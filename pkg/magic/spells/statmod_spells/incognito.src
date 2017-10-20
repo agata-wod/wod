@@ -1,0 +1,21 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 5;
+
+program cast_incognito (parms, spellid)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+
+	var duration := CINT (CalcModDuration () / 4);
+	PlaySoundEffect (caster, SFX_1E3);
+	DoMagicStatMod (caster, STATMOD_INCOGNITO, 1, duration, "Incognito Spell");
+	return 1;
+endprogram

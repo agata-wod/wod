@@ -1,0 +1,67 @@
+//////////////////////////////////////////////////////////////
+//	GETPROP.SRC									//
+//												//
+//	Syntax: .getprop <propname>						//
+//												//
+/////////////////////////////////////////////////////////////
+
+use uo;
+use os;
+use basic;
+use vitals;
+use attributes;
+
+program textcmd_getprop (player, propname)
+	if (!propname)
+		SendSysMessage (player, "Usage is: .getprop [PROPERTY_NAME]");
+		return;
+	endif
+
+	SendSysMessage (player, "Select an object");
+	var item := Target (player, TGTOPT_NOCHECK_LOS);
+	if (!item)
+		SendSysMessage (player, "Canceled.");
+		return;
+	endif
+
+	var value := DeterminePropertyValue (item, propname);
+	if (value == error)
+		SendSysMessage (player, "Invalid prop name!");
+	else
+		SendSysMessage (player, propname + ": " + value);
+	endif
+
+endprogram
+
+
+
+
+///////////////////
+//  Usually we just use .get_member, but for some options, things are more difficult
+///////////////////
+
+function DeterminePropertyValue (item, propname)
+	var retstr := 0;
+	case (propname)
+		"hp":				if (item.npctemplate or item.acctname)
+								retstr := CINT (GetVital (item, "Life")/100);
+							else
+								retstr := item.hp;
+							endif
+		"mana":				retstr := CINT (GetVital (item, "Mana")/100);
+		"stamina":			retstr := CINT (GetVital (item, "Stamina")/100);
+
+		"strength":			retstr := GetAttribute (item, "Strength");
+		"dexterity":			retstr := GetAttribute (item, "Dexterity");
+		"intelligence":		retstr := GetAttribute (item, "Intelligence");
+
+		"strength_mod":		retstr := CINT (GetAttributeTemporaryMod (item, "Strength")/10);
+		"intelligence_mod":		retstr := CINT (GetAttributeTemporaryMod (item, "Intelligence")/10);
+		"dexterity_mod":		retstr := CINT (GetAttributeTemporaryMod (item, "Dexterity")/10);
+		"objtype":			retstr := Hex (item.objtype) + " (" + item.objtype + ")";
+		default:
+			retstr := item.get_member (propname);
+	endcase
+	return retstr;
+endfunction
+

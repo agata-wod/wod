@@ -1,0 +1,1 @@
+This is the script base for The World of Dreams UO Shard, for POL 099

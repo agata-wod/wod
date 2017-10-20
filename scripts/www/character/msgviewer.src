@@ -1,0 +1,91 @@
+use uo;
+use os;
+use http;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/string";
+include "include/clock";
+include "include/accounts";
+include "include/www";
+include "../pkg/items/housing/house";
+
+program search_for_inactive_accounts ()
+	LogWWWPageAccess (QueryIP());
+
+	WriteHTML ("<html><head><title>Message Viewer</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+	
+	//Have to be online to access this feature
+	if (!FindOnlineAccountByIP (QueryIP()))
+		WriteHTML ("Access denied:  you must be online to access this function");
+		WriteHTML ("</body></html>");
+		return 0;
+	else
+		var onlinecharacter := FindOnlineAccountByIP (QueryIP());
+		if (!onlinecharacter or !onlinecharacter.cmdlevel)
+			WriteHTML ("You don't have the authorization to access this function.");
+			WriteHTML ("</body></html>");
+			return 0;
+		endif
+	endif
+
+	var acctname := QueryParam ("acctname");
+	if (!acctname)
+		WriteHTML ("Please enter an acctname");
+		WriteHTML ("<form method=GET action=msgviewer.ecl>");
+		WriteHTML ("Account name: <input name=acctname>");
+		WriteHTML ("<input id=submit1 name=submit1 type=submit value=Search>");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	
+	var acctinfodf := OpenDataFile (":character:msg_logging");
+	if (!acctinfodf)
+		acctinfodf := CreateDataFile (":character:msg_logging");
+		if (!acctinfodf)
+			WriteHTML ("Can't open datafile!");
+			WriteHTML ("</body></html>");
+			return 0;
+		endif
+	endif
+
+	var entry := acctinfodf.FindElement (acctname);
+	if (!entry)
+		WriteHTML ("No messages for that accountname");
+		WriteHTML ("</body></html>");
+		return 0;
+	endif	
+	
+	var dfkeys := entry.PropNames();
+	if (!len (dfkeys))
+		WriteHTML ("No messages for that accountname");
+		WriteHTML ("</body></html>");
+		return 0;
+	endif
+	
+	WriteHTML ("<table border=1>");
+	WriteHTML ("<tr><td>Time</td><td>Msg From</td><td>Msg To</td><td>The Message</td></tr>");
+
+	foreach key in dfkeys
+		var thevalue := entry.GetProp (key);
+		var whoname := thevalue[1];
+		var whomname := thevalue[2];
+		var themsg := thevalue[3];
+
+		WriteHTML ("<tr><td>" + key + "</td><td>" + whoname + "</td><td>" + whomname + "</td><td>" + themsg + "</td></tr>");
+	
+	endforeach
+	
+	WriteHTML ("</table>");
+	WriteHTML ("</body></html>");
+endprogram
+
+
+
+
+
+
+

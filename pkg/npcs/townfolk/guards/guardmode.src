@@ -1,0 +1,752 @@
+///////////////////
+//This AI is for warriors that have been hired by a players and have been set to guard an area.
+///////////////////
+
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+include "../pkg/npcs/townfolk/guards/henchman";
+
+const HALT_THRESHOLD			:= 8;
+
+var me := Self();
+var movestate := 0;
+var lastbark := ReadGameClock();
+var chaseloop := 0;
+var master, masterserial := 0;
+
+program GuardModeWarrior()
+	//find out who their master is.  If they don't have one, wait a while to see if they get one
+	//(For resurrection purposes.)
+	masterserial := GetObjProperty (me, "master");
+	if (!masterserial)
+		var waitcounter := 0;
+		repeat
+			sleep (1);
+			waitcounter := waitcounter + 1;
+			masterserial := GetObjProperty (me, "master");
+		until (masterserial or waitcounter > 20);
+	endif
+
+	//if they still don't have a master, commit suicide
+	if (!masterserial)
+		KillMe ();
+		return;
+	endif
+
+	AddToAccountHenchmen (masterserial);
+	//Try to find their master.  If he doesn't exist (deleted, maybe), commit suicide
+	master := SystemFindObjectBySerial (masterserial);
+	if (!master)
+		master := SystemFindObjectBySerial (masterserial, SYSFIND_SEARCH_OFFLINE_MOBILES );
+		if (!master)
+			KillMe ();
+			return;
+		endif
+	endif
+
+	if (!me.backpack)
+		DoOnCreationSetup ();
+	endif
+	SetUpSpeech ();
+	RecordStats ();
+	setwarmode (0);
+
+	if (GetObjProperty (me, "color") )
+		me.color := GetObjProperty (me, "color");
+	endif
+	me.graphic := 400+me.gender;
+	SetObjProperty (me, "myscript", ":guards:guardmode");
+	SetObjProperty (me, "gender", me.gender);
+	me.title_suffix := " the Warrior";
+
+	//If there's another NPC standing directly where we're standing, take a step.g
+	if (OtherGuardHere())
+		movestate := 1;
+	endif
+
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_ENTEREDAREA + SYSEVENT_ITEM_GIVEN + SYSEVENT_SPEECH, HALT_THRESHOLD);
+	MarkHomePoint ();
+	GetDressed();
+
+	var ev;
+	while (me)
+		if (movestate)
+			ev := os::wait_for_event (0);
+			if (!ev)
+				DoMarching ();
+			endif
+		else
+			ev := GuardSleepMode ();
+		endif
+		if (ev and ev.source)
+			case (ev.type)
+			EVID_ENTEREDAREA:
+				if (CheckForCriminals (ev.source))
+					GetHelp (ev.source);
+					fight (ev.source);
+					WalkToMyHome ();
+				endif
+			EVID_ENGAGED:
+			EVID_DAMAGED:
+				if (ev.source)
+					GetHelp (ev.source);
+					fight (ev.source);
+					WalkToMyHome ();
+				endif
+			EVID_ALL_ATTACK_CMD:
+				fight (ev.source);
+				WalkToMyHome ();
+			EVID_SPEECH:
+				ProcessSpeech (ev);
+			endcase
+		endif
+	endwhile
+endprogram
+
+
+
+
+///////////////////
+//  Set this location as our homepoint that we'll return to if we wander away.
+///////////////////
+
+function MarkHomePoint()
+	var homepoint := array { };
+	homepoint[1] := me.x;
+	homepoint[2] := me.y;
+	homepoint[3] := me.z;
+	homepoint[4] := me.realm;
+	SetObjProperty (me, "#homepoint", homepoint);
+endfunction
+
+
+
+
+///////////////////
+//  Once we've set out homepoint, this function later on recalls it and takes us there.
+///////////////////
+
+function WalkToMyHome()
+	sleep (1);
+	var walkhomecounter := CINT (GetObjProperty (me, "#walkhomecounter"));
+	if (walkhomecounter > 25)
+		me.script := ":guards:henchman";
+		RestartScript (me);
+		return;
+	endif
+	SetObjProperty (me, "#walkhomecounter", walkhomecounter+1);
+
+	var myhome := GetObjProperty (me,"#homepoint");
+	if (!myhome)
+		MarkHomePoint();
+		return;
+	endif
+
+	if (me.x == myhome[1] and me.y == myhome[2])
+		return;
+	endif
+
+	foreach mob in ListMobilesNearLocation (me.x, me.y, me.z, 5, me.realm)
+		if (CheckForCriminals (mob))
+			GetHelp (mob);
+			fight (mob);
+			break;
+		endif
+	endforeach
+
+	foreach mob in ListHostiles (me, 9);
+		if (mob)
+			GetHelp (mob);
+			Fight (mob);
+			break;
+		endif
+	endforeach
+	
+	if (me.x == myhome[1] and me.y == myhome[2])
+		return;
+	endif
+
+	var ev;
+	for i := 1 to 15
+		WalkTowardLocation (myhome[1], myhome[2]);
+		ev := wait_for_event (0);
+		if (me.x == myhome[1] and me.y == myhome[2])
+			return;
+		endif
+	endfor
+
+	if (me.x != myhome[1] or me.y != myhome[2] )
+	MoveObjectToLocation( me, myhome[1], myhome[2], myhome[3], myhome[4], MOVEOBJECT_FORCELOCATION );
+	endif
+	return;
+endfunction
+
+
+
+
+///////////////////
+//  The NPC's normal state, where they use less CPU and wait for events.
+///////////////////
+
+function GuardSleepMode ()
+	var ev;
+	while (me)
+		if (me.poisoned or GetVital (me, "Life") < GetVitalMaximumValue (me, "Life"))
+			ApplyHenchmanHealing (me);
+		endif
+		ev := os::wait_for_event (120);
+		if (ev and ev.source)
+			case (ev.type)
+				EVID_ENGAGED:
+				EVID_DAMAGED:
+					return ev;
+				EVID_ENTEREDAREA:
+					return ev;
+				EVID_ALL_ATTACK_CMD:
+					return ev;
+				EVID_SPEECH:
+					if (!ev.source.npctemplate)
+						if (ev.source.serial == masterserial or ev.source.cmdlevel)
+							return ev;
+						endif
+					endif
+				EVID_DOUBLECLICKED:
+					if (!ev.source.npctemplate)
+						return ev;
+					endif
+				EVID_ITEM_GIVEN:
+					if (!ev.source.npctemplate)
+						return ev;
+					endif
+				endcase
+			endif
+	endwhile      
+endfunction
+
+
+
+
+///////////////////
+//  Called when something enters our area to find out if its something that we should be attacking
+///////////////////
+
+function CheckForCriminals (byref jerk)
+	if (jerk.dead or jerk.acctname)
+		return 0;
+	endif
+	
+	if (jerk.z < (me.z - 20) or jerk.z > (me.z + 20))
+		return 0;
+	endif
+	
+	if (GetObjProperty (jerk, "master"))
+		return 0;
+	endif	
+
+	if (IsHostile (jerk) and jerk.serial != masterserial)
+		say ("Ah ha! " + jerk.name);
+		return 1;
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Fight chosen opponent
+///////////////////
+
+function Fight (opponent)
+	movestate := 0;
+	if (opponent.npctemplate)
+		if (opponent.script["guardmode"])
+			ClearEventQueue ();
+			return;
+		endif
+	endif
+
+	var oldweapon_one := GetEquipmentByLayer (me, LAYER_HAND1);
+	var oldweapon_two := GetEquipmentByLayer (me, LAYER_HAND2);
+	
+	if (GetAttributeTemporaryMod (me, "Dexterity") > 5000)
+		SetAttributeTemporaryMod (me, "Dexterity", GetAttributeTemporaryMod (me, "Dexterity") - 5000);
+	endif
+
+	if (opponent.cmdlevel or opponent == me or opponent.npctemplate["humuc"])
+        	setwarmode(0); 
+		ClearEventQueue ();
+		return;
+	endif
+
+	if (opponent == master)
+		say ("I can't spar right now, I'm guarding.");
+		GuardmodeFlee (opponent);
+		ClearEventQueue ();
+		return;
+	endif
+
+	set_priority (50);
+	SetOpponent (opponent);
+	turntoward (opponent);
+
+	if (GetObjProperty (me, "keywordbattlecry"))
+		Say (GetObjProperty (me, "keywordbattlecry"));
+	endif
+
+	var ev, cd;
+	chaseloop := 0;
+	var loops := 1;
+	var wasmoving:=1;
+
+    	while (opponent and !(opponent.dead or opponent.hidden or opponent.concealed) and (Distance (me, opponent) < 20))
+		if (GetVital (me, "Life") < 1000)
+			GuardmodeFlee (opponent);
+		elseif (me.poisoned or GetVital (me, "Life") < GetVitalMaximumValue (me, "Life"))
+			ApplyHenchmanHealing (me);
+		endif
+
+		cd := CloseDistance (opponent);
+		case (cd)
+		0:
+			wasmoving := 1;
+			loops := loops + 1;
+			if (loops > 10)
+				loops := 0;
+				if (!OpenDoors (opponent))
+					if (HasBow() and chaseloop > 3)
+						ChangeWeapons();
+					endif
+					chaseloop := chaseloop + 1;
+					if (!CheckLoSAt (me, opponent.x, opponent.y, opponent.z))
+						RunRandom (opponent, chaseloop);
+					endif
+				endif
+				if (chaseloop > 10)
+					sleep (2);
+					loops := 0;
+					chaseloop := 0;
+					GuardmodeFlee (opponent);
+				endif
+			endif
+		1:
+			if (wasmoving)
+				TurnToward(opponent);
+			endif
+			if (!CheckLoSAt (me, opponent.x, opponent.y, opponent.z))
+				SetWarMode(0);
+				ReArm (oldweapon_one, oldweapon_two);
+				return;
+			endif
+			loops := 0;
+			chaseloop := 0;
+			wasmoving := 0;
+		2:
+			SetWarMode(0);
+			ReArm (oldweapon_one, oldweapon_two);
+			ClearEventQueue ();
+			return;
+		endcase
+
+		ev := wait_for_event (cd);
+		while (ev)
+			case (ev.type)
+			EVID_DAMAGED:
+			EVID_ENGAGED:
+				if (ev.source)
+					if (ev.source != opponent and !ev.source.script["guardmode"])
+						if ((RandomInt (8)==1) or (distance (ev.source, me) < Distance (me, opponent)) )
+							var newopponent := ev.source;
+							if (newopponent.npctemplate)
+								opponent := ev.source;
+								SetOpponent( opponent );
+								turntoward( opponent );
+							endif
+						endif
+					endif
+				endif
+			EVID_PEACEMADE:
+				setwarmode (0);
+				chaseloop := 0;
+				sleep(1);
+				ReArm (oldweapon_one, oldweapon_two);
+				ClearEventQueue ();
+				return;
+			endcase
+			ev := wait_for_event (0);
+		endwhile
+	endwhile
+
+	SetWarMode(0);
+	chaseloop := 0;
+	ReArm (oldweapon_one, oldweapon_two);
+	ClearEventQueue ();
+endfunction
+
+function process_combat_event (byref ev)
+	if (ev.type == EVID_DAMAGED)
+		if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/10))
+			EraseObjProperty (me, "#flees");
+			GuardmodeFlee (ev.source);
+		endif
+	endif
+endfunction
+
+
+function in_combat_event_loop (byref opponent)
+	if (opponent)
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Runs towards our opponent, unless we're using a bow, in which case we run away from them a bit
+///////////////////
+
+function CloseDistance (byref opponent)
+	var archerymovement := HasBow ();
+	var d := distance (me, opponent);
+	if (d > 15)
+		return 2;
+	endif
+
+	if (!archerymovement)
+		if ( d > 1 )
+			RunToward (opponent);
+			return 0;
+		else
+			return 1;
+		endif
+	else
+		if (d == 1)
+			ChangeWeapons();
+		elseif ( d < 4 )
+			RunAwayFrom (opponent);
+			return 0;
+		else
+			return 1;
+		endif
+	endif
+endfunction
+
+
+
+///////////////////
+//  Determines if we have a bow equipped, and, if so, if we have ammo for it
+///////////////////
+
+function HasBow ()
+	var weapon := me.weapon;
+	if (!weapon.objtype)
+		ChangeWeapons();
+		return 0;
+	endif
+
+	var ammotype := 0;
+	case (weapon.objtype)
+		0x13B2:
+		0x26c2:
+		0x27f0:
+		0x2d2a:
+		0x2d2b:
+			ammotype := 0xf3f;//bow and arrows
+		0x0f4f:
+		0x13fd:
+		0x26c3:
+			ammotype := 0x1bfb;//xbow and bolts
+		0x6050:
+			ammotype := 0x6051;//firebow and firearrows
+		default: return 0;
+	endcase
+
+	foreach item in enumerateitemsincontainer (me.backpack)
+		if (item.objtype == ammotype)
+			return 1;
+		endif
+	endforeach
+
+	say ("No ammo!");
+	ChangeWeapons ();
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Try to find a different weapon in my backpack to use
+///////////////////
+
+function ChangeWeapons ()
+	var weapon := GetEquipmentByLayer(me,LAYER_HAND1);
+	var shield := GetEquipmentByLayer(me,LAYER_HAND2);
+
+	if (weapon)
+	MoveObjectToLocation( weapon, me.x, me.y, me.z, me.realm, MOVEOBJECT_FORCELOCATION );
+	endif
+	if (shield)
+	MoveObjectToLocation( shield, me.x, me.y, me.z, me.realm, MOVEOBJECT_FORCELOCATION );
+	endif
+
+	foreach item in ListRootItemsInContainer (me.backpack)
+		EquipItem (me,item);
+	endforeach
+
+	if (weapon)
+		MoveItemToContainer (weapon, me.backpack);
+	endif
+	if (shield)
+		MoveItemToContainer (shield, me.backpack);
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Run away from our opponent
+///////////////////
+
+function GuardmodeFlee (byref opponent)
+	EraseObjProperty (me, "killme");
+	if (me.frozen or me.paralyzed)
+		sleep (1);
+		return;
+	endif
+	var runs := 0;
+	var ev;
+	say("Aaaaiiiiiii!!!");
+
+	while ( (distance(me, opponent) < 20) and (runs < 50) )
+		runawayfrom (opponent);
+		runs := runs +1;
+		ev := wait_for_event(0);
+	endwhile
+
+	RestartScript (me);
+endfunction
+
+
+
+
+///////////////////
+//  Change back to our old weapons
+///////////////////
+
+function Rearm (byref oldweapon_one, byref oldweapon_two)
+	var weapon := GetEquipmentByLayer (me, LAYER_HAND1);
+	var shield := GetEquipmentByLayer (me, LAYER_HAND2);
+
+	if (weapon == oldweapon_one and shield == oldweapon_two)
+		return;
+	endif
+
+	if (weapon)
+	MoveObjectToLocation( weapon, me.x, me.y, me.z, me.realm, MOVEOBJECT_FORCELOCATION );
+	endif
+
+	if (shield)
+	MoveObjectToLocation( shield, me.x, me.y, me.z, me.realm, MOVEOBJECT_FORCELOCATION );
+	endif
+
+	EquipItem (me, oldweapon_one);
+	EquipItem (me, oldweapon_two);
+
+	if (weapon)
+		MoveItemToContainer (weapon, me.backpack);
+	endif
+	if (shield)
+		MoveItemToContainer (shield, me.backpack);
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Look for other guards in the area to help us out
+///////////////////
+
+function GetHelp (byref opponent)
+	if (!opponent or opponent == master)
+		return;
+	endif
+
+	var eve := struct;
+	eve.+type := EVID_ALL_ATTACK_CMD;
+	eve.+source := opponent;
+	eve.+target := opponent;
+
+	foreach mob in ListMobilesNearLocation (me.x, me.y, me.z, 10, me.realm);
+		if (mob.npctemplate and mob.npctemplate == me.npctemplate and !mob.warmode and mob != me)
+			SendEvent (mob, eve);
+		endif
+	endforeach
+endfunction
+
+
+
+
+///////////////////
+//  follow orders
+///////////////////
+
+function ProcessSpeech (byref ev)
+	var you := ev.source;
+	if (you != master)
+		if (!you.cmdlevel)
+			return;
+		endif
+	endif
+
+	var evtext := lower (ev.text);
+	var myname := lower (me.name);
+	if (evtext[myname + " follow me"]);
+		if (!BelowHenchCount ())
+			Say ("I think I'll just stay right here.");
+			return;
+		endif
+		me.script := ":guards:henchman";
+		RestartScript (me);
+		return;
+	elseif (evtext["all follow me"]);
+		say ("Say '"+ me.name + " follow me' if you are talking to me");
+	elseif (evtext == (myname + " attention") or evtext == "attention")
+		var myfacing := me.facing;
+		if ( you.facing < 4 )
+			myfacing := you.facing + 4;
+		else
+			myfacing := you.facing - 4;
+		endif
+		if ( me.facing != myfacing )
+			me.facing := myfacing;
+		endif
+	elseif (evtext == (myname + " right face") or evtext == "right face")
+		me.facing := me.facing + 2;
+	elseif (evtext == (myname + " left face") or evtext == "left face")
+		me.facing := me.facing -2;
+	elseif (evtext == (myname + " about face") or evtext == "about face")
+		me.facing := me.facing -2;
+		me.facing := me.facing -2;
+	elseif (evtext == (myname + " present arms") or evtext == "present arms")
+		PerformAction (me, ANIM_SALUTE);
+	elseif (evtext == (myname + " forward march") or evtext == "forward march")
+		movestate := 1;
+	elseif (evtext == (myname + " halt") or evtext == "halt")
+		movestate := 0;
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  March forward, if we've been told to
+///////////////////
+
+function DoMarching()
+	var nextmove;
+	if (!getobjproperty (me, "#nextmove"))
+		nextmove := 0;
+	else
+		nextmove := getobjproperty (me, "#nextmove");
+	endif
+
+	if (nextmove > ReadGameClock())
+		sleep (1);
+		return;
+	endif
+	SetObjProperty (me, "#nextmove", ReadGameClock() + 1);
+
+	if (!MarchForward())
+		movestate := 0;
+	endif
+
+	if (!master.ip or distance (me, master ) > 15)
+		movestate := 0;
+	endif
+
+	MarkHomePoint();
+	sleep (1);
+endfunction
+
+
+
+
+///////////////////
+//  See if there's any other NPCs standing directly on top of the guards.  If so, they'll take a step.
+///////////////////
+
+function OtherGuardHere()
+	foreach mob in ListMobilesNearLocation (me.x, me.y, me.z, 0, me.realm);
+		if (mob != me)
+			return 1;
+		endif
+	endforeach
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  NPC takes a step forward
+///////////////////
+
+function MarchForward ()
+	var mex := me.x;
+	var mey := me.y;
+	case ( me.facing )
+		0: Move ("N");
+		1: Move ("NE");
+		2: Move ("E");
+		3: Move ("SE");
+		4: Move ("S");
+		5: Move ("SW");
+		6: Move ("W");
+		7: Move ("NW");
+	endcase
+	if ( me.x == mex and me.y == mey )
+		return 0;
+	else
+		return 1;
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Equip everything we've got
+///////////////////
+
+function GetDressed ()
+	foreach item in ListRootItemsInContainer (me.backpack)
+		EquipItem (me, item);
+	endforeach
+endfunction
+
+
+
+
+///////////////////
+//  This really isn't called when the henchman is created, since they spawn with the warrior script,
+//	but might be used when they get resurrected
+///////////////////
+
+function DoOnCreationSetup ()
+	var newbackpack := CreateItemAtLocation (5288 , 1176 , 0, UOBJ_BACKPACK, 1, REALM_BRITANNIA);
+	if (!EquipItem (me, newbackpack))
+		DestroyItem (newbackpack);
+	endif
+	if (me.name["<random>"] )
+		me.name := RandomName (me);
+	endif
+endfunction
+
+

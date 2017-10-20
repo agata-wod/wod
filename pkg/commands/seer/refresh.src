@@ -1,0 +1,21 @@
+/////////////////////////////////////////////////////////////////////////////
+//
+//  ".refreshme" - Restore Hits, Mana, Stamina
+//
+//  Thanks to The Writer, from our Dev Board, for this one.
+//
+/////////////////////////////////////////////////////////////////////////////
+
+use uo;
+use vitals;
+
+program textcmd_refreshme( me )
+	var who := target( me ,TGTOPT_NOCHECK_LOS);
+	if (!who)
+		SendSysMessage (me, "Canceled.");
+		return;
+ 	endif
+	SetVital (who, "Life", GetVitalMaximumValue (who, "Life"));
+	SetVital (who, "Mana", GetVitalMaximumValue (who, "Mana"));
+	SetVital (who, "Stamina", GetVitalMaximumValue (who, "Stamina"));
+endprogram

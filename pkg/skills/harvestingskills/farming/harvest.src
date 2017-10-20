@@ -1,0 +1,232 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+use attributes;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/gumps";
+include "include/crafting";
+
+program harvest (character, plant)
+	plant.decayat := ReadGameClock() + 1209600;
+	if (Distance (character, plant) > 3)
+		sendsysmessage (character, "That is too far away!");
+		return;
+	endif
+
+	if (GetObjProperty (plant, "new") )
+		SendSysMessage (character, "You must wait until the plant is fully grown before you can harvest.");
+		return;
+	endif
+	
+	//If they double clicked the bottom of a tree, reroute the action to the top
+	if (IsBottomOfTwoPartPlant (plant))
+		var planttopserial := GetObjProperty (plant, "planttop");
+		var planttop := SystemFindObjectBySerial (planttopserial);
+		if (!planttop)
+			SendSysMessage (character, "Looks dead.");
+			DestroyItem (plant);
+			return;
+		endif
+		plant := planttop;
+		plant.decayat := ReadGameClock() + 1209600;
+	endif
+
+	var plant_cfg_file := readconfigfile("itemdesc");
+	if (!plant_cfg_file)
+		return;
+	endif
+
+	var product_type := plant_cfg_file[plant.objtype].product;
+	if (!product_type)
+		return;
+	endif
+
+	var max_harvest_amount := plant_cfg_file[plant.objtype].maxamount;
+	if (!max_harvest_amount)
+		max_harvest_amount := 10;
+	endif
+
+	var already_harvested_amount := GetObjProperty (plant, "#harvested");
+	if (!already_harvested_amount)
+		already_harvested_amount := 0;
+	elseif (already_harvested_amount >= max_harvest_amount)
+		SendSysMessage (character, "There is nothing here to harvest.");
+		DestroyPlant (character, plant);
+		return;
+	endif
+
+	//setup some variables
+	var craftingbag := FindCraftingBag (character);
+	var character_x := character.x;
+	var character_y := character.y;
+
+	SendSysMessage (character, "You start harvesting...");
+	repeat
+		PlaySoundEffect (character, SFX_58);
+		PerformAction (character, ANIM_BOW);
+		sleep (2);
+		if (CheckSkill (character, SKILLID_LUMBERJACKING, -1, 0))
+			if (RandomInt (100) == 0)
+				SendSysMessage (character, "You have found some fertile dirt!");
+				CreateItemInContainer (craftingbag, UOBJ_FERTILE_DIRT, 1);
+			endif
+
+			CreateItemInContainer (craftingbag, product_type, 1);
+			SendSysmessage (character, "You put the crops in your pack");
+			ChangePlantGraphic (plant);
+
+			already_harvested_amount := CInt(GetObjProperty (plant, "#harvested"));
+			if (!already_harvested_amount)
+				SetObjProperty (plant, "#harvested", 1);
+			else
+				SetObjProperty (plant, "#harvested", CInt(already_harvested_amount + 1));
+			endif
+
+			if (already_harvested_amount+1 >= max_harvest_amount)
+				SendSysmessage (character, "There's nothing more here to harvest.");
+				return;
+			endif
+		endif
+	until ( (character.x != character_x) or (character.y != character_y) );
+endprogram
+
+function IsBottomOfTwoPartPlant (plant)
+	case (plant.objtype)
+		0x0d98:
+		0x0d9c:
+		0x0da4:
+		0xa097:
+		0xa09a:
+			return 1;
+		default:
+			return 0;
+	endcase
+endfunction
+
+
+
+
+function DestroyPlant(me, plant);
+	case (plant.objtype)
+	0x18df:
+	0x18e0:
+	0x18e1:
+	0x18e2:
+	0x18e5:
+	0x18e6:
+	0x18e9:
+	0x18ea:
+		return;
+	default:
+		if (YesNo(me,"Destroy it?"))
+			var planttopserial := GetObjProperty (plant, "planttop");
+			var planttop := SystemFindObjectBySerial (planttopserial);
+			if (planttop)
+				LogTreeDestruction (me, plant);
+				DestroyItem (planttop);
+			endif
+			var plantbottomserial := GetObjProperty (plant, "plantbottom");
+			var plantbottom := SystemFindObjectBySerial (plantbottomserial);
+			if (plantbottom)
+				LogTreeDestruction (me, plant);
+				DestroyItem (plantbottom);
+			endif
+			DestroyItem(plant);
+		endif
+	endcase
+endfunction
+
+
+
+
+///////////////////
+//  changes the graphic of the plant to one that's so as fully grown
+///////////////////
+
+function ChangePlantGraphic (plant)
+	case (plant.objtype)
+		//wheat
+		0x0c56:	plant.graphic := 0x0c57;
+		//carrots
+		0x0c76:	plant.graphic := 0x0c69;
+		//onions
+		0x0c6f:	plant.graphic := 0x0c69;
+		//corn
+		0x0c7d:	plant.graphic := 0x0c7e;
+		//flax
+		0x1a99:	plant.graphic := 0x1a9a;
+		//cotton
+		0x0c4f:	plant.graphic := 0x0c53;
+		//turnip
+		0x0c61:	plant.graphic := 0x0c61;
+		//hops
+		0x1a9e:	plant.graphic := 0x1a9f;
+		//lettuce
+		0x1708e:	plant.graphic := 0x0c93;
+				plant.color := 270;
+		//cabbage
+		0x1708f:	plant.graphic := 0x0c93;
+				plant.color := 276;
+		//potato
+		0x170c0:	plant.graphic := 0x0cb6;
+		//lemon tree
+		0xa096:	plant.graphic := 0xa095;
+		//apple tree
+		0x0d9a:	plant.graphic := 0x0d99;
+		//peach tree
+		0x0d9e:	plant.graphic := 0x0d9d;
+		//pear tree
+		0x0da6:	plant.graphic := 0x0da5;
+		//lime tree
+		0xa099:	plant.graphic := 0xa098;
+		//orange tree
+		0xa09c:	plant.graphic := 0xa09b;
+		default:
+	endcase;
+endfunction
+
+
+
+
+
+///////////////////
+//  Figures out if the given player is allowed to take the item, and if not, logs it
+///////////////////
+
+function LogTreeDestruction (character, tree);
+	var themessage := array {
+		"Character: " + character.name,
+		"Account name: " + character.acctname,
+		"IP address: " + character.ip,
+		"Tree name: " + tree.desc,
+		"Tree serial: " + tree.serial,
+		"Position: " + tree.x + ", " + tree.y + ", " + tree.realm
+	};
+	AppendLog (character, themessage);
+endfunction
+
+
+
+
+///////////////////
+//  Logs the message to a file
+///////////////////
+
+function AppendLog (who, themessage)
+	var log := array {};
+	var prop := struct {};
+	prop.+name := "";
+	prop.+value := "";
+	foreach line in themessage
+		prop.value := line;
+		log.append (prop);
+	endforeach
+
+	var elemkey := who.name + "(" + who.acctname + ")";
+	AppendConfigFileElem ("treelog", "TreeDestroyed:", elemkey, log );
+	UnloadConfigFile ("treelog");
+endfunction

@@ -1,0 +1,73 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/magicitems";
+include "include/clock";
+include "include/accounts";
+
+Const POINTS_FOR_REWARD := 100;
+Const GOLD_FOR_REWARD := 10000;
+
+program display_forsale_items (parms)
+	var magic_dealer := parms[1];
+	var player := parms[2];
+	if (!magic_dealer or !player)
+		return;
+	endif
+	
+	set_critical (1);
+	var total_points := GetAccountProperty (player.acctname, "magic_dealer_points");
+	if (!total_points)
+		total_points := 0;
+	endif
+	
+	if (total_points < POINTS_FOR_REWARD)
+		PrintTextAbovePrivate (magic_dealer, "You only have " + total_points + " points.", player);
+		PrintTextAbovePrivate (magic_dealer, "You need " + POINTS_FOR_REWARD + " points for a potion.", player);
+		set_critical (0);
+		return 0;
+	endif
+	
+	if (!player.spendGold (GOLD_FOR_REWARD))
+		PrintTextAbovePrivate (magic_dealer, "You have enough points, but you also need " + GOLD_FOR_REWARD + " gold for a potion.", player);
+		set_critical (0);
+		return 0;
+	endif
+	
+	total_points := total_points - POINTS_FOR_REWARD;
+	SetAccountProperty (player.acctname, "magic_dealer_points", total_points);
+
+	//A counter to keep track of how many potions they've got.  Just out of curiosity
+	var total_potions := GetAccountProperty (player.acctname, "magic_dealer_potions");
+	if (!total_potions)
+		total_potions := 0;
+	endif
+	SetAccountProperty (player.acctname, "magic_dealer_potions", total_potions + 1);
+	
+	//Keep track by month, too
+	var year := Systime_GetYear ();
+	var month := lower (Systime_GetMonth ());
+	var monthly_string := "magic_dealer_potions" + year + "_" + month;
+
+	var monthly_potions := GetAccountProperty (player.acctname, monthly_string);
+	if (!monthly_potions)
+		monthly_potions := 0;
+	endif
+
+	monthly_potions := monthly_potions + 1;
+	SetAccountProperty (player.acctname, monthly_string, monthly_potions);
+
+	//create the potion
+	var the_potion := CreateItemInContainer (player.backpack, 0x170a3, 1);
+	if (!the_potion)
+		CreateItemAtLocation (player.x, player.y, player.z, 0x170a3, 1, player.realm);
+	endif	
+	PrintTextAbove (magic_dealer, "Good luck with that!");
+	set_critical (0);
+
+endprogram
+
+
+

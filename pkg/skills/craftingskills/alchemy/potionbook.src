@@ -1,0 +1,179 @@
+use uo;
+use cfgfile;
+
+
+var reagent_cfg := ReadConfigFile ("::itemnames");
+var alchemy_cfg_file := ReadConfigFile ("alchemy");
+var string_counter := 1;
+
+var book_layout := array {
+	"page 0",
+	"gumppic 0 0 2200"
+};
+
+var book_data := array { "filler" };
+
+
+
+
+program display_potionbook (character, book)
+	if (book)
+	endif
+	BuildBookGump (character);
+	SendDialogGump (character, book_layout, book_data);
+
+endprogram
+
+
+
+
+///////////////////
+//  this function looks at the reagent that was passed to it, and returns a string that best describes
+//  that reagents
+///////////////////
+
+function DescribeReagent (reagent)
+
+	var return_string := "";
+	var temp_split_words := splitwords(reagent);
+	var reagent_objtype := cint(temp_split_words[1]);
+	var reagent_number := cint(temp_split_words[2]);
+
+	var reagent_cfg_elem := FindConfigElem ( reagent_cfg, reagent_objtype );
+
+	if (reagent_number == 1 or reagent_number == 0)
+		return_string := cstr ("1 " + reagent_cfg_elem.name);
+	else
+		return_string := cstr (reagent_number + " " + reagent_cfg_elem.plural);
+	endif
+
+	return return_string;
+endfunction
+
+
+
+
+///////////////////
+//  returns a string that describes the bottling or kegging requirments of the potion
+///////////////////
+
+function DescribeContainerRequirements (current_potion)
+	var return_string := "";
+
+	if (current_potion.make_in_keg and current_potion.consume_bottle)
+		return_string := "a bottle or keg";
+	elseif (current_potion.consume_bottle)
+		return_string := "a bottle";
+	endif
+
+	return return_string;
+endfunction
+
+
+
+
+///////////////////
+//  Builds the gump layout and data
+///////////////////
+
+function BuildBookGump (character)
+	var current_potion;
+	var cfgkeys := GetConfigIntKeys (alchemy_cfg_file);
+	if (character)
+	endif
+	
+	var max_page_number := CInt (len (cfgkeys)/2) + 1;
+	for current_page_number := 1 to max_page_number
+		book_layout.append ("page " + current_page_number);
+		//add a previous page button if we're not on the first page
+		if (current_page_number != 1)
+			book_layout.append (cstr ("button 23 6 2205 2205 0 " + CStr(current_page_number-1) ) );
+		endif
+		//add a next page button if we're not on the last page
+		if (current_page_number != max_page_number)
+			book_layout.append (cstr ("button 294 5 2206 2206 0 " + CStr(current_page_number+1) ) );
+		endif
+
+		current_potion := alchemy_cfg_file [cfgkeys[current_page_number*2-1]];
+		if (current_potion.book_name_1)
+			AddInfoAboutCurrentPotion (current_potion, 30);
+		endif
+		current_potion := alchemy_cfg_file [cfgkeys[current_page_number*2]];
+		if (current_potion.book_name_1)
+			AddInfoAboutCurrentPotion (current_potion, 190);
+		endif
+
+	endfor
+endfunction
+
+
+
+
+///////////////////
+//  adds the given potion to the book at the given location
+///////////////////
+
+function AddInfoAboutCurrentPotion (byref current_potion, xpos)
+	var temp_string;
+	var temp_string_pos := 80;
+
+	//put in the first potion, starting with the potion name
+	//capitalize the first letter of the name
+	temp_string := current_potion.book_name_1;
+	temp_string[1] := upper(current_potion.book_name_1[1]);
+	book_data.append(temp_string);
+	book_layout.append ("text " + xpos + " 25 0 " + string_counter );
+	string_counter := string_counter + 1;
+
+	//overwrite the first letter of the potion name with another in blue
+	temp_string := upper(current_potion.book_name_1[1]);
+	book_data.append(temp_string);
+	book_layout.append ("text " + xpos + " 25 9 " + string_counter );
+	string_counter := string_counter + 1;
+
+	//now for the second line of the potion title, if it exists
+	if (current_potion.book_name_2)
+		temp_string := current_potion.book_name_2;
+		book_data.append(temp_string);
+		book_layout.append ("text " + CInt(xpos+15) + " 40 0 " + string_counter );
+		string_counter := string_counter + 1;
+	endif
+
+	//load the reagent list from the current potion into an array
+	var reagent_array := GetConfigStringArray (current_potion, "reagent");
+	foreach reagent in reagent_array
+		temp_string := DescribeReagent (reagent);
+		book_data.append (temp_string);
+		book_layout.append ("text " + CInt(xpos+10) + " " + temp_string_pos + " 0 " + cstr(string_counter) );
+		string_counter := string_counter + 1;
+		temp_string_pos := temp_string_pos + 15;
+	endforeach
+
+	//add if it needs a burner
+	if (current_potion.needburner)
+		book_data.append("heating stand");
+		book_layout.append ("text " + CInt(xpos+10) + " " + temp_string_pos + " 0 " + cstr(string_counter) );
+		string_counter := string_counter + 1;
+		temp_string_pos := temp_string_pos + 15;
+	endif
+
+	//add if it needs a mortar
+	if (current_potion.needmortar)
+		book_data.append("mortar");
+		book_layout.append ("text " + CInt(xpos+10) + " " + temp_string_pos + " 0 " + cstr(string_counter) );
+		string_counter := string_counter + 1;
+		temp_string_pos := temp_string_pos + 15;
+	endif
+	
+	//whether it can be made in a bottle or keg
+	if ( DescribeContainerRequirements (current_potion) )
+		book_data.append( DescribeContainerRequirements (current_potion) );
+		book_layout.append ("text " + CInt(xpos+10) + " " + temp_string_pos + " 0 " + cstr(string_counter) );
+		string_counter := string_counter + 1;
+		temp_string_pos := temp_string_pos + 15;
+	endif
+
+endfunction
+
+
+

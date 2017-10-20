@@ -1,0 +1,15 @@
+use uo;
+
+include "include/utility";
+
+program textcmd_tile (character, webaddress)
+	var targetted := Target (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	OpenBrowser (targetted, webaddress);
+	SendSysmessage (character, "Command completed.");
+endprogram
+

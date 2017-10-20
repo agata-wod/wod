@@ -1,0 +1,127 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/magicitems";
+include "include/attributes";
+
+program use_essense_potion (character, potion)
+
+	SendSysMessage (character, "Select a bow or some arrows.");
+	var targetted := Target (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (targetted.objtype == UOBJ_BOW)
+		SendSysMessage (character, "I'm sorry, but you can't make firebows anymore.");
+		return;
+	
+		//old code
+		if (IsMagicalItem (targetted) )
+			SendSysMessage (character, "You can't use the potion on that bow.");
+			return;
+		endif
+
+		if (GetAttribute (character, ATTRIBUTEID_ALCHEMY) < 75 )
+			SendSysMessage (character, "You have no chance of applying this potion to that.");
+			return;
+		endif
+
+		PlaySoundEffect (character, 0x241);
+		sleep (2);
+
+		If (CheckSkill (character, SKILLID_ALCHEMY, 90, 0) )
+			SendSysMessage (character, "You put the fire bow into your backpack");
+			PlaySoundEffect (character, 0x1fb);
+			CreateItemInBackpack (character, UOBJ_FIRE_BOW, 1);
+			CreateItemInBackpack (character, UOBJ_EMPTY_BOTTLE, 1);
+			DestroyItem (targetted);
+			SubtractAmount (potion, 1);
+		else
+			if (RandomInt (10 == 1) )
+				SendSysMessage (character, "You destroy the bow attempting to apply the potion.");
+				PlaySoundEffect (character, 0x48);
+				CreateItemInBackpack (character, UOBJ_EMPTY_BOTTLE, 1);
+				SubtractAmount (potion, 1);
+				DestroyItem (targetted);
+			else
+				SendSysMessage (character, "You fail to apply the potion to the bow.");
+				PlaySoundEffect (character, 0x48);
+				CreateItemInBackpack (character, UOBJ_EMPTY_BOTTLE, 1);
+				SubtractAmount (potion, 1);
+			endif
+		endif
+	else
+		var ammoname := "";
+		var ammotype := 0;
+		
+		case (targetted.objtype)
+			UOBJ_ARROW:		ammoname := "arrows";
+							ammotype := UOBJ_FIRE_ARROW;
+			UOBJ_BOLT:		ammoname := "bolts";
+							ammotype := UOBJ_FIRE_BOLT;
+			UOBJ_DART:		ammoname := "darts";
+							ammotype := UOBJ_FIRE_DART;
+			UOBJ_SHURIKEN:		ammoname := "shurikens";
+							ammotype := UOBJ_FIRE_SHURIKEN;
+			UOBJ_THROWINGAXE:	ammoname := "throwing axes";
+							ammotype := UOBJ_FIRE_THROWINGAXE;
+			default:
+					SendSysMessage (character, "You don't know how to use those together.");
+					return;
+		endcase
+		if (GetAttribute (character, ATTRIBUTEID_ALCHEMY) < 40 )
+			SendSysMessage (character, "You have no chance of applying this potion to that.");
+			return;
+		endif
+ 
+		var arrow_amount := targetted.amount;
+		if (arrow_amount > 100)
+			arrow_amount := 100;
+		endif
+
+		PlaySoundEffect (character, 0x241);
+		sleep (2);
+
+		If (CheckSkill (character, SKILLID_ALCHEMY, 50, 0) )
+		
+			//either fire or frost ammo
+			if (potion.objtype == 0x1709b)
+				SendSysMessage (character, "You put some fire " + ammoname + " into your backpack");
+				CreateItemInBackpack (character, ammotype, arrow_amount);
+			elseif (potion.objtype == 0x1709d)
+				SendSysMessage (character, "You put some frost " + ammoname + " into your backpack");
+				CreateItemInBackpack (character, (ammotype+1), arrow_amount);
+			else
+				SendSysMessage (character, "What sort of potion is THIS?");
+				return;
+			endif
+
+			PlaySoundEffect (character, 0x1fb);
+			CreateItemInBackpack (character, UOBJ_EMPTY_BOTTLE, 1);
+			SubtractAmount (targetted, arrow_amount);
+			SubtractAmount (potion, 1);
+		else
+			SendSysMessage (character, "You fail to apply the potion to the arrows.");
+			PlaySoundEffect (character, 0x48);
+			CreateItemInBackpack (character, UOBJ_EMPTY_BOTTLE, 1);
+			SubtractAmount (targetted, RandomInt (10));
+			SubtractAmount (potion, 1);
+		endif
+	endif
+
+endprogram
+
+
+
+
+
+
+
+
+
+

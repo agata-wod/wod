@@ -1,0 +1,49 @@
+use uo;
+
+program textcmd_paintboat( who, text )
+	var params := SplitWords( text );
+	if (len(params) < 1)
+		return;
+	endif
+	var boat := TargetCoordinates(who);
+	if(!boat)
+		return;
+	endif
+	
+	if (!boat.isa(POLCLASS_BOAT))
+		if(!boat.multi)
+			return;
+		endif
+
+		if(boat.multi.isa(POLCLASS_BOAT))
+			boat := boat.multi;
+		else
+			return;
+		endif
+	endif
+	
+	if(!(boat.multiid >= 0x18 && boat.multiid <= 0x3B) && !(boat.multiid >= 0x40 && boat.multiid <= 0x47))
+		return;
+	endif
+	
+	boat.color := CINT(params[1]);
+	
+	boat.hold.color := boat.color;
+	foreach compo in (boat.hull)
+		compo.color := boat.color;
+	endforeach
+	foreach compo in (boat.wheel)
+		compo.color := boat.color;
+	endforeach
+	foreach compo in (boat.sails)
+		compo.color := boat.color;
+	endforeach
+	foreach compo in (boat.storage)
+		compo.color := boat.color;
+	endforeach
+	foreach compo in (boat.weaponslot)
+		compo.color := boat.color;
+	endforeach
+	
+
+endprogram

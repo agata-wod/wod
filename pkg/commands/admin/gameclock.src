@@ -1,0 +1,7 @@
+use uo;
+
+program gameclock ( who )
+
+	SendSysMessage (who, "Gameclock: " + ReadGameClock());
+
+endprogram

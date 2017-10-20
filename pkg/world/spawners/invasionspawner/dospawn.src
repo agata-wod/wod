@@ -1,0 +1,295 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+var regspawn;
+var totalnumspawned := 0;
+
+include "include/wodinc";
+include "../pkg/npcs/npc_util";
+include "../pkg/items/housing/house";
+
+program SpawnThatStuff (region)
+	if (!region)
+		SendGMErrorMessage ("Invasionspawner:  Tried to invade a nonexistant region!", 1, 5);
+		return;
+	endif
+
+	//make sure we're not already running from the last time
+	if (GetGlobalProperty( "#" + region + "spawning" ) )
+		if (GetProcess (GetGlobalProperty( "#" + region + "spawning" )))
+			SendGMErrorMessage ("Invasionspawner:  Invasion of " + region + " still running from last invocation", 1, 5);
+			return;
+		endif
+	endif
+	SetGlobalProperty ("#" + region + "spawning", GetPID());
+
+	UnloadConfigFile (":invasionspawner:regions");
+	var regionscfg := ReadConfigFile (":invasionspawner:regions");
+	var elem := FindConfigElem (regionscfg, region );
+	if (!elem)
+		SendGMErrorMessage ("Invasionspawner:  Unable to locate elem for region: " + region, 1, 5);
+	endif
+
+	var boss;
+	var bossserial := GetGlobalProperty ( "invasionboss"+region );
+	if (!bossserial)
+		SendGMErrorMessage ("Invasionspawner:  spawning strength 1 boss in " + region, 0, 5);
+		SpawnBoss (region, elem, 1);
+		EraseGlobalProperty ( "#" + region + "spawning");
+		return;
+	else
+		boss := systemfindobjectbyserial ( BossSerial );
+		if (!boss)
+			SendGMErrorMessage ("Invasionspawner:  spawning strength 1 boss in " + region, 0, 5);
+			SpawnBoss (region, elem, 1);
+			EraseGlobalProperty( "#" + region + "spawning");
+			return;
+		endif
+	endif
+	
+	//make sure its the right boss.  I've had this happen for some reason...
+	var strength := GetObjProperty (boss, "strength");
+	if (!strength)
+		KillIt (boss);
+		SendGMErrorMessage ("Invasionspawner:  respawning strength 1 boss in " + region, 0, 5);
+		SpawnBoss (region, elem, 1);
+		EraseGlobalProperty( "#" + region + "spawning");
+		return;
+	endif
+	
+	SpawnRegion (boss, region, elem);
+	EraseGlobalProperty( "#" + region + "spawning");
+endprogram
+
+
+
+
+///////////////////
+//  spawns a new boss monster for the area
+///////////////////
+
+function SpawnBoss (region, byref elem, strength)
+	var bosstype := elem.npctype;
+	var coords := splitwords(elem.rect);
+	var x1 := cint(coords[1]);
+	var y1 := cint(coords[2]);
+	var x2 := cint(coords[3]);
+	var y2 := cint(coords[4]);
+	var rlm := elem.realm;
+	if (!rlm)
+		rlm := _DEFAULT_REALM;
+	endif
+
+	var groupscfg := ReadConfigFile (":invasionspawner:groups");
+	var bosselem := FindConfigElem( groupscfg, bosstype+strength );
+	var mobtype := bosselem.boss;
+	if (!mobtype)
+		SendGMErrorMessage ("Invasionspawner:  No boss elem for invasion element " + CSTR (bosstype+strength), 1);
+		return 0;
+	endif
+
+	var boss := SpawnMob( x1, y1, x2, y2, mobtype, rlm );
+	if (!boss)
+		SendGMErrorMessage ("Invasionspawner:  Error spawning boss for group " + CSTR (bosstype+strength), 1);
+		return;
+	endif
+	Setglobalproperty( "invasionboss"+region, boss.serial );
+	SetObjProperty (boss, "strength", strength );
+	SetObjProperty (boss, "spawntime", ReadGameClock());
+	
+	//if there's a boss in the next region, kill him off (cut the invasion off at it's source)
+	if ( strength == 1 )
+		if ( elem.invade )
+			var nextbossserial := GetGlobalProperty("invasionboss"+elem.invade);
+			if (nextbossserial)
+				var nextboss := SystemFindObjectBySerial (nextbossserial);
+				if ( nextboss )
+					KillIt( nextboss );
+				endif
+			endif
+			EraseGlobalProperty("invasionboss"+elem.invade);
+		endif
+	endif
+
+	sleep (60);
+endfunction
+
+
+
+
+///////////////////
+//  spawns the given NPC
+///////////////////
+
+function SpawnMob ( x1, y1, x2, y2, critter, rlm )
+	var x, y, z;
+	var thecritter := 0;
+	var tries := 0;
+	repeat
+		x := RandomInt (x2-x1)+x1;
+		y := RandomInt (y2-y1)+y1;
+		z := GetMapInfo(x,y,rlm).z;
+		tries := tries + 1;
+
+		if (CheckAreaIfSpawnable (x, y, z, rlm) )
+			thecritter := CreateNpcFromTemplate( critter, x, y, z, 0, rlm);
+			if (thecritter)
+				if(!MoveObjectToLocation( thecritter, thecritter.x, thecritter.y, z, rlm, MOVEOBJECT_NORMAL ))
+					KillIt (thecritter);
+				else
+					return thecritter;
+				endif
+			endif
+		endif
+		sleep (1);
+	until (thecritter or tries > 50);
+	
+
+	if (!thecritter)
+		SendGMErrorMessage ("Invasionspawner:  unable to spawn " + critter, 1);
+		SendGMErrorMessage ("Invasionspawner:  Coords are " + x1 + ", " + x2 + ", " + y1 + ", " + y2, 1);
+	endif
+	return 0;
+endfunction
+
+
+
+///////////////////
+//  kill the given NPC
+///////////////////
+
+function KillIt (npc)
+	var hostiles := ListHostiles (npc, 9 );
+	if (hostiles.size() or npc.warmode)
+		EraseObjProperty ( npc, "regspawn" );
+		return;
+	endif
+	
+	KillNPC (npc);
+endfunction
+
+
+
+
+///////////////////
+//  spawns NPCs inside a given region
+///////////////////
+
+function SpawnRegion (byref boss, region, byref elem)
+	var bosstype := elem.npctype;
+	var coords := splitwords(elem.rect);
+	var x1 := cint(coords[1]);
+	var y1 := cint(coords[2]);
+	var x2 := cint(coords[3]);
+	var y2 := cint(coords[4]);
+	var rlm := elem.realm;
+	if (!rlm)
+		rlm := _DEFAULT_REALM;
+	endif
+
+	var strength := GetObjProperty (boss, "strength");
+	var density := elem.density;
+
+	var SpawnName := "invasion"+region;
+	var numcurrentspawns := Cint(GetGlobalProperty(SpawnName));
+	var maxtospawn := density + ( cint(density/5) * strength * 2 );
+	var numtospawn := maxtospawn - numcurrentspawns;
+
+	if (numtospawn < 0 or randomint (500) == 1 or (numtospawn > maxtospawn) or (numcurrentspawns<0) )
+		NukeThisGroup (x1, y1, x2, y2, SpawnName, rlm);
+		return;
+	elseif ( numtospawn == 0 )
+		if ( (strength < 5 ) and ( randomint(2)==1 ) )
+			strength := strength + 1;
+			SendGMErrorMessage ("Invasionspawner:  Incrementing strength of boss to " + strength + " in " + region, 0, 5);
+			KillIt (boss);
+			SpawnBoss( region, elem, strength);
+		elseif ( elem.invade and strength == 5)
+			start_script (":invasionspawner:dospawn", elem.invade);
+		endif
+		return;
+	endif
+
+	SendGMErrorMessage ("Invasionspawner:  Spawning " + numtospawn + " of " + maxtospawn + " mobs in " + region, 0, 5);
+
+	var groupscfg := ReadConfigFile( ":invasionspawner:groups" );
+	var bosselem := FindConfigElem( groupscfg, bosstype+strength );
+	var critterlist := GetConfigStringArray(bosselem, "npc" );
+	for i := 1 to numtospawn
+		var critter := SpawnMob( x1, y1, x2, y2, 
+			critterlist[randomint( critterlist.size() )+1 ], rlm);
+		if ( critter )
+			set_critical(1);
+			numcurrentspawns := Cint(GetGlobalProperty(SpawnName))+1;
+			SetGlobalProperty( SpawnName, numcurrentspawns);
+			SetObjProperty( critter, "regspawn", SpawnName );
+			set_critical(0);
+			sleep (15);
+			if (!boss) return; endif
+		endif
+	endfor		
+	
+endfunction
+
+function NukeThisGroup(x1, y1, x2, y2, SpawnName, rlm)
+	var kills := 0;
+	var x, y, z;
+	for( x := x2 ; x > x1 ; x := x  - 16)
+		for( y := y1; y < y2; y := y + 16 )
+			for( z := -60; z <= 60; z := z + 16 )
+				foreach npc in ListMobilesNearLocationEx (x, y, z, 16, 0x02+0x01, rlm)
+					if ( GetObjProperty( npc, "regspawn" ) == SpawnName )
+						set_critical(1);
+						EraseObjProperty (npc,"regspawn");
+						KillIt(npc);
+						kills := kills + 1;
+						set_critical(0);
+						sleep(1);
+					endif
+				endforeach
+		    endfor
+		    sleep(1);
+		endfor
+		sleep(1);
+	endfor
+	SendGMErrorMessage ("Invasionspawner:  nuking " + spawnname + " kills: " + kills, 0, 5);
+	SetGlobalProperty (SpawnName, 0);
+
+endfunction
+
+
+
+
+///////////////////
+//  Checks around the area to see if the position is inside of a house or if there's a player around
+///////////////////
+
+function CheckAreaIfSpawnable (x, y, startz := -120, rlm)
+	var sh := GetStandingHeight (x, y, startz, rlm);
+	if (sh.multi or sh.multi.serial)
+		return 0;
+	endif
+	
+	if (FindHouseSignAtLocation (x, y, rlm))
+		return 0;
+	endif
+
+	var z;
+	for ( z := startz; z <= 120; z := z + 30)
+		foreach item in ListItemsNearLocationOfType (x, y, z, 32, 0x708a, rlm)
+			if (IsLocationWithinHouseSign (item, x, y, rlm))
+				return 0;
+			endif
+		endforeach
+		foreach mobile in ListMobilesNearLocationEx (x, y, z, 12, LISTEX_FLAG_NORMAL+LISTEX_FLAG_HIDDEN+LISTEX_FLAG_GHOST, rlm)
+			if (!mobile.npctemplate)
+				return 0;
+			endif
+		endforeach
+	endfor
+
+	return 1;
+endfunction
+

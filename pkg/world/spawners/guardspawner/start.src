@@ -1,0 +1,6 @@
+use os;
+
+start_script ("guardspawner");
+Syslog("Guard Spawner Started.");
+
+

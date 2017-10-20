@@ -1,0 +1,175 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "include/utility";
+include "include/sysevent";
+include "include/eventid";
+include "../pkg/npcs/npcinfo";
+include "../pkg/npcs/npc_util";
+
+var me := Self();
+var next_possible_spam := ReadGameClock ();
+
+program auctioneer_ai()
+	if (!me.backpack)
+		DoDealerOnCreationSetup ();
+	endif
+
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN + SYSEVENT_ENTEREDAREA, 10);
+
+	var ev;
+	while (me)
+		if (me.hidden)
+			sleep (30);
+			me.hidden := 0;
+		endif
+		
+		ev := wait_for_event (120);
+		if (ev)
+			ProcessEvent (ev);
+		endif
+	endwhile
+endprogram
+
+
+
+
+///////////////////
+//  pretty obvious - processes events picked up in the main AI loop
+///////////////////
+
+function ProcessEvent (byref ev)
+	case (ev.type)
+		EVID_ENGAGED:
+		EVID_DAMAGED:
+			me.hidden := 1;
+			SetVital (me, "Life", GetVitalMaximumValue (me, "Life"));
+		EVID_ENTEREDAREA:
+			if (ev.source.npctemplate)
+				return 0;
+			endif
+
+			if (ReadGameClock() > next_possible_spam)
+				GreetCustomer (ev.source);
+				next_possible_spam := ReadGameClock() + 60;
+			endif
+		EVID_SPEECH:
+			if (ev.source.npctemplate)
+				return 0;
+			endif
+			var evtext := lower(ev.text);
+			if (evtext ["buy"])
+				var parms := array;
+				parms[1] := me;
+				parms[2] := ev.source;
+				start_script (":magic_dealer:buy_potion", parms);
+			elseif (evtext ["sell"])
+				Say ("If you have any scrap magic items you'd like to get rid of, just hand them to me.");
+			elseif (evtext ["bank"])
+				Say ("Nope.");
+			else
+				if (RandomInt (2))
+					Say ("I'm busy!  Go away!");
+				endif
+			endif
+
+		EVID_MERCHANT_BOUGHT:
+			TurnToward (ev.source);
+			return 1;
+
+		EVID_ITEM_GIVEN:
+			TurnToward (ev.source);
+			if (ev.item.objtype == UOBJ_GOLD_COIN)
+				Say ("For me?  Thanks.");
+				sleep (3);
+				Say ("What, you wanted something?");
+				sleep (3);
+				Say ("Fine, take it back.");
+				MoveItemToContainer (ev.item, ((ev.source).backpack));
+				return;
+			endif
+			
+			MoveItemToContainer (ev.item, me.backpack);
+			var parms := array;
+			parms[1] := me;
+			parms[2] := ev.source;
+			parms[3] := ev.item;
+			start_script (":magic_dealer:take_item", parms);
+	endcase
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  when a player enters the NPCs range, this function makes them
+//  yell a greeting
+///////////////////
+
+function GreetCustomer (customer)
+	if (customer.npctemplate)
+		return;
+	endif
+
+	if (customer.concealed)
+		return;
+	endif
+
+	case (RandomInt (10) )
+		0:
+			Say ("Where'd I put that #*^@! thing?");
+		1:
+			Say ("Ouch!  #^$*@ thing!");
+		2:
+			Say ("@*#^!");
+		3:
+			Say ("You'd think I lived in the bank, the way people keep tromping through here!");
+		4:
+			Say ("Why can't anything stay where I *@%!$ put it?!");
+		5:
+			Say ("Not again!");
+		6:
+			Say ("@*$% it to the $*@^$ pits of @!$^#");
+		7:
+			TurnToward (customer);
+			Say ("Vendor buy the guards a bank - get a life!");
+		8:
+			Say ("Another day, another *$@^%");
+		9:
+			TurnToward (customer);
+			Say ("Go away already " + customer.name + "!");
+	endcase
+endfunction
+
+
+
+
+///////////////////
+//  called when the NPC is first created, this function names
+//  them and clothes them
+///////////////////
+
+function DoDealerOnCreationSetup()
+	var newpack := CreateItemAtLocation (5288, 1176, 0, UOBJ_BACKPACK, 1, REALM_BRITANNIA);
+	if (!EquipItem (me, newpack))
+		DestroyItem (newpack);
+	endif
+
+	me.gender := 0;
+	me.graphic := 400;
+	me.name := "Benson";
+	me.title_suffix := ", Master Blacksmith";
+	EquipFromTemplate (me, "magic_dealer");
+
+	var myhome := array {};
+	myhome[1] := me.x;
+	myhome[2] := me.y;
+	myhome[3] := me.z;
+	myhome[4] := me.realm;
+	SetObjProperty (me, "myhome", myhome);
+endfunction

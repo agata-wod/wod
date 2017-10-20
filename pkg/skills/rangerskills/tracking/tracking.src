@@ -1,0 +1,273 @@
+use uo;
+use basic;
+use cfgfile;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/locations";
+include "include/attributes";
+
+program track (character)
+	if (GetObjProperty (character, "#useskill"))
+		if (GetProcess (GetObjProperty (character, "#useskill")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#useskill", GetPid());
+	SetObjProperty (character, "#trackingskill", GetPid());
+
+	if (!CheckSkill (character, SKILLID_TRACKING, -1, 0))
+		EraseObjProperty (character, "#usetracking");
+		SendSysmessage (character, "You fail to find any creatures nearby");
+		return;
+	endif
+
+	var config := ReadConfigFile ("tracking");
+	var range := 10 + CINT((GetAttribute(character, ATTRIBUTEID_TRACKING) /3));
+	var nearby := ListMobilesNearLocationEx (character.x, character.y, character.z, range, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, character.realm);
+	var corpses := ListItemsNearLocationOfType (character.x,character.y, character.z, range, UOBJ_CORPSE, character.realm);
+
+	if (len (nearby) < 2)
+		if (!len (corpses))
+			SendSysmessage (character, "There don't seem to be any creatures nearby");
+			return;
+		endif
+	endif
+
+	var catmenu := CreateMenu ("Select a trail:");
+	var crittypes := array { };
+	var crittype;
+	
+	foreach mobile in nearby
+		if (mobile.acctname or GetObjProperty (mobile, "master") )
+			if (mobile != character and !mobile.dead and !mobile.hidden)
+				if (!(0x1508 in crittypes))
+					crittypes.append (0x1508);
+					AddMenuItem (catmenu, 0x1508, "Players & Pets");
+				endif
+			endif
+		endif
+	endforeach
+
+	if (len (corpses) )
+		crittypes.append (0x2006);
+		AddMenuItem (catmenu, 0x2006, "corpses");
+	endif
+
+	foreach mobile in nearby
+		if (!mobile.acctname and !GetObjProperty (mobile, "master"))
+			var elem := FindConfigElem (config, mobile.graphic);
+			if (elem)
+				if ( !(elem.tile in crittypes) )
+					var tiletype := GetConfigInt (elem, "tile");
+					var tilename := GetConfigString (elem, "name");
+					crittypes.append(elem.tile);
+					AddMenuItem (catmenu, tiletype, tilename);
+				endif
+			endif
+		endif
+	endforeach
+
+	if (len(crittypes))
+		crittype := SelectMenuItem2 (character, catmenu);
+		if (!crittype)
+			SendSysmessage (character, "Canceled.");
+		EraseObjProperty (character, "#usetracking");
+			return;
+		endif
+	endif
+
+	if (crittype.objtype == UOBJ_CORPSE)
+		TrackCorpse (character, range);
+		return;
+	elseif (crittype.objtype == 0x1508)
+		TrackPlayersAndPets (character, range);
+		return;
+	endif
+
+	var tracktype := crittypes[crittype.index];
+
+	var track_menu := CreateMenu("Select a creature.");
+	var critter_ids := array;
+	var menucount := 0;
+
+	foreach mobile in nearby
+		if (!mobile.acctname and !GetObjProperty (mobile, "master"))
+			var elem := FindConfigElem(config, mobile.graphic);
+			if (elem)
+				if (elem.tile == tracktype)
+					menucount := menucount + 1;
+					critter_ids[menucount] := mobile;
+					var tiletype := GetConfigInt(elem, "tile");
+					AddMenuItem(track_menu, tiletype, mobile.name);
+				endif
+			endif
+		endif
+	endforeach
+  
+	var thetarget;
+
+	if (menucount > 0)
+		thetarget := SelectMenuItem2 (character, track_menu);
+		if (!thetarget)
+			SendSysmessage (character, "Canceled.");
+			EraseObjProperty (character, "#usetracking");
+			return;
+		endif
+	endif
+
+	var critter := critter_ids[thetarget.index];
+	detach();
+
+	EraseObjProperty (character, "#useskill");
+	if (!character.concealed and !character.hidden)
+		PrintTextAbove (character, "*tracking*");
+	else
+		PrintTextAbovePrivate (character, "*tracking*", character);
+	endif
+		
+	var timercounter := 0;
+	while (critter and Distance (character, critter) <= range and !critter.dead and timercounter < 10)
+		//If they've started tracking something else, exit
+		if (GetObjProperty (character, "#trackingskill") != GetPid())
+			return;
+		endif
+
+		timercounter := timercounter + 1;
+		var dir := GetDirection (character, critter.x, critter.y);
+		if (critter.name)
+			PrintTextAbovePrivate (character, "*" + critter.name + " is " + dir+ "*",character);
+			sleep(5);
+		endif
+		if (Distance (character, critter) < 6)
+			PrintTextAbovePrivate (character, "*Found it!*",character );
+			EraseObjProperty (character, "#usetracking");
+			return;
+		endif
+	endwhile
+
+	SendSysmessage (character, "You have lost your quarry.");
+	EraseObjProperty (character, "#usetracking");
+endprogram
+
+
+
+
+///////////////////
+//  If they selected to track corpses, this function is used.
+///////////////////
+
+function TrackCorpse (character, range)
+
+	var track_menu := CreateMenu("Select a corpse.");
+	var corpse_ids := array;
+
+	foreach corpse in ListItemsNearLocationOfType (character.x,character.y, character.z, range,UOBJ_CORPSE, character.realm)
+		corpse_ids.append (corpse);
+		AddMenuItem (track_menu, 0x2006, corpse.name);
+	endforeach
+
+	if (!len (corpse_ids) )
+		SendSysMessage (character, "Nothing.");
+		return;
+	endif
+
+	var thetarget := SelectMenuItem2 (character, track_menu);
+	if (!thetarget)
+		SendSysmessage (character, "Canceled.");
+		EraseObjProperty (character, "#usetracking");
+		return;
+	endif
+
+	var corpse := corpse_ids[thetarget.index];
+	detach();
+
+	PrintTextAbove (character, "*tracking*");
+	var timercounter := 0;
+	while (corpse and Distance (character, corpse) <= range and timercounter < 10)
+		timercounter := timercounter + 1;
+		var dir := GetDirection (character, corpse.x, corpse.y);
+		if (corpse.name)
+			PrintTextAbovePrivate (character, "*" + corpse.name + " is " + dir+ "*", character );
+			sleep (5);
+		endif
+		if (Distance (character, corpse) < 6)
+			PrintTextAbovePrivate (character, "*Found it!*", character );
+			EraseObjProperty (character, "#usetracking" );
+			return;
+		endif
+	endwhile
+
+	SendSysmessage (character, "You have lost your quarry.");
+	EraseObjProperty (character, "#usetracking");
+endfunction
+
+
+
+
+///////////////////
+//  If they selected to track players and their pets, this function is used.
+///////////////////
+
+function TrackPlayersAndPets (character, range)
+	var config := ReadConfigFile ("tracking");
+	var track_menu := CreateMenu ("Select a creature.");
+	var critter_ids := array;
+
+	foreach mobile in ListMobilesNearLocationEx (character.x, character.y, character.z, range, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, character.realm);
+		if (mobile.acctname or GetObjProperty (mobile, "master"))
+			if (mobile != character and !mobile.dead and !mobile.hidden)
+				var elem := FindConfigElem (config, mobile.graphic);
+				if (elem)
+					critter_ids.append (mobile);
+					var tiletype := GetConfigInt (elem, "tile");
+					AddMenuItem (track_menu, tiletype, mobile.name);
+				endif
+			endif
+		endif
+	endforeach
+  
+	if (!len (critter_ids) )
+		SendSysMessage (character, "Nothing.");
+		return;
+	endif
+
+	var thetarget := SelectMenuItem2 (character, track_menu);
+	if (!thetarget)
+		SendSysmessage (character, "Canceled.");
+		EraseObjProperty (character, "#usetracking");
+		return;
+	endif
+
+	var critter := critter_ids[thetarget.index];
+	SetObjProperty (character, "#trackingtimeout", ReadGameClock() + 40);
+	detach ();
+
+	PrintTextAbove (character, "*tracking*");
+	var timercounter := 0;
+	while (critter and Distance (character, critter) <= range and !critter.dead and timercounter < 10)
+		timercounter := timercounter + 1;
+		var dir := GetDirection (character, critter.x, critter.y);
+		if (critter.name)
+			PrintTextAbovePrivate (character, "*" + critter.name + " is " + dir+ "*",character);
+			sleep(5);
+		endif
+		if (Distance (character, critter) < 6)
+			PrintTextAbovePrivate (character, "*Found it!*",character );
+			EraseObjProperty (character, "#usetracking");
+			return;
+		endif
+	endwhile
+
+	SendSysmessage (character, "You have lost your quarry.");
+	EraseObjProperty (character, "#usetracking");
+endfunction
+
+
+
+
+
+

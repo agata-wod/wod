@@ -1,0 +1,92 @@
+use os;
+use http;
+use datafile;
+
+include "include/www";
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/string";
+include "include/accounts";
+include "../pkg/items/housing/house";
+
+program nukeaccount ()
+	WriteHTML ("<html><head><title>Account Information</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+	
+	//to delete an account, the GM has to be online (needed to confirm authority
+	var online_gm := FindOnlineAccountByIP (QueryIP());
+	if (!online_gm)
+		WriteHTML ("<p>Warning:  You must be logged in to WoD delete characters (security measure)");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	
+	if (!online_gm.cmdlevel or online_gm.cmdlevel < 5)
+		WriteHTML ("<p>Warning:  You do not have the authority to access this function.  Only GMs of command level 5 ");
+		WriteHTML ("are permitted to delete chacters.");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	
+	var acctname := QueryParam ("acctname");
+	if (!acctname)
+		WriteHTML ("Please enter an account name");
+		WriteHTML ("<form method=GET action=nukeaccount.ecl>");
+		WriteHTML ("Account name: <input name=acctname>");
+		WriteHTML ("<input id=submit1 name=submit1 type=submit value=Search>");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	
+	var confirm := QueryParam ("confirm");
+	if (confirm and confirm == "yes")
+		DeleteTheAccount (acctname);
+		WriteHTML ("<p>Account deleted.");
+		WriteHTML ("<br><a href=inactive_accounts.ecl>Back to inactive accounts</a></td>");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	
+
+	var acct := FindAccount (acctname);
+	if (!acct)
+		WriteHTML ("Invalid account name!");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+
+	WriteHTML ("<table>");
+	for counter := 1 to 7
+		var player := acct.GetCharacter (counter);
+		if (player)
+			WriteHTML ("<tr><td>" + player.name + "</td></tr>");
+		endif
+	endfor
+	WriteHTML ("</table>");
+
+	var housevalue := GetGlobalProperty ("#housevalue of " + acctname);
+	if (housevalue)
+		WriteHTML ("<p><b>Player has a house!</b>");
+	endif
+
+	WriteHTML ("<p><a href=nukeaccount.ecl?acctname=" + acctname + "&confirm=yes>Confirm Delete</a>");
+	WriteHTML ("</body></html>");
+endprogram
+
+function DeleteTheAccount (acctname)
+	var acct := FindAccount (acctname);
+  	for counter := 1 to 7
+		var player := acct.GetCharacter (counter);
+		if (player)
+			foreach item in ListEquippedItems (player)
+				DestroyItem (item);
+			endforeach
+		endif
+		acct.DeleteCharacter (counter);
+	endfor
+
+	var worldbank := OpenWorldBank();
+	var bank_obj_name := "Bankbox of " + acctname;
+	DestroyRootItemInStorageArea (worldbank, bank_obj_name);
+endfunction

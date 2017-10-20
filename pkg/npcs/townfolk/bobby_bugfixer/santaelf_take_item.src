@@ -1,0 +1,79 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/magicitems";
+include "include/accounts";
+include "include/string";
+include "include/magic";
+
+program display_forsale_items (parms)
+	var magic_dealer := parms[1];
+	var player := parms[2];
+	var item := parms[3];
+	if (!magic_dealer or !player or !item)
+		return;
+	endif
+
+	if (!MoveItemToContainer (item, magic_dealer.backpack))
+		PrintTextAbovePrivate (magic_dealer, "Ack, I'm having problems!", player);
+		if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		return;
+	endif
+
+	if (GetObjProperty (item, "ownerserial"))
+		PrintTextAbovePrivate (magic_dealer, "I'm sorry, but that has an owner's mark on it.", player);
+		if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		return;
+	endif
+	
+	if (!ReserveItem (item))
+		PrintTextAbovePrivate (magic_dealer, "Sorry, I can't do anything with that.", player);
+		if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		return;
+	endif
+
+	if (item.objtype != 0xBE35)
+		PrintTextAbove (magic_dealer, "For me?  Thanks.");
+		sleep (3);
+		PrintTextAbove (magic_dealer, "What, you wanted something?");
+		sleep (3);
+		PrintTextAbove (magic_dealer, "Fine, take it back.");
+		MoveItemToContainer (item, player.backpack);
+		return;
+	endif
+
+	var total_points := GetAccountProperty (player.acctname, "santa_elf_points");
+	if (!total_points)
+		total_points := 0;
+	endif
+
+	total_points := total_points + 1;
+	SetAccountProperty (player.acctname, "santa_elf_points", total_points);
+	
+	DestroyItem (item);
+	case (RandomInt (5))
+		0: PrintTextAbovePrivate (magic_dealer, "Thanks!", player);
+		1: PrintTextAbovePrivate (magic_dealer, "The children will really appreciate your help.", player);
+		2: PrintTextAbovePrivate (magic_dealer, "On behalf of Santa, thank you.", player);
+		3: PrintTextAbovePrivate (magic_dealer, "Santa will be glad to get this one back!", player);
+		4: PrintTextAbovePrivate (magic_dealer, "Christmas was almost ruined.  Good thing you're here!", player);
+		default:
+			if (player.gender)
+				PrintTextAbovePrivate (magic_dealer, "I'll tell santa what a good girl you've been!", player);
+			else
+				PrintTextAbovePrivate (magic_dealer, "I'll tell santa what a good boy you've been!", player);
+			endif
+	endcase
+	
+endprogram
+
+
+

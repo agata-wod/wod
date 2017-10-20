@@ -1,0 +1,39 @@
+use os;
+use uo;
+
+include "include/client";
+include "include/spawn";
+
+
+program textcmd_createnpc (character, parms)
+	if (!parms)
+		SendSysMessage (character, "usage: .npc [templatename] [number]");
+		return;
+	endif
+
+	var splitted := SplitWords (parms);
+	var npctemplate := splitted [1];
+	if (!npctemplate)
+		SendSysMessage (character, "usage: .npc [templatename] [number]");
+		return;
+	endif
+	
+	var amount := CINT (splitted [2]);
+	if (!amount)
+		amount := 1;
+	endif
+	
+	for i := 1 to amount
+		var loc := TargetCoordinates (character);
+		if (!loc)
+			SendSysMessage (character, "Canceled");
+			return;
+		endif
+
+		var npc := SpawnNPCAtLocation (npctemplate, loc.x, loc.y, loc.z, 0, loc.realm);
+		if (npc == "error")
+			SendSysMessage (character, "Can't create NPC!");
+			return;
+		endif
+	endfor
+endprogram

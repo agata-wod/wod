@@ -1,0 +1,40 @@
+use uo;
+use os;
+use polsys;
+
+include "include/newperformaction";
+
+program textcmd_anim (who, text)
+	var params := SplitWords (text);
+	var animation := cint(params[1]);
+	var action := cint(params[2]);
+	var subaction := cint(params[3]);
+	NewPerformAction(who, animation, action, subaction);
+endprogram
+
+// Animation 0: Attack
+// Attack Actions
+// 0: dodge? punch?
+// 1: fire bow
+// 2: fire crossbow
+// 3: Macefighting: (0) slash (1) bash
+// 4: Swordsmanship: (0) slash (1) pierce (2) bash
+// 5: Fencing: (0) slash (1) pierce
+// 6: 2h Macefighting: (0) bash (1) slash
+// 7: 2h Swordsmanship: (0) slash (1) pierce
+// 8: 2h Fencing: (0) slash (1) pierce
+// 9: slash (1) pierce
+//10: pierce (1) bash
+//11: dodge? (1) slash (2) pierce (3) pierce (4) bash (5) slash (6) bash (7) slash (8) pierce (9) bash (10) slash (11) pierce
+//
+//Animation 1: Parry
+//Animation 2: Block (flying looks different than parry)
+//Animation 3: Die (0,0) on back (0,1) on face
+//Animation 4: Hit
+//Animation 5: Fidget
+//Animation 6: Eat
+//Animation 7: Emote (0) bow (1) salute
+//Animation 8: Alert
+//Animation 9: Take off (must be flying)
+//Animation 10: Land
+//Animation 11: Spell (0,0) Area (0,1) directional

@@ -1,0 +1,33 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+
+program testmods (character, text)
+	if (text)
+	endif
+	caster_magery := GetAttribute (character, ATTRIBUTEID_MAGERY);
+	caster_evalint := GetAttribute (character, ATTRIBUTEID_INVOCATION);
+
+	var modamount_array := array{};
+	for i := 1 to 20
+		modamount_array.append (0);
+	endfor
+	
+	var total_counter := 0;
+	for i := 1 to 1000
+		var mod_amount := CINT(CalcModAmount()/2);
+		modamount_array[mod_amount] := modamount_array[mod_amount] + 1;
+		total_counter := total_counter + mod_amount;
+	endfor
+	
+	for i := 1 to 20
+		if (modamount_array[i])
+			SendSysMessage (Character, "number of " + i + "s: " + modamount_array[i]);
+		endif
+	endfor
+	
+	SendSysMessage (character, "Average is " + CSTR (CDBL (total_counter)/1000));
+endprogram
+

@@ -1,0 +1,47 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/wodinc";
+include "../pkg/npcs/npc_util";
+
+program npcwipe( me )
+	var number := 0;
+	var SpawnName;
+	var numspawns;
+
+	foreach mobile in ListMobilesNearLocationEx ( me.x, me.y, me.z, 100, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, me.realm )
+		if (IsKillableNPC (mobile))
+			if ( GetObjProperty (mobile, "regspawn") )
+				SpawnName := GetObjProperty (mobile, "regspawn");
+				numspawns := CINT(GetGlobalProperty (SpawnName))-1;
+				SetGlobalProperty (SpawnName, numspawns);
+			endif
+			KillNPC (mobile);
+			number := number + 1;
+		endif
+	endforeach
+
+	SendSysMessage(me,"Total NPCs killed: " + number);
+endprogram
+
+
+
+
+///////////////////
+//  figures out if this is an NPC that shouldn't be killed
+///////////////////
+
+function IsKillableNPC (mobile)
+	if (!mobile.npctemplate)
+		return 0;
+	elseif (GetObjProperty (mobile, "master") )
+		return 0;
+	elseif (GetObjProperty (mobile, "myhome") )
+		return 0;
+	endif
+	return 1;
+endfunction
+
+
+

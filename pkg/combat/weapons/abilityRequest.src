@@ -1,0 +1,15 @@
+use uo;
+use os;
+use uo;
+use polsys;  
+
+include ":weapons:abilityIcons";
+
+
+program Request(parms)
+	var who := parms[1];
+	var packet := parms[2];
+	var ability := packet.getInt8(13);
+	SetWeaponAbility (who, ability);
+	return 1;
+endprogram

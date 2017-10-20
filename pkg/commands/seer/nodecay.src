@@ -1,0 +1,21 @@
+use os;
+use uo;
+
+include "include/objtype";
+
+program textcmd_ident( who )
+	SendSysMessage (who, "Make what no-decay?");
+	var what := Target (who, TGTOPT_NOCHECK_LOS);
+
+	if (!what)
+		SendSysMessage (who, "Cancelled");	
+		return;
+	endif
+
+	what.decayat := 0;
+	if (what.objtype == UOBJ_CORPSE)
+		SetObjProperty (what, "nodecay", 1);
+	endif
+
+	SendSysMessage( who, ".Decayat is now: "+ what.decayat );	
+endprogram

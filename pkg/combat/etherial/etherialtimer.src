@@ -1,0 +1,13 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+program etherial_item_timer ()
+	sleep (600);
+
+	while (1)
+		start_script ("timercheck");
+		sleep (3600);
+	endwhile    
+endprogram

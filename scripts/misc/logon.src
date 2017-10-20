@@ -1,0 +1,428 @@
+use os;
+use uo;
+use util;
+use math;
+
+include "include/client";
+include "include/objtype";
+include "include/wodinc";
+include "include/accounts";
+include "include/clock";
+include "include/buffdebuff";
+include "../pkg/npcs/npc_util";
+include "../pkg/world/weather/weather";
+include "../pkg/character/virtue/virtue";
+
+program logon (character)
+	SendPacket (character, "B9000F97DF");
+	character.setlightlevel (10, 1);
+	//Now we have to move them to reset the items around them
+	if (GetObjProperty (character, "sailto"))
+		FinishSailing (character);
+	endif
+
+	unclone (character);
+	if (character.race == RACE_HUMAN)
+		character.carrying_capacity_mod := 100;
+	else
+		character.carrying_capacity_mod := 0;
+	endif
+	if (character.race == RACE_ELF)
+		character.setlightlevel (0, -1);
+	endif
+	if (!character.cmdlevel)
+		character.concealed := 0;
+	endif
+
+	SendSysMessage (character, "Welcome to the World of Dreams!");
+	SetObjProperty (character, "logontime", ReadGameClock() );
+
+	if (GetObjProperty (character, "follower_moved_to_inn"))
+		SendSysMessage (character, "Your pets and/or henchmen have been moved to the nearby inn");
+		EraseObjProperty (character, "follower_moved_to_inn");
+	endif
+
+	var humuc := GetObjProperty (character, "humuc");
+	if (humuc)
+		humuc := SystemFindObjectBySerial (humuc);
+		if (humuc) 
+			humuc.hidden := 0;
+			humuc.frozen := 0;
+			RestartScript (humuc);
+		else
+			EraseObjProperty (character, "humuc");
+		endif
+	endif
+
+	var NextPossibleVirtueLoss := GetObjProperty (character, "NextPossibleVirtueLoss");
+	if (!NextPossibleVirtueLoss or NextPossibleVirtueLoss < ReadGameClock() )
+		var amt := cint(GetVirtueAmount(character)/1000);
+		if (amt > 0)
+			AddVirtue(character, 0-amt, 1);
+			BonusHonor(character, amt);
+		elseif (amt < 0)
+			AddVirtue(character, amt, 1);
+		endif
+		SetObjProperty (character, "NextPossibleVirtueLoss", ReadGameClock()+86400);
+	endif
+
+	var acct := character.acct;
+	acct.SetProp ("lastlogon", ReadGameClock() );
+
+	//Players with less than 40 hours of playtime get a 'young' tag
+	var total_time := GetAccountProperty (character.acctname, "online_time");
+	if (!total_time)
+		total_time := 0;
+	endif
+
+	if (total_time < CINT (40*60*60) )
+		if (!character.cmdlevel)
+			character.title_guild := "young";
+		endif
+	elseif (character.title_guild == "young")
+		character.title_guild := "";
+		acct.EraseProp ("young");
+	endif
+
+	//Save the players IP address and logon time
+	RecordPlayerLogin (character);
+	SetWeatherForPlayer (character);
+	SetObjProperty (character, "#logon_noskillwin", 1);
+	ResetBuffDebuffIcons(character);
+	
+	//MakeChristmasTreeDeed (character);
+	//MakeChristmasGift (character);
+	//MakeValentineBox (character);
+
+	if ( character.cmdlevel < 1 )
+		broadcastsound();
+		broadcast(character.name + " has arrived into the World of Dreams!", FONT_NORMAL, 48);
+	else
+		broadcastsound(1);
+		gmbroadcast (character.name + " has arrived into the World of Dreams!", FONT_NORMAL, 48);
+	endif
+	
+endprogram
+
+
+
+
+///////////////////
+//  Finds the player's NPC clone, if they have one, and kills it
+///////////////////
+
+function unclone(who)
+
+	set_critical(1);
+	var npc;
+	if ( getobjproperty(who,"clone") )
+		npc := SystemFindObjectBySerial(getobjproperty(who,"clone"));
+		if (npc)
+			KilLNPC (npc);
+		endif
+		EraseObjProperty(who,"clone");
+	endif
+	set_critical(0);
+
+endfunction
+
+
+
+
+///////////////////
+//  If the player logged off while sailing somewhere, take them to their destination
+///////////////////
+
+function FinishSailing (who)
+	if (getobjproperty (who, "sailto"))
+		var sailto := getobjproperty (who, "sailto");
+		var sailtor := sailto[4];
+		if (!sailtor)
+			sailtor := REALM_BRITANNIA;
+		endif
+		MoveObjectToLocation( who, sailto[1], sailto[2], sailto[3], sailtor, MOVEOBJECT_FORCELOCATION );
+		EraseObjProperty (who, "sailto");
+	endif
+endfunction
+
+
+
+///////////////////
+//  Records the player's last 10 logins and their associated IP addresses
+///////////////////
+
+function RecordPlayerLogin (character)
+	var logon_record := GetAccountProperty (character.acctname, "logon_record");
+	if (!logon_record)
+		logon_record := dictionary;
+	endif
+
+	//only record the last 10
+	var logon_keys := logon_record.keys();
+	if (logon_keys.size())
+		if (logon_keys.size() > 10)
+			logon_record.erase (logon_keys[1]);
+		endif
+	endif
+	
+	var newlogon := array {};
+	newlogon[1] := Systime_GetReadableTimeString();
+	newlogon[2] := character.ip;
+	newlogon[3] := character.name;
+	
+	logon_record.insert (ReadGameClock(), newlogon);
+	SetAccountProperty (character.acctname, "logon_record", logon_record);
+endfunction
+
+
+
+
+
+function MakeChristmasGift (character)
+	if (GetAccountProperty (character.acctname, "christmas_present_2013"))
+		return;
+	endif
+
+	var bankbox := FindBankBox (character.acctname);
+	if (!bankbox)
+		Syslog ("Error finding bankbox of " + character.acctname);
+		return;
+	endif
+
+	var gift1 := CreateItemInContainer (bankbox, 0xB010, 1);
+	if (!gift1)
+		return 0;
+	endif
+	
+	gift1.graphic := 0xa02d;
+	gift1.color := 272;
+	gift1.name := "A Christmas Gift";
+	gift1.usescript := ":giftwrapper:christmasgift";
+	gift1.movable := 0;
+	
+	var gift2 := CreateItemInContainer (bankbox, 0xB010, 1);
+	if (!gift2)
+		Syslog ("Christmas Error! player " + character.acctname + " did not get their second gift");
+	endif
+	gift2.graphic := 0xa031;
+	gift2.color := 38;
+	gift2.name := "A Christmas Gift";
+	gift2.usescript := ":giftwrapper:christmasgift";
+	gift2.movable := 0;
+	SetAccountProperty (character.acctname, "christmas_present_2013", 1);
+
+	SendSysMessage (character, "Merry Christmas!");
+	return;
+endfunction
+
+
+
+
+
+///////////////////
+//  For easter.  Its easier to leave it here than remake it every year...
+///////////////////
+
+function MakeEasterBasket (character)
+	if (GetAccountProperty (character.acctname, "easter_present_2012"))
+		return;
+	endif
+	var basket := CreateItemInContainer (character.backpack, 0x990, 1);
+	if (!basket)
+		SendSysMessage (character, "Error creating basket!");
+		return;
+	endif
+	
+	basket.graphic := 5344;
+	basket.name := "an Easter basket";
+	case (RandomInt (4))
+		0:
+			basket.color := 1419;
+		1:
+			basket.color := 1328;
+		2:
+			basket.color := 1650;
+		default:
+			basket.color := 621;
+	endcase
+	
+	var item := CreateItemInContainer (basket, 0xc951, 1);
+
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 3378;
+	item.color := 273;
+	item.name := "bubblegum Easter grass";
+	
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 3378;
+	item.color := 273;
+	item.name := "bubblegum Easter grass";
+
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 3873;
+	item.color := 0;
+	item.name := "a jellybean";
+	
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 3881;
+	item.color := 0;
+	item.name := "a jellybean";
+
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 3882;
+	item.color := 0;
+	item.name := "a jellybean";
+
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 3883;
+	item.color := 0;
+	item.name := "a jellybean";
+
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 3884;
+	item.color := 0;
+	item.name := "a jellybean";
+
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 3886;
+	item.color := 0;
+	item.name := "a jellybean";
+	
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 3887;
+	item.color := 0;
+	item.name := "a jellybean";
+	
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 8474;
+	item.color := 53;
+	item.name := "a marshmallow peep";
+	
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 8474;
+	item.color := 53;
+	item.name := "a marshmallow peep";
+
+	item := CreateItemInContainer (basket, 0x2821, 1);
+	item.graphic := 10273;
+	item.color := 0;
+	item.name := "a stuffed bunny";
+
+	SetAccountProperty (character.acctname, "easter_present_2012", 1);
+endfunction
+
+
+
+
+///////////////////
+//  For christmas
+///////////////////
+
+function MakeChristmasTreeDeed (character)
+	if (GetAccountProperty (character.acctname, "christmas_tree_deed_2012"))
+		return;
+	endif
+
+	var deed := CreateItemInContainer (character.backpack, 0xB010, 1);
+	if (!deed)
+		SendSysMessage (character, "Error creating Christmas Tree deed!");
+		SendSysMessage (character, "(Your backpack is probably full)");
+		return;
+	endif
+
+	SetAccountProperty (character.acctname, "christmas_tree_deed_2012", 1);
+endfunction
+
+function MakeValentineBox (character)
+	if (GetAccountProperty (character.acctname, "valentine_present_2013"))
+		return;
+	endif
+	var basket := CreateItemInContainer (character.backpack, 0x49cc, 1);
+	if (!basket)
+		SendSysMessage (character, "Error creating Valentine's Day Present!");
+		return;
+	endif
+		
+	var item;
+
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 0x1ea7;
+	item.color := 34;
+	item.name := "Happy Valentine's Day!";
+	
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 0x1ea7;
+	item.color := 34;
+	item.name := "Happy Valentine's Day!";
+	
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 0x1ea7;
+	item.color := 34;
+	item.name := "Happy Valentine's Day!";
+	
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 0x1ea7;
+	item.color := 1154;
+	item.name := "True Love";
+	
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 0x1ea7;
+	item.color := 1154;
+	item.name := "True Love";
+	
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 0x1ea7;
+	item.color := 1154;
+	item.name := "True Love";
+	
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 0x1ea7;
+	item.color := 1202;
+	item.name := "Be my Valentine";
+	
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 0x1ea7;
+	item.color := 1202;
+	item.name := "Be my Valentine";
+	
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 0x1ea7;
+	item.color := 1202;
+	item.name := "Be my Valentine";
+	
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 0x1ea7;
+	item.color := 34;
+	item.name := "Be mine!";
+	
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 0x1ea7;
+	item.color := 1154;
+	item.name := "Be mine!";
+	
+	item := CreateItemInContainer (basket, 0xc942, 1);
+	item.graphic := 0x1ea7;
+	item.color := 1202;
+	item.name := "Be mine!";
+
+	item := CreateItemInContainer (basket, 0xb034, 1);
+
+	SetAccountProperty (character.acctname, "valentine_present_2013", 1);
+endfunction
+
+function broadcastsound(mincmdlevel := 0)
+	foreach char in enumerateonlinecharacters()
+		if (char.cmdlevel >= mincmdlevel)
+			PlaySoundEffectPrivate( char, 0x1E9, char );
+		endif
+	endforeach
+endfunction
+
+function gmbroadcast (message, font, color)
+	foreach char in enumerateonlinecharacters()
+		if (char.cmdlevel > 0)
+			SendSysMessage (char, message, font, color);
+		endif
+	endforeach
+endfunction
+

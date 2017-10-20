@@ -1,0 +1,44 @@
+use uo;
+use os;
+use http;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/string";
+include "include/accounts";
+include "../pkg/items/housing/house";
+
+WriteHTML ("<html><head><title>Search for account by Email address</title></head>");
+WriteHTML ("<body bgcolor=\"#dcdeed\">");
+
+var email := QueryParam ("email");
+if (!email)
+	WriteHTML ("Please enter an email address (or partial address)");
+	WriteHTML ("<form method=GET action=search_email.ecl>");
+	WriteHTML ("Account name: <input name=email>");
+	WriteHTML ("<input id=submit1 name=submit1 type=submit value=Search>");
+	WriteHTML ("</body></html>");
+	return;
+endif
+
+var found := 0;
+
+WriteHTML ("<table cellpadding=2>");
+foreach acctname in ListAccounts ()
+	var account_email := GetAccountProperty (acctname, "account_email");
+	if (account_email)
+		if (account_email[email])
+			WriteHTML ("<tr><td><li><a href=account_info.ecl?acctname=" + acctname + ">" + acctname + "</a></td></tr>");
+			found := found + 1;
+		endif
+	endif
+endforeach
+WriteHTML ("</table>");
+WriteHTML ("<p>Found " + found + " possible matches");
+WriteHTML ("</body></html>");
+
+
+
+

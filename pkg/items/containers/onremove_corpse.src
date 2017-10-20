@@ -1,0 +1,32 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/magicitems";
+
+program onremove_corpse (character, corpse, item, movetype)
+	corpse.name := corpse.desc;
+	if (movetype != MOVETYPE_PLAYER)
+		return 1;
+	endif
+	if (!character or character.concealed)
+		return 1;
+	endif
+
+	if (IsMagicalItem (item) )
+		PrintTextAbove (character, "*"+item.desc+"*");
+	elseif (GetObjProperty (item, "ownerserial"))
+		PrintTextAbove (character, "*"+item.desc+"*");
+	elseif (GetObjProperty (item, "questitem"))
+		PrintTextAbove (character, "*"+item.desc+"*");
+	elseif (item.objtype >= 0x16003 and item.objtype <= 0x16007)
+		PrintTextAbove (character, "*"+item.desc+"*");
+	elseif (item.desc["treasure"] or item.desc["glowing"])
+		PrintTextAbove (character, "*"+item.desc+"*");
+	else
+		PrintTextAbove (character, "*yoink*");
+	endif
+	return 1;
+endprogram
+

@@ -1,0 +1,12 @@
+use uo;
+use os;
+
+program test_text (character)
+	SendSysMessage (character, "Restarting weather.  This will probably take a while to take effect.");
+	SetGlobalProperty ("#stopweather", 1);
+	repeat
+		sleep (60);	
+	until (!GetGlobalProperty ("#stopweather"));
+	start_script (":weather:startweather");
+	SendSysMessage (character, "Weather has been restarted.");
+endprogram

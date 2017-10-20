@@ -1,0 +1,22 @@
+use uo;
+use os;
+
+program make_bow (character)
+	var targetted := TargetCoordinates (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+	
+	var thebow := CreateItemAtLocation (targetted.x, targetted.y, targetted.z+8, 0xB010, 1, targetted.realm);
+	if (!thebow)
+		SendSysMessage (character, "Error creating bow");
+		return;
+	endif
+	
+	thebow.graphic := 10121;
+	thebow.color := 33;
+	thebow.movable := 0;
+	thebow.name := "a bow";
+	return;
+endprogram

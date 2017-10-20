@@ -1,0 +1,7 @@
+use uo;
+use os;
+
+program login (character)
+	EraseObjProperty (character, "#castingdruidspell");
+	EraseObjProperty (character, "#druidbag_version");
+endprogram

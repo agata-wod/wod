@@ -1,0 +1,184 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/wodinc";
+include "include/objtype";
+include "include/clock";
+
+var ingot_type_array := array {
+	UOBJ_IRON_INGOT, UOBJ_IRON_INGOT, UOBJ_IRON_INGOT, UOBJ_IRON_INGOT,		//weighted toward iron
+	UOBJ_IRON_INGOT, UOBJ_IRON_INGOT, UOBJ_IRON_INGOT, UOBJ_IRON_INGOT,		//and other common ingots
+	UOBJ_IRON_INGOT, UOBJ_IRON_INGOT, UOBJ_IRON_INGOT, UOBJ_IRON_INGOT,
+	UOBJ_IRON_INGOT, UOBJ_IRON_INGOT, UOBJ_IRON_INGOT, UOBJ_IRON_INGOT,
+
+	UOBJ_BRONZE_INGOT, UOBJ_BRONZE_INGOT, UOBJ_BRONZE_INGOT, UOBJ_BRONZE_INGOT,
+	UOBJ_BRONZE_INGOT, UOBJ_BRONZE_INGOT, UOBJ_BRONZE_INGOT, UOBJ_BRONZE_INGOT,
+
+	UOBJ_DULLCOPPER_INGOT, UOBJ_DULLCOPPER_INGOT, UOBJ_DULLCOPPER_INGOT, UOBJ_DULLCOPPER_INGOT,
+	UOBJ_DULLCOPPER_INGOT, UOBJ_DULLCOPPER_INGOT, UOBJ_DULLCOPPER_INGOT, UOBJ_DULLCOPPER_INGOT,
+
+	UOBJ_COPPER_INGOT, UOBJ_COPPER_INGOT, UOBJ_COPPER_INGOT,
+	UOBJ_COPPER_INGOT, UOBJ_COPPER_INGOT, UOBJ_COPPER_INGOT,
+
+	UOBJ_ONYX_INGOT, UOBJ_ONYX_INGOT, UOBJ_ONYX_INGOT, UOBJ_ONYX_INGOT,
+
+	UOBJ_PYRITE_INGOT, UOBJ_PYRITE_INGOT, UOBJ_PYRITE_INGOT,
+	UOBJ_PYRITE_INGOT, UOBJ_PYRITE_INGOT,
+
+	UOBJ_MALACHITE_INGOT, UOBJ_MALACHITE_INGOT, UOBJ_MALACHITE_INGOT,
+
+	UOBJ_AZURITE_INGOT, UOBJ_AZURITE_INGOT,
+
+	UOBJ_BLUESTEEL_INGOT,
+	UOBJ_RUBYSTEEL_INGOT
+};
+
+program CreateScript_BulkOrderDeed (deed)
+	var blacksmith_cfg := ReadConfigFile (":blacksmithy:blacksmithy");
+	if (!blacksmith_cfg)
+		DestroyItem (deed);
+		return CreateError ("Unable to read blacksmithy.cfg file", 1);
+	endif
+
+	var cfgfile_keys := GetConfigIntKeys(blacksmith_cfg);
+	if (cfgfile_keys.size() == 0)
+		DestroyItem (deed);
+		return CreateError ("blacksmithy.cfg file seems to be empty", 1);
+	endif
+	
+	var chosen_objtype := 0;
+	var chosen_elem := 0;
+	var tries := 0;
+	repeat
+		chosen_objtype := cfgfile_keys[RandomInt (cfgfile_keys.size()) + 1];
+		chosen_elem :=  FindConfigElem (blacksmith_cfg, chosen_objtype);
+		if (chosen_elem)
+			if (!chosen_elem.bulk_deed)
+				chosen_objtype := 0;
+			endif
+		else
+			chosen_objtype := 0;
+			tries := tries + 1;
+		endif
+	until (chosen_objtype or tries > 10);
+
+	if (!chosen_objtype)
+		DestroyItem (deed);
+		return CreateError ("Can't find workable objtype", 1);
+	endif
+	
+	var quality_needed := 0;
+	if (chosen_elem.hasquality)
+		quality_needed := RandomInt (3);
+	endif
+
+	var amount_to_make := 10 + (RandomInt (3) * 5);
+	var ingot_objtype := ingot_type_array [RandomInt (ingot_type_array.size()) + 1];
+	
+	//Try to make a rough guess at how much gold should be paid to complete the quest
+	var material_amount_needed := CINT (chosen_elem.material) * amount_to_make;
+	if (!material_amount_needed)
+		deed.name := "broken bulk deed - please give to a GM";
+		SetObjProperty (deed, "Error", "unable to find material needed to make objtype " + chosen_objtype);
+		return CreateError ("Unable to find material for objtype " + chosen_objtype, 1);
+	endif
+	
+	var ingot_multiplier := GetValueMultiplierByIngot (ingot_objtype);
+	if (!ingot_multiplier)
+		deed.name := "broken bulk deed - please give to a GM";
+		SetObjProperty (deed, "Error", "unable to find ingot multiplier for " + ingot_objtype);
+		return CreateError ("Unable to find ingot multiplier for " + ingot_objtype, 1);
+	endif
+	
+	var total_gold := CINT (material_amount_needed * ingot_multiplier);
+	
+	//Figure out the special bonus multiplier
+	total_gold := CINT (total_gold * CalculateSpecialBonusMultiplier (quality_needed, chosen_elem.skill));
+
+	//This is currently not enabled
+	var special_reward_level := 0;
+	
+	var required_items := Array {};
+	required_items[1] := ReadGameClock();
+	required_items[2] := chosen_objtype;
+	required_items[3] := quality_needed;
+	required_items[4] := ingot_objtype;
+	required_items[5] := amount_to_make;
+	required_items[6] := 0;
+	required_items[7] := total_gold;
+	required_items[8] := special_reward_level;
+	
+	SetObjProperty (deed, "required_items", required_items);
+	return 1;
+endprogram
+
+
+
+
+///////////////////
+//  Different materials have a different value
+///////////////////
+
+function GetValueMultiplierByIngot (ingot_objtype)
+	case (ingot_objtype)
+		UOBJ_IRON_INGOT:		return 5;
+		UOBJ_BRONZE_INGOT:		return 6;
+		UOBJ_DULLCOPPER_INGOT:	return 7;
+		UOBJ_COPPER_INGOT:		return 8;
+		UOBJ_ONYX_INGOT:		return 10;
+		UOBJ_PYRITE_INGOT:		return 10;
+		UOBJ_MALACHITE_INGOT:	return 12;
+		UOBJ_AZURITE_INGOT:		return 20;
+		UOBJ_BLUESTEEL_INGOT:	return 25;
+		UOBJ_RUBYSTEEL_INGOT:	return 25;
+		default:
+			Syslog ("Error - unable to find multipier for objtype " + ingot_objtype);
+			return CreateError ("Unable to find multipier for objtype " + ingot_objtype, 1);
+	endcase;
+endfunction
+
+
+
+
+///////////////////
+//  Calculates the gold muliplier, depending on the quality and skill needed
+///////////////////
+
+function CalculateSpecialBonusMultiplier (quality_needed, skill_needed)
+	if (quality_needed == 2)	//exceptional
+		if (skill_needed > 98)
+			return 3.5;
+		elseif (skill_needed > 88)
+			return 3.0;
+		elseif (skill_needed > 78)
+			return 2.7;
+		elseif (skill_needed > 68)
+			return 2.4;
+		else
+			return 2.2;
+		endif
+	elseif (quality_needed == 1)
+		if (skill_needed > 98)
+			return 2.4;
+		elseif (skill_needed > 88)
+			return 2;
+		elseif (skill_needed > 78)
+			return 1.8;
+		else
+			return 1.6;
+		endif
+	else
+		if (skill_needed > 98)
+			return 1.5;
+		elseif (skill_needed > 88)
+			return 1.2;
+		else
+			return 1;
+		endif
+	endif
+	return 1;
+endfunction
+
+
+

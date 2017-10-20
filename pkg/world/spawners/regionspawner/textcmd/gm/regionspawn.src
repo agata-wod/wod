@@ -1,0 +1,25 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+program regionalspawner()
+
+	if (GetGlobalProperty("#spawnerisrunning"))
+		gmreport("regional spawner is still running from last invocation");
+	else
+		start_script( "dospawn" );
+	endif	
+endprogram
+
+function gmreport (text)
+
+	syslog(text);
+	var gms := EnumerateOnlineCharacters();
+	foreach guy in gms
+        	if  (guy.cmdlevel)
+       			SendSysMessage(guy, "Regionspawner: " + text);
+		endif
+	endforeach
+
+endfunction

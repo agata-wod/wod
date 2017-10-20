@@ -1,0 +1,41 @@
+use uo;
+use os;
+use http;
+
+include "include/client";
+include "include/clock";
+include "include/accounts";
+
+program count_benson_potions ()
+	WriteHTML ("<html><head><title>Shadowpack Guess Contest</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+
+	var acctinfodf := OpenDataFile (":character:character_data");
+	if (!acctinfodf)
+		acctinfodf := CreateDataFile (":character:character_data");
+		if (!acctinfodf)
+			Syslog ("Error opening character data file!");
+			WriteHTML ("Unable to open or create data file.");
+			WriteHTML ("</body></html>");
+			return;
+		endif
+	endif
+
+	WriteHTML ("<table><tr><td>&nbsp</td><td>Guess</td></tr>");
+	foreach acctname in ListAccounts ()
+		var tempentry := acctinfodf.FindElement (acctname);
+		if (!tempentry)
+			acctinfodf.CreateElement (acctname);
+			tempentry := acctinfodf.FindElement (acctname);
+		endif
+		var account_points := CINT (tempentry.GetProp ("shadowpack_guess"));
+		if (account_points)
+			WriteHTML ("<tr><td>" + acctname + "</td><td>" + account_points + "</td></tr>");
+		endif
+	endforeach
+	WriteHTML ("</table>");
+	WriteHTML ("</body></html>");
+endprogram
+
+
+

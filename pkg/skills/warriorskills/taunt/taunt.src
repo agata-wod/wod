@@ -1,0 +1,68 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/utility";
+include "include/eventid";
+include "include/attributes";
+include "../pkg/npcs/npcinfo";
+
+program taunt (character)
+	if (GetObjProperty (character, "#useskill"))
+		if (GetProcess (GetObjProperty (character, "#useskill")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#useskill", GetPid());
+
+	if (GetObjProperty (character, "#usetaunt"))
+		if (GetProcess (GetObjProperty (character, "#usetaunt")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#usetaunt", GetPid());
+
+	SendSysMessage (character, "Taunt what?");
+	var subject := Target (character, TGTOPT_CHECK_LOS + TGTOPT_HARMFUL);
+	if (!subject)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (!subject.npctemplate)
+		SendSysMessage (character, "How do you expect to taunt that?");
+		return;
+	endif
+
+	if (!CheckSkill (character, SKILLID_LEADERSHIP, -1, 0) )
+		SendSysMessage (character, "They don't seem very impressed.");
+		EraseObjProperty (character, "#useskill");
+		detach ();
+		sleep (7);
+		return;
+	endif
+
+	var range := 15 - CINT (GetAttribute (character, ATTRIBUTEID_LEADERSHIP)/10);
+	if (range < 2)
+		range := 2;
+	endif
+
+	var ev := struct;
+	ev.+source := character;
+	ev.+type := EVID_ALL_ATTACK_CMD;
+	SendEvent (subject, ev);
+
+	//then taunt everything around it, because u suk
+	foreach mob in ListMobilesInLineOfSight (subject, range)
+		if (IsHostile(mob) and mob.warmode)
+			SendEvent (subject, ev);
+		endif
+	endforeach
+
+	EraseObjProperty (character, "#useskill");
+	detach ();
+	sleep (10);
+endprogram

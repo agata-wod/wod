@@ -1,0 +1,108 @@
+use uo;
+use os;
+use http;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/string";
+include "include/attributes";
+
+
+program count_skill_usage ()
+WriteHTML ("<html><head><title>Character Skill Information</title></head>");
+WriteHTML ("<body bgcolor=\"#dcdeed\">");
+WriteHTML ("<p>This page counts the number of characters who have each skill, either as a primary or a secondary.");
+WriteHTML ("Only characters with maxed at least one stat are counted.");
+
+var primary_counter := dictionary;
+var secondary_counter := dictionary;
+var tradeskill_counter := dictionary;
+
+for i := 0 to 57
+	primary_counter.insert (i, 0);
+	secondary_counter.insert (i, 0);
+	tradeskill_counter.insert (i, 0);
+endfor
+
+var acct, player;
+var total_players := 0;
+var total_maxed_players := 0;
+
+foreach acctname in ListAccounts ()
+	acct := FindAccount (acctname);
+	if (acct)
+		for counter := 1 to 7
+			player := acct.GetCharacter (counter);
+			if (player)
+				total_players := total_players + 1;
+				if (CheckMaxedOutCharacter (player))
+					total_maxed_players := total_maxed_players + 1;
+
+					primary_counter[GetObjProperty (player, "primary1")] := primary_counter[GetObjProperty (player, "primary1")] + 1;
+					primary_counter[GetObjProperty (player, "primary2")] := primary_counter[GetObjProperty (player, "primary2")] + 1;
+					primary_counter[GetObjProperty (player, "primary3")] := primary_counter[GetObjProperty (player, "primary3")] + 1;
+
+					secondary_counter[GetObjProperty (player, "secondary1")] := secondary_counter[GetObjProperty (player, "secondary1")] + 1;
+					secondary_counter[GetObjProperty (player, "secondary2")] := secondary_counter[GetObjProperty (player, "secondary2")] + 1;
+					secondary_counter[GetObjProperty (player, "secondary3")] := secondary_counter[GetObjProperty (player, "secondary3")] + 1;
+			
+					tradeskill_counter[GetObjProperty (player, "tradeskill")] := tradeskill_counter[GetObjProperty (player, "tradeskill")] + 1;
+				endif
+			endif
+		endfor
+	endif
+endforeach
+
+WriteHTML ("<p>Total characters: " + total_players);
+WriteHTML ("<p>Total characters counted in this study: " + total_maxed_players);
+
+
+
+WriteHTML ("<p>Primaries:");
+WriteHTML ("<br><table border=1>");
+WriteHTML ("<tr><td><Primary></td><td>Secondary</td><td>Tradeskill</td></tr>");
+foreach key in (primary_counter.keys())
+	var skillname := GetSkillName (key);
+	if (Lower (skillname) != "none")
+		WriteHTML ("<tr><td>" + skillname + "</td><td>" + primary_counter[key] + "</td><td>" + secondary_counter[key] + "</td><td>" + tradeskill_counter[key] + "</td></tr>");
+	endif
+endforeach
+WriteHTML ("</table>");
+
+
+
+WriteHTML ("</body></html>");
+endprogram
+
+function CheckMaxedOutCharacter (player)
+	var maxstr := GetObjProperty (player, "maxstr");
+	if (!maxstr)
+		return 0;
+	endif
+	
+	if (GetAttributeBaseValue (player, "Strength") >= maxstr*10)
+		return 1;
+	endif
+	
+	var maxint := GetObjProperty (player, "maxint");
+	if (!maxint)
+		return 0;
+	endif
+	if (GetAttributeBaseValue (player, "Intelligence") >= maxint*10)
+		return 1;
+	endif
+
+	var maxdex := GetObjProperty (player, "maxdex");
+	if (!maxdex)
+		return 0;
+	endif
+	if (GetAttributeBaseValue (player, "Dexterity") >= maxdex*10)
+		return 1;
+	endif
+endfunction
+
+
+
+

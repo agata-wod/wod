@@ -1,0 +1,18 @@
+use uo;
+use os;
+
+program make_creature_untamable (character)
+	var creature := Target (character);
+	if (!creature)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (!creature.npctemplate)
+		SendSysMessage (character, "You can only use this on NPCs.");
+		return;
+	endif
+
+	SetObjProperty (creature, "untamable", 1);
+
+endprogram

@@ -1,0 +1,65 @@
+use uo;
+use util;
+use os;
+
+// FIXME key_types doesn't seem to ever get initialized.. ??
+
+include "include/client";
+include "include/poison";
+include "include/wodinc";
+include "include/dotempmods";
+
+program open_trapped_item(character, item)
+
+    var key_types := array;
+    var stuff := EnumerateItemsInContainer(character.backpack);
+    var thelock := GetObjProperty(item,"lockid");
+    var has_key := 0;
+
+    foreach item in stuff
+        if (item.objtype in key_types)
+            if (GetObjProperty(item,"lockid") == thelock)
+                //he has the key
+                has_key := 1;
+                break;
+            endif
+        endif
+    endforeach
+
+    if (!has_key)
+
+        var traptype := GetObjProperty(item,"trap_type");
+        var trapstrength := GetObjProperty(item,"trap_strength");
+
+        case (traptype)
+            "1" :   PlaySoundEffect(character, SFX_225);
+                    var dmg := randomint(30 * cint(trapstrength));
+                    SendSysmessage(character, "You set off a needle trap!");
+                    DoDamageByType (0, character, dmg, DAMAGETYPE_PHYSICAL);
+                    item.usescript := "";
+		    EraseObjProperty( item, "trap_type" );
+		    EraseObjProperty( item, "trap_strength" );
+
+            "2" :   SetPoison(character,trapstrength,0);
+                    PlayObjectCenteredEffect( character, FX_CURSE_EFFECT, 10,10);
+                    item.usescript := "";
+		    EraseObjProperty( item, "trap_type" );
+		    EraseObjProperty( item, "trap_strength" );
+
+            "3" :   PlaySoundEffect(character, SFX_208);
+                    SendSysmessage (character, "You set off a trap!");
+                    PlayObjectCenteredEffect( character, FX_EXPLODE_3, 10,10);  
+                    var dmg := randomint(20 * cint(trapstrength)); 
+                    DoDamageByType (0, character, dmg, DAMAGETYPE_PHYSICAL);
+                    item.usescript := "";
+		    EraseObjProperty( item, "trap_type" );
+		    EraseObjProperty( item, "trap_strength" );
+
+            default: SendSysmessage (character, "You narrowly avoid the trap!");
+        endcase
+    else
+        item.usescript := "";
+        SendSysmessage(character, "You disarm the trap");
+    endif
+
+endprogram

@@ -1,0 +1,300 @@
+use uo;
+use util;
+use os;
+
+include "include/client";
+include "include/dotempmods";
+include "include/poison";
+include "include/wodinc";
+include "include/magic";
+include "include/attributes";
+include "../pkg/npcs/npcinfo";
+include "../pkg/npcs/npc_util";
+include "../pkg/character/virtue/virtue";
+
+
+program mainhit (attacker, defender, weapon, armor, basedamage, rawdamage)
+	if (basedamage and armor)
+	endif
+	if (attacker.z > (defender.z + 20) or attacker.z < (defender.z - 20))
+		return;
+	endif
+	if (Distance (attacker, defender) > 20)
+		return;
+	endif
+	SetScriptController (attacker);
+	if (defender.enable( "invul" ) )
+		RevokePrivilege (defender, "invul" );
+		PrintTextAbove (defender, "*Vulnerable*");
+	endif
+
+	if (GetObjProperty (defender, "#reactive_armor"))
+		if (Distance (attacker, defender) <= 1)
+			var evalintskill := GetAttribute (defender, ATTRIBUTEID_INVOCATION);
+			var reactive_damage := CINT ( (evalintskill*rawdamage)/200);
+			PlaySoundEffect (attacker, SFX_SPELL_EXPLOSION);
+			PlayObjectCenteredEffect (attacker, FX_EXPLODE_3, 7, 0x10);
+			DoDamageByType (defender, attacker, reactive_damage, DAMAGETYPE_MAGIC);
+			EraseObjProperty (defender, "#reactive_armor");
+		endif
+	endif
+
+	if (defender.npctemplate and defender.npctemplate != "warrior")
+		rawdamage := rawdamage*2;
+	endif
+	DoDamageByType (attacker, defender, rawdamage, DAMAGETYPE_PHYSICAL);
+
+	if (GetAttribute (attacker, ATTRIBUTEID_ANATOMY))
+		var hitchance := CINT (GetAttribute (attacker, ATTRIBUTEID_ANATOMY)/10);
+		if (RandomInt (100) < hitchance)
+			SendSysMessage (attacker, "Critical hit!");
+			if (CheckSkill (attacker, SKILLID_ANATOMY, 80, 0) )
+				DoDamageByType (attacker, defender, rawdamage, DAMAGETYPE_PHYSICAL);
+			else
+				DoDamageByType (attacker, defender, CINT (rawdamage/2), DAMAGETYPE_PHYSICAL);
+			endif
+		endif
+	endif
+
+	if (GetObjProperty (weapon, "poison_level"))
+		DoPoisonHit (attacker, defender, weapon);
+	endif
+
+	if (GetObjProperty (weapon, "silver") ) 
+		DoSilverHit (attacker, defender, rawdamage);
+	endif
+
+	DoHitSpell (attacker, defender, weapon);
+	if (GetObjProperty (weapon, "etheriallightninghit") )
+		if (RandomInt (10) == 1)
+			var spellparms := array{ };
+			spellparms[1] := "#SPECIALNONE";
+			spellparms[2] := defender;
+			start_script (":damage_spells:lightning", spellparms);		
+		endif
+	endif
+endprogram
+
+
+
+
+///////////////////
+//  This function is called if the weapon is poisoned
+///////////////////
+
+function DoPoisonHit (byref attacker, byref defender, byref weapon);
+	var poison_strength := CINT (GetObjProperty (weapon, "poison_level"));
+	var effective_strength := poison_strength;
+	var character_skill := GetAttribute (attacker, ATTRIBUTEID_POISONING);
+	if (character_skill < 50 and effective_strength > 2)
+		effective_strength := 2;
+	elseif (character_skill < 70 and effective_strength > 3)
+		effective_strength := 3;
+	elseif (character_skill < 90 and effective_strength > 4)
+		effective_strength := 4;
+	endif
+
+	if (!effective_strength)
+		return;
+	endif
+
+	if (defender.poisoned and (RandomInt (5) < effective_strength))
+		return;
+	endif
+	
+	var skill := 90;
+	case (effective_strength)
+		1:
+		2:	skill := 20;
+		3:
+		4:	skill := 40;
+		5:
+		6:	skill := 60;
+		7:
+		8:	skill := 80;
+		9:
+		10:	skill := 100;
+	endcase
+
+	if (CheckSkill (attacker, SKILLID_POISONING, skill, 0))
+		SetPoison (defender, effective_strength, "You have been poisoned by " + attacker.name);
+		AddVirtue (attacker, -1);
+	endif
+
+	if (RandomInt(10) == 1)
+		poison_strength := poison_strength - 1;
+		SendSysMessage (attacker, "The poison on your weapon seems to have rubbed off some.");
+	endif
+
+	if (poison_strength and poison_strength > 0)
+		SetObjProperty (weapon, "poison_level", poison_strength);
+	else
+		SendSysMessage (attacker, "The poison on your weapon seems to have worn off.");
+		EraseObjProperty (weapon, "poison_level");
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Called when the weapon being used is silver
+///////////////////
+
+function DoSilverHit (byref attacker, byref defender, byref rawdamage);
+	if (!IsAnUndeadCreature (defender.npctemplate))
+		return;
+	endif
+
+	PlayObjectCenteredEffect (defender, FX_GLOW, 7, 7);
+	DoDamageByType (attacker, defender, CINT (rawdamage/2)+1, DAMAGETYPE_PHYSICAL);
+
+	if (GetObjProperty (defender, "summoned"))
+		PlaySoundEffect (attacker, SFX_SPELL_MANA_VAMPIRE);
+		if (!checkskill (defender, SKILLID_MAGICRESISTANCE, -1, 0))
+			PlayStationaryEffect (defender.x, defender.y, defender.z, FX_SMOKE, 0xA, 0xA, 0, defender.realm );
+			KillNPC (defender);
+		endif
+	endif
+endfunction
+
+
+
+
+function DoHitSpell (byref attacker, byref defender, byref weapon)
+
+	var spellname := getobjproperty(weapon,"hitspell");
+	if (!spellname)
+		return;
+	endif
+
+	//tempcode to fix old hitspell names:
+	if (!spellname[":"])
+		spellname := GetNewSpellName (spellname);
+		setobjproperty (weapon, "hitspell", spellname);
+	endif
+
+	if (spellname["feeblemind"])
+		if (!CanMod(defender,"cint") )
+			return;
+		endif
+	elseif (spellname["clumsy"])
+		if (!CanMod(defender,"cdex") )
+			return;
+		endif
+	elseif (spellname["weaken"])
+		if (!CanMod(defender,"cstr") )
+			return;
+		endif
+	elseif (spellname["curse"])
+		if (!CanMod(defender,"call") )
+			return;
+		endif
+	endif
+
+	if (GetObjProperty (weapon,"charges") )
+		var charges := GetObjProperty (weapon, "charges");
+		charges := charges - 1;
+		if (!charges or charges < 1)
+			EraseObjProperty (weapon, "charges");
+			EraseObjProperty (weapon, "hitspell");
+			var spellname := GetObjProperty (weapon, "itemspellname");
+			if (spellname)
+				var itemname := weapon.desc;
+				if (itemname[CSTR ("of " + spellname)])
+					itemname[CSTR ("of " + spellname)] := "";
+				else
+					itemname[CSTR ("and " + spellname)] := "";
+				endif
+				weapon.name := itemname;
+			endif
+			if (GetObjProperty (weapon, "oldname") )
+				var itemname := GetObjProperty (weapon, "oldname");
+				if (itemname[CSTR ("of " + spellname)])
+					itemname[CSTR ("of " + spellname)] := "";
+				else
+					itemname[CSTR ("and " + spellname)] := "";
+				endif
+				SetObjProperty (weapon, "oldname", itemname);
+			endif
+		else
+			SetObjProperty (weapon, "charges", charges);
+		endif
+	endif
+
+	var spellparms := array{ };
+	spellparms[1] := "#MOB";
+	spellparms[2] := attacker;
+	spellparms[3] := defender;
+	start_script (spellname, spellparms);
+endfunction
+
+function GetNewSpellName( spellname )
+
+	case (spellname)
+	"heal":
+	"nightsight":
+	"gheal":
+	"manadrain":
+	"reflect":
+	"invisibility":
+	"reveal":
+	"manavamp":
+	"resurrect":
+		return (":misc_spells:"+spellname);
+	"magicarrow":
+	"harm":
+	"fireball":
+	"lightning":
+	"mindblast":
+	"ebolt":
+	"explosion":
+	"chain_lightning":
+	"fstrike":
+	"meteor_swarm":
+	"earthquake":
+		return (":damage_spells:"+spellname);
+	"polymorph":
+	"masscurse":
+	"paralyze":
+	"clumsy":
+	"feeblemind":
+	"reactivearmor":
+	"weaken":
+	"agility":
+	"cunning":
+	"protection":
+	"strength":
+	"bless":
+	"archprot":
+	"curse":
+		return (":statmod_spells:"+spellname);
+	"cure":
+	"poison":
+	"archcure":
+		return (":poison_spells:"+spellname);
+	"teleport":
+	"recall":
+	"gate":
+		return (":travel_spells:"+spellname);
+	"wallofstone":
+	"firefield":
+	"dispel_field":
+	"poisonfield":
+	"parafield":
+	"energy_field":
+		return (":field_spells:"+spellname);
+	"blade_spirit":
+	"summon_creature":
+	"dispel":
+	"massdispel":
+	"vortex":
+	"summon_air":
+	"summon_daemon":
+	"summon_earth":
+	"summon_fire":
+	"summon_water":
+		return (":summoning_spells:"+spellname);
+	endcase
+
+endfunction

@@ -1,0 +1,34 @@
+use os;
+use uo;
+use cfgfile;
+
+include "include/skills";
+
+program Practice (who)
+
+	var prac := array{};
+
+	if (GetObjProperty(who,"practicing"))
+		prac := GetObjProperty(who,"practicing");
+		SendSysMessage(who,"You are currently practicing: ");
+	else
+		SendSysMessage(who,"You are not currently practicing any skills.");
+		return;
+	endif
+
+	var skillname;
+	var theskill := array{};
+	var skillnum;
+	var pracamount;
+	var i;
+
+	for (i := 1 ; i <= len(prac) ; i := i + 1 )
+		theskill := prac[i];
+		skillnum := theskill[1];
+		pracamount := theskill[2];
+		skillname := GetSkillName(theskill[1]);
+		SendSysMessage(who,skillname +", "+ cstr(pracamount/60) + " minutes remaining");
+		sleepms(250);
+	endfor
+
+endprogram

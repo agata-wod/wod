@@ -1,0 +1,508 @@
+use uo;
+use cfgfile;
+use os;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/attributes";
+include "include/crafting";
+include "../pkg/combat/loot/loot";
+
+
+Const UACTION_FISH := 0x9;
+var craftingbag;
+
+program use_fishpole (character, pole)
+	var equippeditem := GetEquipmentByLayer (character, LAYER_HAND2);
+	if (!equippeditem or equippeditem != pole)
+		if (!EquipItem (character, pole))
+			SendSysmessage (character, "You have to equip that to fish!");
+			return;
+		endif
+	endif
+
+	var targetted_location := TargetCoordinates (character);
+	if (!targetted_location)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+    
+	if (! IsWaterTile (targetted_location, character)) 
+		SendSysMessage (character, "That's not water!");
+		return;
+	endif
+
+	var castxoffset := targetted_location.x - character.x;
+	var castyoffset := targetted_location.y - character.y;
+	if (targetted_location.multi)
+		SendSysMessage (character, "That's too close to the ship's hull!");
+		return;
+	endif
+	if ( !IsLocationAccessibleForFishing (character, targetted_location.x, targetted_location.y, targetted_location.z) )
+        	SendSysmessage (character, "That's too far away!");
+        	return;
+	elseif ( !CheckLosAt (character, targetted_location.x, targetted_location.y, targetted_location.z) )
+        	SendSysmessage (character, "You can't see that! Maybe it's too close to the hull.");
+        	return;
+	endif
+
+	craftingbag := FindCraftingBag (character);
+	var x := character.x;
+	var y := character.y;
+	if (character.multi and character.multi.tillerman)
+		x := character.multi.x - character.x;
+		y := character.multi.y - character.y;
+	endif
+
+	var newx := character.x;
+	var newy := character.y;
+	if (character.multi and character.multi.tillerman)
+		newx := character.multi.x - character.x;
+		newy := character.multi.y - character.y;
+	endif
+
+	var mymaps := ListRootItemsInContainerOfObjtype (character.backpack, 0x99f);
+	repeat
+		PerformAction (character, UACTION_FISH);
+		sleep (2);
+		PlaySoundEffect (character, SFX_26);
+
+		var splashx := castxoffset + character.x;
+		var splashy := castyoffset + character.y;
+		var splashz := targetted_location.z;
+		MakeSplashTile (splashx, splashy, splashz, character.realm);
+		var timedelay := RandomInt (8) + 4;
+		for i := 1 to timedelay
+			sleep (1);
+			newx := character.x;
+			newy := character.y;
+			if (character.multi and character.multi.tillerman)
+				newx := character.multi.x - character.x;
+				newy := character.multi.y - character.y;
+			endif
+			if (newx != x or newy != y)
+				SendSysMessage (character, "You stop fishing.");
+				return;
+			endif
+		endfor
+
+		if ( FishUpChest (mymaps, character) )
+			return;
+		endif
+
+		if (WalrusNearby (character))
+			SendSysMessage (character, "Something is scaring the fish!");
+			return;
+		endif
+
+		if (!HarvestResource ("wood", splashx, splashy, RandomInt(3)+1, RandomInt(3)+1, targetted_location.realm)
+				or !HarvestResource ("wood", character.x, character.y, RandomInt(3)+1, RandomInt(3)+1, character.realm))
+			SendSysMessage (character, "The fish don't seem to be biting here.");
+			return;
+		endif
+
+		if (CheckSkill (character, SKILLID_FISHING, -1, 0) )
+			PlaySoundEffect (character, SFX_27);
+			if (!MakeRandomFish (character) )
+				PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+				return;
+			endif
+		endif
+		sleep (1);
+
+		if (DoRandomEvent (character, pole) )
+			return;
+		endif
+
+		var equipped_item := GetEquipmentByLayer (character, LAYER_HAND2);
+		if (equipped_item != pole)
+			SendSysMessage (character, "The fishing pole must be equipped to fish!");
+			return;
+		endif
+
+		newx := character.x;
+		newy := character.y;
+		if (character.multi and character.multi.tillerman)
+			newx := character.multi.x - character.x;
+			newy := character.multi.y - character.y;
+		endif
+	until (newx != x or newy != y);
+endprogram
+
+
+
+
+///////////////////
+//  checks all the MiBs in the character's backpack and tries to fish them up if they're in the area
+///////////////////
+
+function FishUpChest (byref mymaps, me )
+
+	if (!len (mymaps))
+		return 0;
+	endif
+
+	var mapx, mapy;
+	foreach map in mymaps
+		if (!ReserveItem (map))
+			return 0;
+		endif
+		mapx := CINT (GetObjProperty (map, "treasurex"));
+		mapy := CINT (GetObjProperty (map, "treasurey"));
+		if (mapx or mapx == 0)
+			if ( (me.x > (mapx-10)) and (me.x < (mapx+10)) and
+					(me.y > (mapy-10)) and (me.y < (mapy+10)) )
+				if ( SpawnChest (me, map) )
+					return 1;
+				endif
+			endif
+		endif
+	endforeach
+
+	return 0;
+
+endfunction
+
+
+
+
+///////////////////
+//  creates the treasure chest spawned by the MiB
+///////////////////
+
+function SpawnChest (character, map)
+	//most of the time, we don't successfully fish up the chest.  Instead, sometimes spawn a special
+	//junk item
+	if (RandomInt (5) )
+		if (RandomInt (4) == 1)
+			var cfg := ReadConfigFile ("treasure");
+			var elem := FindConfigElem (cfg, "specialjunk");
+			var junkarray := GetConfigStringArray (elem, "item");
+			var random_item := CINT(junkarray[ randomint(len(junkarray)+1) ]);
+			var it := CreateItemInContainer (craftingbag, random_item, 1);
+			if (!it)
+				Syslog ("Error creatitem item " + random_item);
+				return 0;
+			endif
+			it.name := it.desc + " from a shipwreck";
+			it.movable := 1;
+			PrintTextAbove (character, "*"+character.name+" fishes-up " + it.desc + " !*");
+		endif
+		return 0;
+	endif
+
+	var chest := CreateItemAtLocation (character.x, character.y, character.z, 0x0E7C, 1, character.realm);
+	if (!chest)
+		return 0;
+	endif
+
+	PrintTextAbove (chest, "*"+character.name+" fishes-up a treasure chest!*");
+	chest.locked := 1;
+	chest.movable := 1;
+	SetObjProperty (chest, "lockpicking", RandomInt(4)+5);
+
+	//there's 3 different chest types:  warrior, mage, and treasure
+	case (RandomInt (4))
+		0:	MakeLootInChest (chest, "MIB1");
+		1:	MakeLootInChest (chest, "MIB2");
+		2:	MakeLootInChest (chest, "MIB3");
+		3:	MakeLootInChest (chest, "MIB4");
+	endcase
+
+	DestroyItem (map);
+	return 1;
+
+endfunction
+
+
+
+
+///////////////////
+//  tries to create a random fish in the character's backpack
+///////////////////
+
+function MakeRandomFish (character)
+	var fish_type := GetRandomFishType (character);
+	var fish := CreateItemInContainer (craftingbag, fish_type, 1);
+	if (fish)
+		SendSysMessage (character, "You catch a fish!");
+		return 1;
+	endif
+
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  picks a random type of fish
+///////////////////
+
+function GetRandomFishType (character)
+
+	if ( RandomInt(4) != 1 )
+		return 0x09cc;
+	endif
+
+	var skill := GetAttribute (character, ATTRIBUTEID_FISHING);
+	var fish_type := 1;
+
+	if (skill< 40 )
+		fish_type := 1;
+	elseif (skill < 50 )
+		fish_type := randomint(2)+1;
+	elseif (skill < 60 )
+		fish_type := randomint(3)+1;
+	elseif (skill < 70 )
+		fish_type := randomint(4)+1;
+	elseif (skill < 80 )
+		fish_type := randomint(5)+1;
+	elseif (skill < 90 )
+		fish_type := randomint(6)+1;
+	elseif (skill < 95 )
+		fish_type := randomint(7)+1;
+	else
+		fish_type := randomint(8)+1;
+	endif
+
+	fish_type := RandomInt(fish_type)+1;
+	case (fish_type)
+		1:		return 0x09cc;
+		2:		return 0x09cd;
+		3:		return 0x09ce;
+		4:		return 0x09cf;
+		5:		return 0x0dd6;
+		6:		return 0x0dd7;
+		7:		return 0x0dd8;
+		8:		return 0x0dd9;
+		default:	return 0x09cc;
+	endcase
+
+endfunction
+
+
+
+
+///////////////////
+//  Sometimes does some random event
+///////////////////
+
+function DoRandomEvent (character, pole)
+
+	if (RandomInt(10))
+		return 0;
+	endif
+
+	var nearby_x_loc := character.x + RandomInt (3) - 1;
+	var nearby_y_loc := character.y + RandomInt (3) - 1;
+
+	case (RandomInt (10))
+		0:
+		1:
+			var walrus := CreateNPCFromTemplate (":wild_animals:walrus", nearby_x_loc, nearby_y_loc, character.z, 0, character.realm);
+			if (walrus)
+				SendSysMessage (character, "A walrus comes by to see what you're doing.");
+				setobjproperty (walrus, "boatspawn", 1);
+			endif
+			return 0;
+		2:
+			var maptype := 0x16003;
+			if ( RandomInt (5) == 0 )
+				maptype := 0x16004;
+			endif
+			if (CheckSkill (character, SKILLID_FISHING, 90, 0 ))
+				if (CreateIteminContainer (craftingbag, maptype, 1))
+					SendSysMessage (character, "You find a tattered old map!");
+					return 0;
+				endif
+			endif
+		3:
+		4:
+		5:
+			var thing :=	UOBJ_BACKPACK;
+			case (randomint(5))
+				0:	thing := UOBJ_SHOES;
+				1:	thing := UOBJ_SANDALS;
+				2:	thing := UOBJ_BOOTS;
+				3:	thing := UOBJ_THIGH_BOOTS;
+			endcase
+			var it := CreateIteminContainer (craftingbag, thing, 1);
+			if ( it )
+				SendSysMessage (character, "You find " + it.desc + "!");
+			endif
+			return 0;
+		6:
+			if (!RandomInt (10) )
+				SendSysMessage (character, "Oh no your pole breaks!");
+				DestroyItem (Pole);
+				return 1;
+			endif
+			return 0;
+		7:
+			if (RandomInt(4)==1)
+				var water_elem := CreateNPCFromTemplate (":elementals:waterelemental", nearby_x_loc, nearby_y_loc, character.z, 0, character.realm);
+				if (water_elem)
+					water_elem.name := "a wave elemental";
+					SendSysmessage (character, "You attract the attention of a wave elemental!");
+					setobjproperty  (water_elem, "boatspawn", 1);
+					return 1;
+				endif
+			endif
+			return 0;
+		8:
+			if (CheckSkill (character, SKILLID_FISHING, 100, 0 ))
+				if (MakeMessage (character))
+					SendSysMessage (character, "You find a message in a bottle!");
+					return 0;
+				endif
+			endif
+		9:
+			if (RandomInt(4)==1)
+				var water_elem := CreateNPCFromTemplate (":elementals:waterspout", nearby_x_loc, nearby_y_loc, character.z, 0, character.realm);
+				if (water_elem)
+					SendSysmessage (character, "You attract the attention of a water spout!");
+					setobjproperty  (water_elem, "boatspawn", 1);
+					return 1;
+				endif
+			endif
+			return 0;
+	endcase
+
+	return 0;
+
+endfunction
+
+
+
+
+///////////////////
+//  checks the nearby area for walruses (anti-macro code)
+///////////////////
+
+function WalrusNearby (character)
+
+	foreach mob in ListMobilesNearLocation (character.x, character.y, character.z, 15, character.realm)
+		if (mob.npctemplate ["walrus"])
+			return 1;
+		endif
+	endforeach
+
+endfunction
+
+
+
+
+///////////////////
+//  determines if the targetted location is a water tile that can be fished on
+///////////////////
+
+function IsWaterTile (targetted_location, character)
+
+	var info := GetMapInfo (targetted_location.x , targetted_location.y, targetted_location.realm);
+
+	if ((targetted_location.objtype >= 0x1796) and (targetted_location.objtype <= 0x17b2) )
+		return 1;
+	elseif ((targetted_location.objtype >= 0x346e) and (targetted_location.objtype <= 0x3530))
+		return 1;
+	elseif ((info.landtile >= 168) and (info.landtile <= 171))
+		return 1;
+	else
+		if ((!targetted_location.objtype) and (character.multi))
+			return 1;
+		endif
+		return 0;
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  determines if the character can reach the targetted location to fish there
+///////////////////
+
+function IsLocationAccessibleForFishing ( me, x, y, z )
+
+	var xd := me.x - x;
+	if (xd < -6 or xd > 6) 
+		return 0;
+	endif
+
+	var yd := me.y - y;
+	if (yd < -6 or yd > 6) 
+		return 0;
+	endif
+	if (z)
+	endif
+	return 1;
+
+endfunction
+
+
+///////////////////
+//  makes, animates and then destroys the splash tile
+///////////////////
+
+function MakeSplashTile (x, y, z, rlm)
+
+	var splash_tile := CreateItemAtLocation (x, y, z, UOBJ_SPLASH_TILE, 1, rlm);
+	splash_tile.movable := 0;
+	splash_tile.decayat := ReadGameClock() + 200;
+	sleepms (200);
+
+	for tmp_tile := 13614 to 13616
+		splash_tile.graphic := tmp_tile;
+		sleepms (200);
+	endfor
+
+	DestroyItem (splash_tile);
+
+endfunction
+
+
+
+
+///////////////////
+//  makes a MiB
+///////////////////
+
+function MakeMessage (me)
+
+	var it := CreateItemInContainer (craftingbag, 0x99f, 1);
+	if (!it)
+		SendSysMessage(me,"Your backpack is full!");
+		return 0;
+	endif
+	set_critical(1);
+	it.name := "a message in a bottle";
+	it.usescript := ":fishing:readnote";
+	it.buyprice := -1;
+	SetObjProperty (it, "questitem", 1);
+
+	var cfg := ReadConfigFile("treasure");
+	var elem := FindConfigElem(cfg,"locations");
+	var coords := GetConfigStringArray(elem,"location");
+	var coord := coords[ RandomInt(len(coords))+1 ];
+
+	var textgroup := RandomInt(4)+1;
+	elem := FindConfigElem(cfg,textgroup);
+	var textlines := GetConfigStringArray(elem,"text");
+	var note := array {};
+	foreach line in textlines
+		note[ len(note)+1 ] := line;
+	endforeach
+	var coordinates := splitwords(coord);
+	note[ len(textlines)+1 ] := "Last coordinates:";
+	note[ len(textlines)+2 ] := "     " + coordinates[1] + ", " + coordinates[2];
+	setobjproperty(it,"note",note);
+	setobjproperty(it,"treasurex",cint(coordinates[1]));
+	setobjproperty(it,"treasurey",cint(coordinates[2]));
+	set_critical(0);
+
+	return 1;
+endfunction
+

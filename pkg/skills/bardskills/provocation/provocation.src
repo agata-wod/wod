@@ -1,0 +1,148 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+use vitals;
+
+include "include/client";
+include "include/objtype";
+include "include/eventid";
+include "include/attributes";
+include "../pkg/npcs/npcinfo";
+include "../pkg/skills/bardskills/bard";
+include "../pkg/character/skillcheck/skillcheck";
+
+program bard_provoke (character)
+	if (GetObjProperty (character, "#useskill"))
+		if (GetProcess (GetObjProperty (character, "#useskill")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#useskill", GetPid());
+
+	if (!can_sing (character, 1))
+		EraseObjProperty (character, "#useskill");
+        	return;
+	endif
+
+	var instrument := findinstrument(character);
+	if (!instrument)
+        	SendSysmessage (character, "You don't have an instrument to play!");
+		EraseObjProperty (character, "#useskill");
+        	return;
+	endif
+
+	SendSysmessage (character, "Provoke what?");
+	var thetarg := Target (character, TGTOPT_CHECK_LOS);
+	if (!thetarg)
+		SendSysMessage (character, "Canceled.");
+		EraseObjProperty (character, "#useskill");
+		return;
+	endif
+
+	if (thetarg.dead or !GetVital (thetarg, "Life"))
+		SendSysMessage (character, "Invalid target.");
+		EraseObjProperty (character, "#useskill");
+		return;
+	endif
+	if (thetarg.alignment == 2)
+		character.SetCriminal (1);
+	endif
+
+	if (GetObjProperty (thetarg, "noprovoke") )
+		SendSysMessage (character, "You can't provoke that!");
+		EraseObjProperty (character, "#useskill");
+		return;
+	endif
+
+	var provoked := GetObjProperty (thetarg, "#provoked");
+	if (!provoked)
+		provoked := 0;
+	endif
+
+	if (provoked + 45 > ReadGameClock())
+		SendSysMessage (character, "You can't provoke that creature again, yet.");
+		EraseObjProperty (character, "#useskill");
+		return;
+	endif
+
+	var elem := GetNpcTemplateElem (thetarg.npctemplate);
+	if (!elem)
+		SendSysMessage (character, "You cannot provoke that!");
+		EraseObjProperty (character, "#useskill");
+		return;
+	endif
+
+	var difficulty := 0;
+	if (elem.provoke)
+//		difficulty := -1;
+		difficulty := elem.provoke - GetDiscordanceMod (thetarg);
+	else
+		difficulty := 100 - GetDiscordanceMod (thetarg);
+	endif
+
+	var ev := struct;
+	ev.+ type := EVID_ALL_ATTACK_CMD;
+	ev.+ source;
+	var success := 0;
+
+	if (CheckSkillWithItem (character, instrument, SKILLID_PROVOCATION, difficulty )
+			and (PlayNoise(character, instrument, -1, SNDTYPE_PROVOCATION)))
+
+		SendSysmessage (character, "Provoke onto what?");
+
+		var newtarg := Target (character, TGTOPT_CHECK_LOS);
+		if (!newtarg)
+			SendSysMessage (character, "Canceled");
+			EraseObjProperty (character, "#useskill");
+			return;
+		endif
+	
+		if (newtarg.dead or !GetVital (newtarg, "Life"))
+			SendSysMessage (character, "Invalid target.");
+			EraseObjProperty (character, "#useskill");
+			return;
+		endif
+
+		if (newtarg == thetarg)
+			SendSysMessage (character, "Invalid target.");
+			EraseObjProperty (character, "#useskill");
+			return;
+		endif
+
+		elem := GetNpcTemplateElem (newtarg.npctemplate);
+		if (elem.provoke)
+			difficulty := (difficulty + elem.provoke - GetDiscordanceMod (newtarg))/2;
+		else
+			difficulty := (difficulty + 100 - GetDiscordanceMod (newtarg))/2;
+		endif
+		if (newtarg.alignment == 2)
+			character.SetCriminal (1);
+		endif
+		
+		
+		if (CheckSkillWithItem (character, instrument, SKILLID_PROVOCATION, difficulty )
+			and PlayNoise(character, instrument, 0, SNDTYPE_PROVOCATION))
+			SendSysmessage (character, "You provoke " + thetarg.name + " to attack " + newtarg.name + "!");
+			SetObjProperty (thetarg, "#provoked", ReadGameClock());
+
+			ev.type := EVID_ALL_ATTACK_CMD;
+			ev.source := newtarg;
+			sendevent (thetarg, ev);
+			ev.source := thetarg;
+			sendevent (newtarg, ev);
+			success := 1;
+		endif
+	endif
+	if (!success)
+		ev.source := character;
+		ev.type := EVID_DAMAGED;
+		PrintTextAbovePrivate (thetarg, "You enrage " + thetarg.name + "!", character);
+        	SendEvent (thetarg, ev);
+	endif
+
+	detach();
+	sleep (1);
+	EraseObjProperty (character, "#useskill");
+endprogram

@@ -1,0 +1,58 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+program invasionspawner()
+	sleep (30);
+
+	while (1)
+		UnloadConfigFile (":invasionspawner:regions");
+		var regionscfg := ReadConfigFile (":invasionspawner:regions");
+		var index := FindConfigElem (regionscfg, "index");
+		var baseregions := GetConfigStringArray (index, "regionname");
+		foreach region in baseregions
+			start_script (":invasionspawner:dospawn", region);
+			sleep (15);
+		endforeach
+		sleep (GetDelayTime());
+	endwhile    
+
+endprogram
+
+///////////////////
+//  Figures out how long to go between invasions based on how many
+//  players are online
+///////////////////
+
+function GetDelayTime()
+	var plrs := EnumerateOnlineCharacters();
+	var numplayers := plrs.size();
+	if (!numplayers)
+		return 7200;
+	endif
+
+	if ( numplayers > 39 )
+		//40 people or more:
+		return 450;
+	elseif ( numplayers > 29 )
+		//30 people or more:
+		return 600;
+	elseif ( numplayers > 19 )
+		//20 people or more:
+		return 900;
+	elseif ( numplayers > 14 )
+		//20 people or more:
+		return 1200;
+	elseif ( numplayers > 9 )
+		//10 to 19 people
+		return 1400;
+	elseif ( numplayers > 4 )
+		//5 to 9 people
+		return 1600;
+	endif		
+
+	//1 to 4 people
+	// Originally 1800, modified because of low population
+	return 2400;
+endfunction

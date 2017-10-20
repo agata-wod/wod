@@ -1,0 +1,213 @@
+use uo;
+use os;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+
+var xpos := 100;
+var ypos := 100;
+var style := "new";
+
+var logging_acctnames := array{};
+
+program textcmd_reply (character, text)
+	if (lower (text) == "off")
+		EraseObjProperty (character, "replyto");
+		SendSysMessage (character, "Your reply-to has been erased");
+		return;
+	endif
+
+	var whom := GetObjProperty (character, "replyto");
+	if (!whom)
+		SendSysMessage (character, "No one to reply to!");
+		return;
+	endif
+	
+	if (GetObjProperty (character, "dotmsgstyle"))
+		style := "old";
+	endif
+
+	foreach onlinechr in EnumerateOnlineCharacters()
+		if (onlinechr.name == whom)
+			if (text)
+				PlaySoundEffectPrivate (onlinechr, 0x225, onlinechr);
+				SendSysMessage (onlinechr, character.name + ": " + text, FONT_NORMAL, MESSAGE_COLOR_MESSAGE);
+				SetObjProperty (onlinechr, "replyto", character.name);
+				SendSysMessage (character, "Message sent to " + onlinechr.name + ": " + text, FONT_NORMAL, MESSAGE_COLOR_MESSAGE - 1);
+				
+				//Logging of certain conversations...  Icky
+				if ((character.acctname in logging_acctnames) or (onlinechr.acctname in logging_acctnames))
+					LogAccountMessages (character, onlinechr, text);
+				endif
+			else
+				SendTheMessage (character, onlinechr);
+			endif
+			return;
+		endif
+	endforeach
+
+	SendSysMessage (character, "Unable to reply to " + whom );
+endprogram
+
+
+
+
+///////////////////
+//  sends the message
+///////////////////
+
+function SendTheMessage (character, whom)
+	if ( GetObjProperty (character,"private") )
+		SendSysMessage (character, "No longer in Privacy mode");
+		EraseObjProperty (character,"private");
+	endif
+
+	var receivers_name := whom.name;
+	var text := " ";
+	repeat
+		if (style == "old")
+			text := SendTextEntryGump (character, text, TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "Message for " + whom.name + ":");
+		else
+			text := GetLineOfText (character, receivers_name, text);
+		endif
+		if (text and text != "NULL MOVED")
+			PlaySoundEffectPrivate (whom, 0x225, whom);
+			SendSysMessage (whom, character.name + ": " + text, FONT_NORMAL, MESSAGE_COLOR_MESSAGE);
+			SetObjProperty (whom, "replyto", character.name);
+			SendSysMessage (character, "Message sent to " + whom.name + ": " + text, FONT_NORMAL, MESSAGE_COLOR_MESSAGE - 1);
+			
+			//Logging of certain conversations...  Icky
+			if ((character.acctname in logging_acctnames) or (whom.acctname in logging_acctnames))
+				LogAccountMessages (character, whom, text);
+			endif
+		endif
+		if (!whom)
+			SendSysMessage (character, receivers_name + " is no longer online.");
+			return;
+		endif
+	until (!text or !character or !whom);
+endfunction
+
+
+
+
+///////////////////
+//  Fancy new gump
+///////////////////
+
+function GetLineOfText (character, receivers_name, previous_line)
+	if (previous_line == "NULL MOVED")
+		previous_line := " ";
+	endif
+
+	var msg_layout := array {
+		"nodispose",
+		"page 0",
+		"resizepic " + xpos + " " + ypos + " 5054 600 160",
+		"resizepic " + (xpos+20) + " " + (ypos+60) + " 2620 560 40",
+		"text " + (xpos+20) + " " + (ypos+10) + " 0 0",
+		"text " + (xpos+20) + " " + (ypos+30) + " 0 1",
+		"text " + (xpos+90) + " " + (ypos+30) + " 1350 2",
+		"button " + (xpos+80) + " " + (ypos+105) + " 5600 5604 1 0 2",	//Up
+		"button " + (xpos+80) + " " + (ypos+135) + " 5602 5606 1 0 3",	//Down
+		"button " + (xpos+100) + " " + (ypos+120) + " 5601 5605 1 0 4",	//right
+		"button " + (xpos+60) + " " + (ypos+120) + " 5603 5607 1 0 5",	//left
+
+		"button " + (xpos+380) + " " + (ypos+120) + " 243 241 1 0 0",	//Cancel
+		"button " + (xpos+460) + " " + (ypos+120) + " 249 247 1 0 1",	//Ok
+		"textentry " + (xpos+30) + " " + (ypos+70) + " 540 20 1350 10 3"
+	};
+	var msg_data := array {
+		"Message for " + receivers_name + ":",
+		"Previous:",
+		previous_line,
+		""
+	};
+	var gump_return := SendDialogGump (character, msg_layout, msg_data);
+
+	if (gump_return [2])
+		ypos := ypos - 50;
+		if (ypos < 0)
+			ypos := 0;
+		endif
+		return "NULL MOVED";
+	elseif (gump_return [3])
+		ypos := ypos + 50;
+		return "NULL MOVED";
+	elseif (gump_return [4])
+		xpos := xpos + 50;
+		return "NULL MOVED";
+	elseif (gump_return [5])
+		xpos := xpos - 50;
+		if (xpos < 0)
+			xpos := 0;
+		endif
+		return "NULL MOVED";
+	endif
+
+	if (!gump_return [1])
+		return "";
+	endif
+	
+	var msg := CSTR (gump_return[10]);
+	msg := msg[(find(msg, " ", 1)+1), len(msg)];
+	if (msg)
+		return msg;
+	endif
+	return "NULL MOVED";
+endfunction
+
+
+
+
+///////////////////
+//  Alerts the GM (Generally me, Drocket) to any important events in the invasion spawner
+///////////////////
+
+function alertgm (msg, syslogit := 0)
+	if (syslogit)
+		syslog (msg);
+	endif
+
+	foreach player in EnumerateOnlineCharacters ()
+		if (IsAGM (player) = 5)
+			SendSysMessage (player, msg);
+		endif
+	endforeach
+endfunction
+
+
+
+function LogAccountMessages (character, whom, text)
+	set_critical (1);
+	var acctinfodf := OpenDataFile (":character:msg_logging");
+	if (!acctinfodf)
+		acctinfodf := CreateDataFile (":character:msg_logging");
+		if (!acctinfodf)
+			Syslog ("Error opening character data file!");
+			set_critical (0);
+			return 0;
+		endif
+	endif
+	
+	var acctname := character.acctname;
+	if (!(character.acctname in logging_acctnames))
+		acctname := whom.acctname;
+	endif
+
+	var entry := acctinfodf.FindElement (acctname);
+	if (!entry)
+		acctinfodf.CreateElement (acctname);
+		entry := acctinfodf.FindElement (acctname);
+	endif
+	
+	var propname := CSTR (ReadGameClock());
+	var value := array{character.name, whom.name, text};
+
+	entry.SetProp (propname, value);
+	UnloadDataFile (":character:msg_logging");
+	set_critical (0);
+
+endfunction
+

@@ -1,0 +1,505 @@
+///////////////////
+//  randomly makes an item magical.  The magic_quality_chance passed to the
+//  script is a number from 1 to 10 that biases the quality of the magic
+//  enchantment
+///////////////////
+
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/magicitems";
+include "include/string";
+include "include/wodinc";
+
+program make_magic_item (parms)
+	var item := parms [1];
+	var magic_quality_chance := CInt (parms [2]);
+	var damage_hp_option := parms [3];
+
+	if (!item)
+		Syslog ("Attempted to make a non-existant item magical!");
+		return 0;
+	endif
+	if (!magic_quality_chance)
+		 magic_quality_chance := RandomInt (10)+1;
+	endif
+
+	Syslog ("Making a magic " + item.desc + ", quality level " + magic_quality_chance);
+
+	var itemtype := GetItemType (item);
+	if (!itemtype)
+		return 0;
+	endif
+
+	if (!item.name["a magic "])
+		item.name := "a magic " + TruncateArticle (item.desc);
+	endif
+	if (item.quality)
+		item.quality := 1.2;
+	endif
+	var durability_loss := 0;
+	if (item.hp)
+		if (damage_hp_option)
+			if (RandomInt (4) and item.maxhp > 50)
+				durability_loss := RandomInt (CINT (item.maxhp * 0.75));
+			endif
+			item.hp := item.maxhp;
+		else
+			item.hp := item.maxhp;
+		endif
+	endif
+	SetObjProperty (item, "magic_quality", magic_quality_chance);
+	SetObjProperty (item, "unidentified", 1);
+	case (itemtype)
+		ITEMTYPE_WEAPON:
+			MakeWeaponMagical (item, magic_quality_chance);
+		ITEMTYPE_ARMOR:
+			MakeArmorMagical (item, magic_quality_chance);
+		ITEMTYPE_CLOTHING:
+			MakeClothingMagical (item, magic_quality_chance);
+		ITEMTYPE_SHIELD:
+			MakeShieldMagical (item, magic_quality_chance);
+		ITEMTYPE_MUSICAL:
+			MakeMusicalInstrumentMagical (item, magic_quality_chance);
+		ITEMTYPE_WAND:
+			MakeWandMagical (item, magic_quality_chance);
+		ITEMTYPE_JEWELRY:
+			if ( randomint (5) == 0 )
+				DoArmorSkillModifier (item, magic_quality_chance);
+				SpecialArmorSpell (item, magic_quality_chance);
+			else
+				repeat
+				until (SpecialArmorSpell (item, magic_quality_chance));
+			endif
+		default:
+			Syslog ("Error:  Cannot make a magic " + item.desc);
+			return 0;
+	endcase
+	if (durability_loss)
+		item.maxhp_mod := item.maxhp_mod - durability_loss;
+		item.hp := item.maxhp;
+		SetObjProperty (item, "durability_loss", durability_loss);
+	endif
+	return 1;
+	
+endprogram
+
+
+
+
+///////////////////
+//  translates the magic_quality_chance into a semi-random quality of the magic item
+///////////////////
+
+function DetermineMagicQuality (magic_quality_chance)
+
+	//base quality is 25% determined and 75% random (ranging from 0 to 100)
+	var base_quality := CINT (magic_quality_chance * 10/4) + RandomInt ( CINT ( magic_quality_chance * 30/4) );
+
+	//the random quality makes it possible, though unlikely, to find good weapons on even
+	//the lowest bad guy
+	var random_quality := CINT ((RandomInt (10)+1) * (RandomInt (10)+1)) + 10;
+
+	//the end magic quality counts the base quality for twice as much in the average, with an
+	//extra 10 for good luck
+	var magic_quality := base_quality + 10;
+	if (random_quality > magic_quality)
+		if (RandomInt (4) == 1)
+			magic_quality := random_quality;
+		endif
+	elseif (RandomInt (10) == 1)
+		magic_quality := random_quality;
+	endif
+
+	if (magic_quality > 100)
+		magic_quality := 100;
+	endif
+
+	return magic_quality;
+
+endfunction
+
+
+
+
+///////////////////
+//  makes the weapon magic semi-based on the passed magic_quality
+///////////////////
+
+function MakeWeaponMagical (item, magic_quality_chance)
+
+	var magic_quality := DetermineMagicQuality (magic_quality_chance);
+	var item_hp_mod := CInt (magic_quality/20);
+
+	magic_quality := DetermineMagicQuality (magic_quality_chance);
+	var item_dmg_mod := CInt (magic_quality/20);
+
+	if (item_dmg_mod)
+		DoHPModifier (item, item_hp_mod);
+		DoDmgModifier (item, item_dmg_mod);
+
+		if (RandomInt (5) == 1)
+			item_hp_mod := item_hp_mod + RandomInt (2);
+			if (!item_hp_mod)
+				item_hp_mod := 1;
+			elseif (item_hp_mod > 5)
+				item_hp_mod := 5;
+			endif
+			DoHPModifier (item, item_hp_mod);
+			DoWeaponSkillModifier (item, item_hp_mod);
+		endif
+	else
+		item_hp_mod := RandomInt (4) + RandomInt (3) + 1;
+		if (!item_hp_mod)
+			item_hp_mod := 1;
+		elseif (item_hp_mod > 5)
+			item_hp_mod := 5;
+		endif
+		DoHPModifier (item, item_hp_mod);
+		DoWeaponSkillModifier (item, item_hp_mod);
+	endif
+
+	if (RandomInt (10) == 0)
+		MakeWeaponSilver (item);
+	endif
+
+	var spellname := "";
+	var suffixex := "";
+	var num_charges := 0;
+
+	if (RandomInt (5) == 1)
+		case (RandomInt(14))
+			0:
+			1:
+				spellname := ":statmod_spells:feeblemind";
+				suffixex := "Feeblemindedness";
+				num_charges := 30 + RandomInt (magic_quality_chance);
+			2:
+			3:
+				spellname := ":statmod_spells:clumsy";
+				suffixex := "Clumsiness";
+				num_charges := 30 + RandomInt (magic_quality_chance);
+			4:
+			5:
+				spellname := ":statmod_spells:weakness";
+				suffixex := "Weakness";
+				num_charges := 30 + RandomInt (magic_quality_chance);
+			6:
+				spellname := ":damage_spells:harm";
+				suffixex := "Harming";
+				num_charges := 20 + RandomInt(CINT(magic_quality_chance/2));
+			7:
+				spellname := ":damage_spells:fireball";
+				suffixex := "Flametoungue";
+				num_charges := 20 + RandomInt(CINT(magic_quality_chance/2));
+			8:
+			9:
+				spellname := ":statmod_spells:curse";
+				suffixex := "Cursing";
+				num_charges := 20 + RandomInt (magic_quality_chance);
+			10:
+				spellname := ":damage_spells:lightning";
+				suffixex := "Lightning";
+				num_charges := 20 + RandomInt(CINT(magic_quality_chance/2));
+			11:
+				spellname := ":statmod_spells:paralyze";
+				suffixex := "Paralyzation";
+				num_charges := 20 + RandomInt(CINT(magic_quality_chance/2));
+			12:
+				spellname := ":summoning_spells:massdispel";
+				suffixex := "Dispelling";
+				num_charges := 20 + RandomInt (magic_quality_chance);
+			13:
+				spellname := ":misc_spells:manadrain";
+				suffixex := "Draining";
+				num_charges := 20 + RandomInt (magic_quality_chance);
+			endcase
+		var suffix := GetObjProperty (item, "suffix");
+		if (suffix)
+			SetObjProperty (item, "suffix", suffix + " and " + suffixex);
+		else
+			SetObjProperty (item, "suffix", " of " + suffixex);
+		endif
+		SetObjProperty (item, "itemspellname", suffixex);
+		SetObjProperty (item, "hitspell", spellname);
+		SetObjProperty (item, "charges", num_charges);
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  makes the armor magic semi-based on the passed magic_quality
+///////////////////
+
+function MakeArmorMagical (item, magic_quality_chance)
+
+	var magic_quality := DetermineMagicQuality (magic_quality_chance);
+	var item_hp_mod := CInt (magic_quality/20);
+
+	magic_quality := DetermineMagicQuality (magic_quality_chance);
+	var item_ar_mod := CInt (magic_quality/20);
+
+	if (item_ar_mod)
+		DoHPModifier (item, item_hp_mod);
+		DoARModifier (item, item_ar_mod);
+
+		if (RandomInt (10) == 0)
+			if (!item_hp_mod)
+				item_hp_mod := 1;
+			endif
+			DoHPModifier (item, item_hp_mod);
+			DoArmorSkillModifier (item, item_hp_mod);
+		endif
+	else
+		item_hp_mod := item_hp_mod + RandomInt (2);
+		if (!item_hp_mod)
+			item_hp_mod := 1;
+		elseif (item_hp_mod > 5)
+			item_hp_mod := 5;
+		endif
+		DoHPModifier (item, item_hp_mod);
+		DoArmorSkillModifier (item, item_hp_mod);
+	endif
+
+	SpecialArmorSpell (item, magic_quality_chance);
+endfunction
+
+
+
+
+///////////////////
+//  makes clothing magic semi-based on the passed magic_quality
+///////////////////
+
+function MakeClothingMagical (item, magic_quality_chance)
+	var magic_quality := DetermineMagicQuality (magic_quality_chance);
+	var item_hp_mod := CInt (magic_quality/20) + RandomInt (2);
+	if (!item_hp_mod)
+		item_hp_mod := 1;
+	elseif (item_hp_mod > 5)
+		item_hp_mod := 5;
+	endif
+	DoHPModifier (item, item_hp_mod);
+	DoArmorSkillModifier (item, item_hp_mod);
+	SpecialArmorSpell (item, magic_quality_chance);
+endfunction
+
+
+
+///////////////////
+//  makes the shield magic semi-based on the passed magic_quality
+///////////////////
+
+function MakeShieldMagical (item, magic_quality_chance)
+
+	var magic_quality := DetermineMagicQuality (magic_quality_chance);
+	var item_hp_mod := CInt (magic_quality/20);
+
+	magic_quality := DetermineMagicQuality (magic_quality_chance);
+	var item_ar_mod := CInt (magic_quality/20);
+
+	if (item_ar_mod)
+		DoHPModifier (item, item_hp_mod);
+		DoARModifier (item, item_ar_mod);
+
+		if (RandomInt (10) == 0)
+			if (!item_hp_mod)
+				item_hp_mod := 1;
+			elseif (item_hp_mod > 5)
+				item_hp_mod := 5;
+			endif
+			DoHPModifier (item, item_hp_mod);
+			DoShieldSkillModifier (item, item_hp_mod);
+		endif
+	else
+		item_hp_mod := item_hp_mod + 2;
+		if (item_hp_mod > 5)
+			item_hp_mod := 5;
+		endif
+
+		DoHPModifier (item, item_hp_mod);
+		DoShieldSkillModifier (item, item_hp_mod);
+	endif
+
+	SpecialArmorSpell (item, magic_quality_chance);
+
+endfunction
+
+
+
+
+///////////////////
+//  charges a wand with spells
+///////////////////
+
+function MakeWandMagical (item, magic_quality_chance)
+
+	var magic_quality := DetermineMagicQuality (magic_quality_chance);
+
+	case (RandomInt (17))
+		0:
+			SetObjProperty (item, "spell", "nightsight");
+			SetObjProperty (item, "suffix", "of nightsight");
+			var charges := CINT (magic_quality/3) + 10;
+			SetObjProperty (item, "charges", charges);
+
+		1:
+			SetObjProperty (item, "spell", "bless");
+			SetObjProperty (item, "suffix", "of blessing");
+			var charges := CINT (magic_quality/5) + 10;
+			SetObjProperty (item, "charges", charges);
+
+		2:
+			SetObjProperty (item, "spell", "strength");
+			SetObjProperty (item, "suffix", "of strength");
+			var charges := CINT (magic_quality/5) + 10;
+			SetObjProperty (item, "charges", charges);
+
+		3:
+			SetObjProperty (item, "spell", "agility");
+			SetObjProperty (item, "suffix", "of agility");
+			var charges := CINT (magic_quality/5) + 10;
+			SetObjProperty (item, "charges", charges);
+
+		4:
+			SetObjProperty (item, "spell", "cunning");
+			SetObjProperty (item, "suffix", "of cunning");
+			var charges := CINT ((RandomInt (magic_quality) + 20)/2);
+			SetObjProperty (item, "charges", charges);
+
+		5:
+			SetObjProperty (item, "spell", "protection");
+			SetObjProperty (item, "suffix", "of protection");
+			var charges := CINT ((RandomInt (magic_quality) + 20)/2);
+			SetObjProperty (item, "charges", charges);
+
+		6:
+			SetObjProperty (item, "spell", "cure");
+			SetObjProperty (item, "suffix", "of curing");
+			var charges := CINT ((RandomInt (magic_quality) + 20)/2);
+			SetObjProperty (item, "charges", charges);
+
+		7:
+			SetObjProperty (item, "spell", "heal");
+			SetObjProperty (item, "suffix", "of healing");
+			var charges := CINT ((RandomInt (magic_quality) + 20)/2);
+			SetObjProperty (item, "charges", charges);
+
+		8:
+		9:
+			SetObjProperty (item, "spell", "resurrection");
+			SetObjProperty (item, "suffix", "of life");
+			var charges := CINT ((RandomInt (magic_quality) + 20)/5);
+			SetObjProperty (item, "charges", charges);
+
+		10:
+		11:
+			SetObjProperty (item, "spell", "fireball");
+			SetObjProperty (item, "suffix", "of fireball");
+			var charges := CINT ((RandomInt (magic_quality) + 20)/5);
+			SetObjProperty (item, "charges", charges);
+
+		12:
+		13:
+		14:
+			SetObjProperty (item, "spell", "lightning");
+			SetObjProperty (item, "suffix", "of lightning");
+			var charges := CINT ((RandomInt (magic_quality) + 20)/5);
+			SetObjProperty (item, "charges", charges);
+		15:
+		16:
+			SetObjProperty (item, "spell", "flamestrike");
+			SetObjProperty (item, "suffix", "of hellfire");
+			var charges := CINT ((RandomInt (magic_quality) + 10)/5);
+			SetObjProperty (item, "charges", charges);
+
+	endcase
+
+endfunction
+
+
+
+
+///////////////////
+//  adds a special equip spell to a piece of armor
+///////////////////
+
+function SpecialArmorSpell (item, magic_quality_chance)
+	var ismagic := 0;
+	var magic_quality := DetermineMagicQuality (magic_quality_chance);
+
+	if (randomint (5) == 1)
+		var charges := CINT (magic_quality/2) + 1;
+		if (charges < 20)
+			charges := 10 + RandomInt (15);
+		endif
+		case (RandomInt (5) )
+			0:	//magic reflect
+				SetObjproperty (item, "equipspell", "magicreflect");
+				SetObjproperty (item, "charges", charges);
+				SetObjProperty (item, "itemspellname", "Magic Reflection");
+			1:
+				item.resist_poison_mod := charges;
+			2:
+				item.resist_fire_mod := charges;
+			3:
+				item.resist_cold_mod := charges;
+			4:
+				item.resist_energy_mod := charges;
+			default:
+				Syslog ("Error adding magic spell to armor.");
+		endcase
+		return 1;
+	elseif ( randomint(25) == 1 )
+		var charges := CINT (magic_quality/2) + 1;
+		SetObjproperty (item, "equipspell", "stealthcloak");
+		SetObjproperty (item, "charges", charges );
+		var suffix := GetObjProperty( item, "suffix");
+		if ( suffix )
+			SetObjProperty(item,"suffix",suffix + " and sneaking");
+		else
+			SetObjProperty(item,"suffix"," of sneaking");
+		endif
+		SetObjProperty (item, "itemspellname", "Sneaking");
+		ismagic := 1;
+
+	elseif ( randomint(40) == 1 )
+		var magic_quality := DetermineMagicQuality (magic_quality_chance);
+		var charges := magic_quality + 1;
+
+		SetObjProperty (item, "equipspell", "regeneration");
+		SetObjProperty (item, "charges", charges);
+		var suffix := GetObjProperty( item, "suffix");
+		if ( suffix )
+			SetObjProperty (item, "suffix",suffix + " and regeneration");
+		else
+			SetObjProperty (item, "suffix"," of regeneration");
+		endif
+		SetObjProperty (item, "itemspellname", "Regeneration");
+		ismagic := 1;
+	endif
+	return ismagic;
+endfunction
+
+
+
+
+///////////////////
+//  makes a musical intrument magical
+///////////////////
+
+function MakeMusicalInstrumentMagical (item, magic_quality_chance)
+	var magic_quality := DetermineMagicQuality (magic_quality_chance);
+	var skill_mod := CInt (magic_quality/20);
+	if (!skill_mod)
+		skill_mod := 1;
+	endif
+
+	DoMusicalInstrumentSkillMod (item, skill_mod);
+
+endfunction

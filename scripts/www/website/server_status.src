@@ -1,0 +1,70 @@
+use os;
+use uo;
+use util;
+use http;
+
+include "include/clock";
+include "include/accounts";
+
+program display_server_status ()
+	var online_players := Array {};
+	foreach player in EnumerateOnlineCharacters()
+		if (!player.cmdlevel)
+			online_players.append (player);
+		endif
+	endforeach
+
+
+	WriteHTML ("<p>Server Status: ONLINE");
+	WriteHTML ("<br>Online Players: " + len (online_players));
+	WriteHTML ("<br>Server Uptime: " + GetServerUptime ());
+	WriteHTML ("<br>System Load: " + polcore().sysload + " (" +	polcore().sysload_severity + ")");
+	WriteHTML ("<br>Month-to-date playtime: " + GetMonthlyPlaytime ());
+
+	if (!len (online_players))
+		WriteHTML ("<p>There's no one online.");
+		return;
+	endif
+
+	WriteHTML ("<p>Online characters:");
+	WriteHTML ("<ol>");
+	foreach chr in online_players
+	    WriteHtml( "<li>" + chr.name);
+		if (chr.title_guild and chr.title_guild == "young")
+			WriteHtml (" [young]");
+		endif
+		if (chr.dead)
+			WriteHtml (" [dead]");
+		endif
+
+	endforeach
+	WriteHtml( "</ol>" );
+endprogram
+
+
+
+function GetServerUptime ()
+	var serveruptimecounter := GetGlobalProperty ("#serveruptimecounter");
+	if (!serveruptimecounter)
+		return "< 1 hour";
+	elseif (serveruptimecounter == 1)
+		return "1 hour";
+	endif
+	return (serveruptimecounter + " hours");
+endfunction
+
+function GetMonthlyPlaytime ()
+	var this_month_string := GetCurrentPlaytimeMonth ();
+	var total_monthly_string := "total_" + this_month_string;
+	var total_monthly := GetGlobalProperty (total_monthly_string);
+	if (!total_monthly)
+		return "Unknown";
+	endif
+	return "" + CINT (total_monthly/3600) + " hours";
+endfunction
+
+
+
+
+
+

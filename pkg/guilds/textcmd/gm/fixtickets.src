@@ -1,0 +1,38 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/eventid";
+include "include/accounts";
+include "include/gumps";
+
+program fixguildtickets (character)
+	var ticket_array := GetGlobalProperty ("adventurers_guild_tickets");
+	if (!ticket_array)
+		ticket_array := dictionary;
+	endif
+
+	var player;
+	foreach player_serial in (ticket_array.keys())
+		player := SystemFindObjectBySerial (player_serial);
+		if (!player)
+			player := SystemFindObjectBySerial (player_serial, SYSFIND_SEARCH_OFFLINE_MOBILES);
+		endif
+		if (player and player.acctname)
+			var current_tickets := GetAccountProperty (player.acctname, "adventurers_guild_tickets");
+			if (!current_tickets)
+				current_tickets := 0;
+			endif
+			current_tickets := current_tickets + ticket_array[player_serial];
+			SetAccountProperty (player.acctname, "adventurers_guild_tickets", current_tickets);
+			SendSysMessage (character, "Awarded " + ticket_array[player_serial] + " tickets to " + player.acctname);
+		else
+			SendSysMessage (character, "AG: Unable to award tickets to serial " + player_serial + ", " + ticket_array[player_serial] + "ticket.");
+			Syslog ("AG: Unable to award tickets to serial " + player_serial + ", " + ticket_array[player_serial] + "ticket.");
+		endif
+		sleepms (200);
+	endforeach
+endprogram

@@ -1,0 +1,89 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/attributes";
+
+program decode_map (character, map)
+	var maplevel;
+	if (GetObjProperty (map, "chestserial"))
+		maplevel := GetObjProperty (map, "level");
+		if (!maplevel)
+			maplevel := 2;
+		elseif (maplevel > 11)
+			maplevel := 11;
+		endif
+	else
+		var cfgfile := ReadConfigFile (":treasuremap:itemdesc" );
+		var elem := FindConfigElem (cfgfile, map.objtype);
+		maplevel := GetConfigInt (elem, "Level");
+		if (!maplevel)
+			maplevel := 2;
+		elseif (maplevel > 10)
+			maplevel := 10;
+		endif
+	endif
+
+	var diffi := maplevel * 10;
+	if (diffi > GetAttribute (character, ATTRIBUTEID_CARTOGRAPHY) + 15)
+		SendSysmessage (character, "You cannot comprehend the map.");
+		return;
+	endif
+	
+	if (!CheckSkill (character, SKILLID_CARTOGRAPHY, diffi, 0))
+		SendSysmessage (character, "You understand the map, but fail to decode it.");
+		return;
+	endif
+
+	//set the necessary properties on the map to make it openable, and delete its usescript
+	//(so double-clicking opens map gump)
+	SetObjProperty (map, "level", maplevel);
+	SetObjProperty (map, "decoder", character.serial);
+
+	var cfgfile := ReadConfigFile ("treasuremap_locs");
+	var pick := RandomInt (GetConfigMaxIntKey (cfgfile)) + 1;
+	var elem := FindConfigElem (cfgfile, pick);
+
+	var x := GetConfigInt (elem, "X");
+	var y := GetConfigInt (elem, "Y");
+
+	//seer-created map
+	if (GetObjProperty (map, "chestserial"))
+		x := GetObjProperty (map, "chestx");
+		y := GetObjProperty (map, "chesty");
+	else
+		SetObjProperty (map, "chestx", x);
+		SetObjProperty (map, "chesty", y);
+	endif
+
+	if (x < 265)
+		map.xwest := 0;
+	else
+		map.xwest := x-265;
+	endif
+
+	if (y < 260)
+		map.ynorth := 0;
+	else
+		map.ynorth := y-260;
+	endif
+
+	map.xeast := x+265;
+	if (y + 260 > 4095)
+		map.ysouth := 4095;
+	else
+		map.ysouth := y+260;
+	endif
+	map.gumpwidth := 250;
+	map.gumpheight := 250;
+	map.usescript := "";
+	map.graphic := 0x14EB;
+	
+	SendSysMessage (character, "You successfully decode the map.");
+endprogram
+
+
+

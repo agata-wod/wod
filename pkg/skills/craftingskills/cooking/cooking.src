@@ -1,0 +1,711 @@
+///////////////////
+//  This program is the maim cooking program.  It reads in recipes from cooking.cfg, decides what can 
+//  be made by the character at the current time depending on what other ingredients they currently have,
+//  their nearness to a fire or oven, and their skill.  It then lets them choose among the valid recipes
+//  and cooks the one they selected.
+///////////////////
+
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/gumps";
+include "include/attributes";
+include "include/crafting";
+include "include/objtype";
+include "../pkg/skills/craftingskills/cooking/food";
+
+//load the food dictionary.  This makes the recipe definitions in cooking.cfg much more understandable
+var food_dictionary := define_food_dictionary ();
+
+//this is used to make sure that all recipes presented use the ingredient that was originally selected
+var original_ingredient_objtype := 0;
+
+//the bag where created items are placed
+var craftingbag;
+
+//some items are renamable
+var selected_product_name;
+
+//This variable counts all ingredients that the player has
+var players_ingredient_counter := dictionary;
+
+program cook (character, ingredient)
+	//This number is used for the checkskill for usage based shards
+	var points := 0;
+
+	//remember what the original double-clicked item was, and count the player's ingredients
+	original_ingredient_objtype := ingredient.objtype;
+	CountPlayersIngredients (character);
+
+	//Go to a function that creates a menu and lets the user choose what to make
+	var current_recipe := select_recipe(character);
+	if (!current_recipe)
+		return;
+	endif
+
+	//Now we send the player a nice message so they know exactly what they're trying to make
+	SendSysmessage (character, "Making: " + current_recipe.menu_name );
+	SendSysmessage (character, "Requires: " + current_recipe.skill + " skill");
+	SendSysmessage (character, current_recipe.ingredient_list);
+
+	//Send popup menu allowing user to autoloop
+	var loopit := 0;
+	if (!current_recipe.product_color["<selected>"])
+		loopit := YesNo(character,"Autoloop?");
+	endif
+
+	//Now make sure that there's still a fire around to cook on.  This prevents people from
+	//opening up the menu while standing by an oven in Britain, running to Trinsic with the 
+	//menu open, and then baking a pie 10 miles from the oven.
+	if ( !can_be_cooked (character, current_recipe) )
+		SendSysmessage (character, "There's nothing around here to cook on.");
+		return;
+	endif
+
+	//Some items are renamable
+	if (current_recipe.product_name["<longrenamable>"])
+		selected_product_name := SendTextEntryGump (character, "Enter the name to add:", TE_CANCEL_ENABLE, 
+					TE_STYLE_NORMAL, 35, "(Blank to keep current name)");
+	elseif (current_recipe.product_name["<renamable>"])
+		selected_product_name := SendTextEntryGump (character, "Enter the name to add:", TE_CANCEL_ENABLE, 
+					TE_STYLE_NORMAL, 20, "(Blank to keep current name)");
+	endif
+
+	//data to make sure the characters don't move
+	craftingbag := FindCraftingBag (character);
+	var characterx := character.x;
+	var charactery := character.y;
+
+	//Send an appropriate message and put in a time delay
+	if ( !current_recipe.cooking_method )
+		SendSysmessage (character, "You begin to mix the ingredients.");
+		sleep(2);
+	elseif (current_recipe.cooking_method == 2)
+		SendSysmessage (character, "You place the item in the oven.");
+		sleep(2);
+		SendSysmessage (character, "Almost done...");
+		sleep(2);
+	elseif (current_recipe.cooking_method == 4)
+		SendSysmessage (character, "You start brewing...");
+		PlaySoundEffect (character, 0x21);
+		sleep(5);
+		SendSysmessage (character, "Almost done...");
+		PlaySoundEffect (character, 0x241);
+		sleep(2);
+		PlaySoundEffect (character, 0x241);
+		sleep(2);
+	else
+		SendSysmessage (character, "That's beginning to smell good!");
+		sleep(2);
+		SendSysmessage (character, "Almost done...");
+		sleep(2);
+	endif
+
+	repeat
+		//check to see if the recipe returns an item other than the product, and if so, create it
+		if (current_recipe.extra_returns)
+			if (!create_extra_returns (character, current_recipe))
+				return;
+			endif
+		endif
+
+		//do a skill check to see if the player was successful in making the recipe
+		if ( checkskill(character, SKILLID_COOKING, current_recipe.skill, points) )
+			//success, so destroy the ingredients and create the product
+			destroy_all_ingredients (character, current_recipe);
+			if (!create_product (character, current_recipe))
+				return;
+			endif
+
+			//meaningless congratulations
+			SendSysmessage(character, "You put the goods in your backpack.");
+
+		//otherwise we have failure, so destroy ingredients
+		else
+			destroy_all_ingredients (character, current_recipe);
+
+			//Now give a bad message dependent on how the material is cooked
+			if (!current_recipe.cooking_method)
+				SendSysmessage (character, "Whoops!  You messed up.");
+			else
+				SendSysmessage (character, "Darn!  You burned it!");
+			endif
+		endif
+
+		//See if autoloop is turned on.  If not, quit the program.
+		if (!loopit)
+			return;
+		else
+			//otherwise, check to see if they have enough ingredients for another batch
+			if (!check_for_all_ingredients (character, current_recipe) )
+				SendSysmessage (character, "You've run out of ingredients!");
+				return;
+			endif
+
+			//then the time delay.  4 seconds for cooked items, 2 seconds for mixed items
+			if (!current_recipe.cooking_method)
+				sleep (2);
+			elseif (current_recipe.cooking_method == 4)
+				sleep(2);
+				PlaySoundEffect (character, 0x241);
+				sleep(2);
+				PlaySoundEffect (character, 0x241);
+			else
+				sleep (4);
+			endif
+
+			//Now make sure that there's still a fire around to cook on.
+			if (	!can_be_cooked (character, current_recipe) )
+				SendSysmessage (character, "It appears that your fire has gone out.");
+				return;
+			endif
+		endif
+
+	//See if the character moved. If so, quit.  Otherwise, loop.
+	until (character.x != characterx or character.y != charactery);
+endprogram
+
+
+
+
+///////////////////
+//  This function is called when the recipe is successfullly made.  It creates the product and
+//  sets any needed properties on that food
+///////////////////
+
+function create_product (byref character, byref current_recipe)
+	//do a loop to create the product.  A loop is used in case a recipe produces 
+	//multiple non-stackable products.
+	for i := 1 to current_recipe.product_amount
+		var theproduct := CreateItemInContainer (craftingbag, current_recipe.product_objtype, 1);
+		if (!theproduct)
+			SendSysMessage( character, "*Your backpack is full!*" );
+			return 0;
+		endif
+
+		//see if the product's name has changed, and if so, rename it
+		if (current_recipe.product_name)
+			var tempstring := current_recipe.product_name;
+			if (selected_product_name)
+				tempstring ["<renamable>"] := selected_product_name;
+				tempstring ["<longrenamable>"] := selected_product_name;
+			endif
+			if (!tempstring ["<renamable>"] and !tempstring ["<longrenamable>"])
+				theproduct.name := tempstring;
+			endif
+		endif
+
+		//Some items are recolorable
+		if (current_recipe.product_color["<selected>"])
+			var selected_product_color := SelectColor (character, theproduct);
+			theproduct.color := selected_product_color;
+			return 0;
+		endif
+
+		//see if the product's graphic has changed, and if so, change it
+		if (current_recipe.product_graphic)
+			theproduct.graphic := current_recipe.product_graphic;
+		endif
+
+		//see if the product's color has changed, and if so, dye it
+		if (current_recipe.product_color)
+			theproduct.color := current_recipe.product_color;
+		endif
+	endfor
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  This function creates any items that a recipe returns in addition to the main product
+///////////////////
+
+function create_extra_returns (character, byref current_recipe)
+	//Check through the current recipe and load all the extra returns into an array
+	var return_array := GetConfigStringArray (current_recipe, "extra_returns");
+	var return_counter;
+	var current_return;
+	
+	//now we cycle through all the ingredients
+	for (return_counter := 1; return_counter == len(return_array); return_counter := return_counter + 1)
+		//Pick the current return items out of the array.  the first part of this (current_return[1]) is the type of
+		//return being created.  The second part (current_return[2]) is the number.
+		current_return := splitwords(return_array[return_counter]);
+
+		//finally create the item
+		var created_items := CreateItemInContainer (craftingbag, food_dictionary[current_return[1]], cint(current_return[2]) );
+		
+		//multiple non-stackable items take a bit more work
+		if (!created_items)
+			if (cint(current_return[2]) > 1)
+				for i := 1 to (cint(current_return[2]))
+					created_items := CreateItemInContainer (craftingbag, food_dictionary[current_return[1]], 1);
+					if (!created_items)
+						PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+						return 0;
+					endif
+				endfor
+			else
+				PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+				return 0;
+			endif
+		endif
+	endfor
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  This function checks through the backpack and destroys ingredients
+///////////////////
+
+function destroy_all_ingredients (byref character, byref current_recipe)
+	//load the ingredient list from the current recipe into an array
+	var ingredient_array := GetConfigStringArray (current_recipe, "ingredient");
+
+	//a couple more variables
+	var splitted, ingredient_objtype, ingredient_amount;
+
+	//go through the ingredients...
+	foreach current_ingredient in ingredient_array
+		//current_ingredient is made up of 2 parts, the ingredient type (first), then the number needed (second)
+		splitted := SplitWords (current_ingredient);
+		ingredient_objtype := food_dictionary [splitted[1]];
+		ingredient_amount := CINT (splitted[2]);
+
+		if (!DestroySpecifiedIngredient (character, ingredient_objtype, ingredient_amount))
+			return 0;
+		endif
+	endforeach
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  this function is called by destroy_all_ingredients, destroys only the given ingredient
+///////////////////
+
+function DestroySpecifiedIngredient (character, ingredient_objtype, ingredient_amount)
+	//remove it from the counter
+	players_ingredient_counter.insert (ingredient_objtype, players_ingredient_counter[ingredient_objtype] - ingredient_amount);
+
+	//if its water we need, search for that
+	if (ingredient_objtype == "water")
+		foreach item in EnumerateItemsInContainer (character.backpack)
+			if (item.objtype == 0x1F91) //glass of water
+				SendSysMessage (character, "Found a glass of water");
+
+				//if so, create an empty glass
+				var the_glass := CreateItemInBackpack (character, 0x1f81);
+	
+				//if the full glass has a saved name, rename the new glass
+				if (GetObjProperty (item, "EmptyName") )
+					the_glass.name := GetObjProperty (item, "EmptyName");
+				endif
+				SubtractAmount (item, 1);
+				ingredient_amount := ingredient_amount - 1;
+			elseif (item.objtype == 0x1f9e) //pitcher of water
+				var fullness := GetObjProperty (item, "fullness");
+				if (!fullness)
+					fullness := 4;
+				endif
+				if (ingredient_amount > fullness)
+					SendSysMessage (character, "Found a pitcher of water, path A");
+					reduce_container_fullness (character, item, fullness);
+					ingredient_amount := ingredient_amount - fullness;
+				else
+					SendSysMessage (character, "Found a pitcher of water, path B");
+					reduce_container_fullness (character, item, ingredient_amount);
+					return 1;
+				endif
+			endif
+		endforeach
+		return 0;
+
+	//if its milk we need, search for that
+	elseif (ingredient_objtype == "milk")
+		foreach item in EnumerateItemsInContainer (character.backpack)
+			if (item.objtype == 0x1F89) //glass of milk
+				SendSysMessage (character, "Found a glass of milk");
+
+				//if so, create an empty glass
+				var the_glass := CreateItemInBackpack (character, 0x1f81);
+	
+				//if the full glass has a saved name, rename the new glass
+				if (GetObjProperty (item, "EmptyName") )
+					the_glass.name := GetObjProperty (item, "EmptyName");
+				endif
+				SubtractAmount (item, 1);
+				ingredient_amount := ingredient_amount - 1;
+			elseif (item.objtype == 0x09ad) //pitcher of milk
+				var fullness := GetObjProperty (item, "fullness");
+				if (!fullness)
+					fullness := 4;
+				endif
+				if (ingredient_amount > fullness)
+					SendSysMessage (character, "Found a pitcher of milk, path A");
+					reduce_container_fullness (character, item, fullness);
+					ingredient_amount := ingredient_amount - fullness;
+				else
+					SendSysMessage (character, "Found a pitcher of milk, path B");
+					reduce_container_fullness (character, item, ingredient_amount);
+					return 1;
+				endif
+			endif
+		endforeach
+		return 0;
+
+	//special stuff for cheese, too
+	elseif (ingredient_objtype == "cheese")
+		//try to use small wedges of cheese first
+		foreach item in EnumerateItemsInContainer (character.backpack)
+			if (item.objtype == 0x97c) //small wedge of cheese
+				if (ingredient_amount > item.amount)
+					ingredient_amount := ingredient_amount - item.amount;
+				else
+					SubtractAmount (item, ingredient_amount);
+					return 1;
+				endif
+			endif		
+		endforeach
+		
+		//Not enough small cheese wedges, try large cheese wedges
+		foreach item in EnumerateItemsInContainer (character.backpack)
+			if (item.objtype == 0x97d) //large wedge of cheese
+				var wheels_needed := CINT (ingredient_amount / 2) + 1;
+				if (wheels_needed > item.amount)
+					ingredient_amount := ingredient_amount - (2 * item.amount);
+				else
+					SubtractAmount (item, wheels_needed);
+					var cheese_parts_left := CINT ((2 * wheels_needed - ingredient_amount) % 2);
+					if (cheese_parts_left)
+						CreateItemInContainer (character.backpack, 0x97c, 1);
+					endif
+					return 1;
+				endif
+			endif
+		endforeach
+		
+		//Finally, check cheese wheels
+		foreach item in EnumerateItemsInContainer (character.backpack)
+			if (item.objtype == 0x97e) //wheel of cheese
+				var wheels_needed := CINT (ingredient_amount / 3) + 1;
+				if (wheels_needed > item.amount)
+					ingredient_amount := ingredient_amount - (3 * item.amount);
+				else
+					SubtractAmount (item, wheels_needed);
+					var cheese_parts_left := CINT ((3 * wheels_needed - ingredient_amount) % 3);
+					if (cheese_parts_left == 1)
+						CreateItemInContainer (character.backpack, 0x97c, 1);
+					elseif (cheese_parts_left == 2)
+						CreateItemInContainer (character.backpack, 0x97d, 1);
+					endif
+					return 1;
+				endif
+			endif
+		endforeach
+		//still haven't found it...
+		return 0;
+	else
+		foreach item in EnumerateItemsInContainer (character.backpack)
+			if (item.objtype == ingredient_objtype)
+				if (item.amount < ingredient_amount)
+					ingredient_amount := ingredient_amount - item.amount;
+					DestroyItem (item);
+				else
+					SubtractAmount (item, ingredient_amount);
+					return 1;
+				endif
+			endif
+		endforeach
+	endif
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  The function that decided what products can be
+//  made, creates a menu that contains those products,
+// and lets the user choose what to make
+///////////////////
+
+function select_recipe (byref character)
+	//set up some data
+	//first, load the cooking.cfg file that contains all the recipes
+	var recipe_config_file := ReadConfigFile ("cooking");
+
+	//this is the number of recipes that are defined in the cooking.cfg file
+	var num_recipes := GetConfigMaxIntKey( recipe_config_file );
+
+	//this is the recipe that is currently being considered for validity
+	var current_recipe := array {};
+
+	//this is an empty menu that will be filled with recipes that pass the check for validity
+	var selectmenu := CreateMenu ("What do you want to make?");
+
+	//an array that contains all the recipes that are valid
+	var array_of_valid_recipes := array {};  //Array of valid recipes
+
+	//just a counter
+	var recipe_counter;
+
+	//loop through all the recipes
+	for (recipe_counter := 1; recipe_counter <= num_recipes; recipe_counter := recipe_counter+1)
+		//read this recipe from the cooking.cfg file
+		current_recipe := FindConfigElem (recipe_config_file, recipe_counter);
+
+		//the first check is if the recipe can be cooked at this time
+		if ( can_be_cooked (character, current_recipe) )
+			//if it passes that check, then make sure that the player has all neccessary ingredients and the skill to make the recipe
+			if (check_for_all_ingredients (character, current_recipe) and has_skill (character, current_recipe))
+				//OK, it appears that this is a valid recipe
+				//Check to see if its graphic is something other than the default for its objtype
+				if (current_recipe.product_graphic)	
+					//If so, add the replacement graphic to the menu
+					AddMenuItem(selectmenu, current_recipe.product_graphic, current_recipe.menu_name);
+				else
+					//If not, just use the default graphic
+					AddMenuItem(selectmenu, current_recipe.product_objtype, current_recipe.menu_name);
+				endif
+
+				//Add the current recipe to the list with the others
+				array_of_valid_recipes[len(array_of_valid_recipes)+1] := current_recipe;
+			endif
+		endif
+	endfor
+
+	//If there's no recipes that can be made, give error and quit
+	if (len(array_of_valid_recipes) == 0)
+		SendSysmessage (character, "You can't make anything with that right now.");
+		return 0;
+
+	//If there's only 1 possible recipe, just make it automatically
+	elseif (len(array_of_valid_recipes) == 1)
+		return array_of_valid_recipes[1];
+	endif
+
+	//Otherwise, display the menu and allow the user to choose
+	var selection := SelectMenuItem2 (character, selectmenu);
+
+	//Make sure they selected a valid item
+	if (!selection)
+		SendSysMessage(character,"Canceled");
+		return 0;
+	endif
+
+	//Then return the recipe that was selected
+	return array_of_valid_recipes[selection.index];
+endfunction
+
+
+
+
+///////////////////
+//  This function checks to see if all the ingredients
+//  called for in the recipe are available
+///////////////////
+
+function check_for_all_ingredients (character, byref current_recipe)
+	//load the ingredient list from the current recipe into an array
+	var ingredient_array := GetConfigStringArray (current_recipe, "ingredient");
+
+	//Make sure that there's at least 1 ingredient.  If not, something is very, very wrong
+	if (len (ingredient_array) <= 0)
+		SendSysmessage (character, "There is an error in the recipe for" + current_recipe.menu_name );
+		return 0;
+	endif
+
+	//Now we set up a hack to make sure that the originally selected ingredient is used in any recipe that
+	//is determined to be valid.  If this isn't done, all recipies that are possible to make, including ones
+	//that don't use this ingredient, would be available.
+	var used_selected_ingredient := 0;
+	
+	//a couple more variables
+	var splitted, current_ingredient_objtype, current_ingredient_amount;
+	
+	//go through the ingredients...
+	foreach current_ingredient in ingredient_array
+		//current_ingredient is made up of 2 parts, the ingredient type (first), then the number needed (second)
+		splitted := SplitWords (current_ingredient);
+		current_ingredient_objtype := food_dictionary [splitted[1]];
+		current_ingredient_amount := CINT (splitted[2]);
+
+		//Here is where we check to see if the ingredient that we just picked out of the ingredient
+		//list is the one that actually was originally selected.  If this isn't done, all the recipes
+		//that can currently be made show up, even if they don't use the ingredient already picked.
+		//Its kind of a messy hack but it's the best thing I can think of using the ingredient list
+		//method.  The !selected_ingredient is used when the recipe is looping (in case the original
+		//item was destroyed) since there could still be others of it's type.
+		if (current_ingredient_objtype == original_ingredient_objtype )
+			used_selected_ingredient := 1;
+		endif
+		
+		//now check our predetermined list of items to see if we have this ingredient
+		if (!players_ingredient_counter[current_ingredient_objtype])
+			return 0;
+		elseif (players_ingredient_counter[current_ingredient_objtype] < current_ingredient_amount)
+			return 0;
+		endif
+	endforeach
+
+	//It appears we've made it through all of the ingredients.  Return success if the originally selected
+	//ingredient was used in this recipe.  Otherwise, fail.
+	if (used_selected_ingredient)
+		return 1;
+	else
+		return 0;
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  This function checks to see if there's even a chance to make the product
+///////////////////
+
+function has_skill (byref character, byref current_recipe)
+	var skill := GetAttribute (character, ATTRIBUTEID_COOKING);
+	if (skill >= (current_recipe.skill - 19))
+		return 1;
+	endif
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Determines whether the recipe can be made dependant upon what cooking surfaces are available in the area
+///////////////////
+
+function can_be_cooked (byref character, byref current_recipe)
+	//if there's no cooking requirement, return success immediately
+	if (!current_recipe.cooking_method)
+		return 1;
+
+	//Brewing doesn't have a requirement either
+	elseif (current_recipe.cooking_method == 4)
+		return 1;
+
+	//else if it requires a fire, search through all var items for a fire
+	elseif (current_recipe.cooking_method == 1)
+		foreach item in ListItemsNearLocation(character.x, character.y, character.z,2, character.realm)
+			if ((item.objtype >= 0x045d) and (item.objtype <= 0x0460))
+				return 1;
+			elseif ((item.objtype >= 0x0475) and (item.objtype <= 0x048e))
+				return 1;
+			elseif ((item.objtype >= 0x0935) and (item.objtype <= 0x096c))
+				return 1;
+			elseif ((item.objtype >= 0x0de3) and (item.objtype <= 0x0de8))
+				return 1;
+			endif
+		endforeach
+		return 0;
+
+	//else if it requires an oven, search for an oven
+	elseif (current_recipe.cooking_method == 2)
+		foreach item in ListItemsNearLocation(character.x, character.y, character.z,2, character.realm)
+			if ((item.objtype >= 0x0461) and (item.objtype <= 0x046f))
+				return 1;
+			elseif ((item.objtype >= 0x092b) and (item.objtype <= 0x0934))
+				return 1;
+			elseif (item.objtype == 0x2ddb or item.objtype == 0x2ddc)
+				return 1;
+			endif
+		endforeach
+		return 0;
+
+	//else if it can be made in either a fire of an oven, check for both
+	elseif (current_recipe.cooking_method == 3)
+		foreach item in ListItemsNearLocation(character.x, character.y, character.z,2, character.realm)
+			if ((item.objtype >= 0x0461) and (item.objtype <= 0x046f))
+				return 1;
+			elseif ((item.objtype >= 0x092b) and (item.objtype <= 0x0934))
+				return 1;
+			elseif ((item.objtype >= 0x045d) and (item.objtype <= 0x0460))
+				return 1;
+			elseif ((item.objtype >= 0x0475) and (item.objtype <= 0x048e))
+				return 1;
+			elseif ((item.objtype >= 0x0935) and (item.objtype <= 0x096c))
+				return 1;
+			elseif ((item.objtype >= 0x0de3) and (item.objtype <= 0x0de8))
+				return 1;
+			elseif (item.objtype == 0x2ddb or item.objtype == 0x2ddc)
+				return 1;
+			endif
+		endforeach
+		return 0;
+
+	//else if for some reason it's none of the above, return failure
+	else
+		return 0;
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  This function counts all the items the player has in their backpack as possible cooking ingredients
+///////////////////
+
+function CountPlayersIngredients (character)
+	players_ingredient_counter := dictionary;
+	players_ingredient_counter.insert ("water", 0);
+	players_ingredient_counter.insert ("milk", 0);
+	players_ingredient_counter.insert ("cheese", 0);
+	
+	
+	foreach item in EnumerateItemsInContainer (character.backpack)
+		if (!item.isa (POLCLASS_CONTAINER))
+			if (ReserveItem (item))
+				//water, milk and cheese are handled differently
+				case (item.objtype)
+					0x1F91:	//glass of water
+						players_ingredient_counter.insert ("water", players_ingredient_counter["water"] + 1);
+					0x1f9e:	//pitcher of water
+						if (GetObjProperty (item, "fullness"))
+							players_ingredient_counter.insert ("water", players_ingredient_counter["water"] + GetObjProperty (item, "fullness"));
+						else
+							players_ingredient_counter.insert ("water", players_ingredient_counter["water"] + 4);
+						endif
+
+					0x1F89:	//glass of milk
+						players_ingredient_counter.insert ("milk", players_ingredient_counter["milk"] + 1);
+					0x09ad:	//pitcher of milk
+						if (GetObjProperty (item, "fullness"))
+							players_ingredient_counter.insert ("milk", players_ingredient_counter["milk"] + GetObjProperty (item, "fullness"));
+						else
+							players_ingredient_counter.insert ("milk", players_ingredient_counter["milk"] + 4);
+						endif
+
+					0x97e:	//wheel of cheese
+						players_ingredient_counter.insert ("cheese", players_ingredient_counter["cheese"] + (3 * item.amount));
+					0x97d:	//large wedge of cheese
+						players_ingredient_counter.insert ("cheese", players_ingredient_counter["cheese"] + (2 * item.amount));
+					0x97c:	//small wedge of cheese
+						players_ingredient_counter.insert ("cheese", players_ingredient_counter["cheese"] + item.amount);
+
+					default:
+						//Ok, lets add it
+						if (players_ingredient_counter.exists (item.objtype))
+							players_ingredient_counter.insert (item.objtype, players_ingredient_counter[item.objtype] + item.amount);
+						else
+							players_ingredient_counter.insert (item.objtype, item.amount);
+						endif
+				endcase
+			endif
+		endif
+	endforeach
+endfunction

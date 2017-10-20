@@ -1,0 +1,43 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 7;
+
+program cast_chainlightning (parms, spellid)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!spellid)
+		spellid := 49;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms);
+	if (!cast_on)
+		return 0;
+	endif
+
+	var range := CINT (caster_magery/15);
+	var dmg := 0;
+	foreach mobile in ListMobilesNearLocationEx (cast_on.x, cast_on.y, cast_on.z, range, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, cast_on.realm)
+		if (!mobile.hidden or !GetObjProperty (mobile, "#specialhidden_nodamage"))
+			dmg := Resisted (caster, mobile, CalcSpellDamageByCircle (spell_circle-1));
+			if (caster.acctname)
+				if (mobile.npctemplate)
+					if (!GetObjProperty (mobile, "master"))
+						dmg := CINT (dmg * 1.5 + 1);
+					endif
+				endif
+			endif
+			PlayLightningBoltEffect (mobile);
+			PlaySoundEffect (mobile, SFX_SPELL_LIGHTNING);
+			PlayLightningBoltEffect (mobile);
+			DoDamageByType (caster, mobile, dmg, DAMAGETYPE_ELECTRICAL);
+		endif
+    	endforeach
+	return 1;
+endprogram

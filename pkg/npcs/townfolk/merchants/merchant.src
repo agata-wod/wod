@@ -1,0 +1,646 @@
+use os;
+use uo;
+use npc;
+use basic;
+use cfgfile;
+
+include "../pkg/npcs/npcinfo";
+include "../pkg/npcs/speech";
+include "../pkg/npcs/npc_util";
+include "../pkg/npcs/main_ai/main/sleepmode_townfolk";
+include "include/locations";
+include "include/utility";
+include "include/eventid";
+include "include/magicitems";
+include "include/npcbackpacks";
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/townfolk/merchants/mrcspawn";
+include ":contextMenus:contextMenus";
+
+const RESTOCK_TIME_SECONDS := 1800;
+
+var inv_fs, inv_pb, inv_1c;
+var next_possible_spam := ReadGameClock ();
+var merchant_type;
+
+program merchantai()
+	DoMerchantStartupSetup ();
+	if (!me.backpack)
+		//make some bandages and restock
+		CreateItemInContainer (me.backpack, UOBJ_BANDAGE, 25);
+		RestockInventory (merchant_type, inv_fs);
+
+		//standard NPC setup
+		DoOnCreationSetup ();
+	endif
+	SetUpSpeech ();
+
+	var next_restock := ReadGameClock() + RESTOCK_TIME_SECONDS;
+	WalkHome ();
+	EnableMainEvents ();
+
+	var ev;
+	var wanders := 60;
+	var next_wander := ReadGameClock();
+
+	while (me)
+		if (me.hidden)
+			me.hidden := 0;
+		endif
+
+		if (readgameclock() > next_wander)
+			if (GetObjProperty (me, "destinationx"))
+				var mydestx := GetObjProperty (me, "destinationx");
+				var mydesty := GetObjProperty (me, "destinationy");
+				var steps := GetObjProperty (me, "destinationsteps");
+				SetObjProperty (me, "destinationsteps", (steps + 1));
+				WalkTowardLocation (mydestx, mydesty);
+				next_wander := readgameclock() - 1;
+				if ( (me.x == mydestx and me.y == mydesty) or ( steps > 10 ) )
+					EraseObjProperty (me, "destinationx");
+					EraseObjProperty (me, "destinationy");
+					EraseObjProperty (me, "destinationsteps");
+				endif
+			else	
+				wander();
+				next_wander := readgameclock() + 3;
+				wanders := wanders + 1;
+			endif
+			next_wander := readgameclock()+2;
+		endif
+
+		if (wanders > 60)
+			wanders := 0;
+			ev := sleepmode();
+		else
+			ev := os::wait_for_event (2);
+		endif
+
+		if (ev)
+			if (ProcessEvent (ev))
+				next_wander := readgameclock() + 30;
+			endif
+		endif
+
+		if (ReadGameClock() > next_restock)
+			if ( GetObjProperty (me, "restock") )
+        			RestockInventory (merchant_type, inv_fs);
+				EraseObjProperty (me, "restock");
+			endif
+			next_restock := ReadGameClock() + RESTOCK_TIME_SECONDS;
+		endif
+	endwhile
+endprogram
+
+
+
+
+///////////////////
+//  pretty obvious - processes events picked up in the main AI loop
+///////////////////
+
+function ProcessEvent (byref ev)
+	case (ev.type)
+		EVID_ENGAGED:
+		EVID_DAMAGED:
+			Fight (ev.source);
+		EVID_ENTEREDAREA:
+			if (ev.source.npctemplate)
+				return 0;
+			endif
+
+			if (ReadGameClock() > next_possible_spam and RandomInt (2))
+				GreetCustomer (ev.source);
+				next_possible_spam := ReadGameClock() + 60;
+			endif
+		EVID_CONTEXT_MENU:
+			var newev := struct;
+			newev.+type := EVID_SPEECH;
+			newev.+source := ev.source;
+			newev.+text := "";
+			case (ev.result)
+				eCMR_Buy:			newev.text := "buy";
+				eCMR_Sell:			newev.text := "sell bag";
+				eCMR_Train:		newev.text := "train";
+				eCMR_CraftItem:		newev.text := "job";
+				eCMR_Quest:		newev.text := "quest";
+				eCMR_GateTravel:	newev.text := "gate";
+			endcase
+			sendevent (me, newev);
+		EVID_SPEECH:
+			if (ev.source.npctemplate)
+				return 0;
+			endif
+
+			TurnToward(ev.source);
+			var evtext := lower(ev.text);
+			if (evtext ["job"])
+				var parms := array { };
+				parms[1] := ev.source;
+				parms[2] := me;
+				start_script (":merchants:job", parms);
+			elseif (evtext ["quest"])
+				if (GetObjProperty (me, "override_quest"))
+					check_speech (ev.text, ev.source);
+				else
+					var parms := array { };
+					parms[1] := me;
+					parms[2] := ev.source;
+					start_script (":merchants:merchant_quest", parms);
+				endif
+			elseif (evtext ["gate"])
+				case (merchant_type)
+					"mage":
+					"alchemist":
+					"scribe":
+						var parms := array { };
+						parms[1] := me;
+						parms[2] := ev.source;
+						start_script (":merchants:merchant_gate", parms);
+					default:
+						PrintTextAbovePrivate (me, "I'm sorry, but you need a mage.", ev.source);
+				endcase
+			elseif (evtext["buy"])
+				SendBuyWindow ( ev.source, inv_fs, me, inv_pb );
+			elseif (evtext["sell all"])
+				var parms := array { };
+				parms[1] := me;
+				parms[2] := ev.source;
+				parms[3] := "sell all";
+				start_script (":merchants:merchant_sell_bag", parms);
+			elseif (evtext["sell bag"])
+				var parms := array { };
+				parms[1] := me;
+				parms[2] := ev.source;
+				parms[3] := "sell bag";
+				start_script (":merchants:merchant_sell_bag", parms);
+			elseif (evtext["sell"])
+				SendSellWindow ( ev.source, me, inv_fs, inv_pb, inv_1c );
+				PrintTextAbovePrivate ( me, "Can I help you?", ev.source );
+			elseif ( evtext["train"] or ev.text["teach"] )
+				TurnToward (ev.source);
+				Say ("Just hand me some gold and I'll see what I can do for you.");
+			else
+				check_speech (ev.text, ev.source);
+			endif
+
+		EVID_MERCHANT_BOUGHT:
+			PrintTextAbovePrivate ( me, "The total of your sale is " + ev.amount, ev.source );
+			PlaySoundEffect (me, 0x38);
+			LogSold (ev.source);
+			
+		EVID_MERCHANT_SOLD:
+			TurnToward (ev.source);
+			if (!ev.amount)
+				return 1;  //fake merchant sold event used in training
+			endif
+			PrintTextAbovePrivate (me, "The total of your purchase is " + ev.amount, ev.source);
+			PlaySoundEffect (me, 0x38);
+			SetObjProperty (me, "restock", 1);
+
+		EVID_ITEM_GIVEN:
+			TurnToward (ev.source);
+			MoveItemToContainer (ev.item, me.backpack);
+
+			if (GetObjProperty (ev.item, "merchant"))
+				PayForJobCompleted (ev);
+			elseif (ev.item.objtype == 0x170d0)	//blacksmithy special order deed
+				start_script (":blacksmithy:merchant_take_bulk_order_deed", array {ev.source, me, ev.item});
+			elseif (GetObjProperty (ev.item, "deliverto") and GetObjProperty (ev.item, "deliverto") == me.serial)
+				if (GetObjProperty (ev.item, "sentfromname"))
+					PayForItemDelivery (ev);
+				else
+					TakeItem (ev.source, ev.item);
+				endif
+			elseif ( ev.item.objtype == UOBJ_GOLD_COIN )
+				TrainSkill (ev.source , ev.item);
+			else
+				TakeItem(ev.source, ev.item);
+			endif
+
+		EVID_ALL_FOLLOW_CMD:
+			SetObjProperty (me, "destinationx", ev.x);
+			SetObjProperty (me, "destinationy", ev.y);
+			SetObjProperty (me, "destinationsteps", 0);
+			SetAnchor (ev.x, ev.y, 3, 80);
+			WalkTowardLocation (ev.x, ev.y);
+		endcase
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  called when someone drops gold on an NPC
+///////////////////
+
+function TrainSkill (byref player, byref gold)
+
+	var parms := array {};
+	parms[1] := me;
+	parms[2] := player;
+	parms[3] := gold.amount;
+
+	start_script (":merchants:merchant_training", parms);
+	DestroyItem (gold);
+	return;
+
+endfunction
+
+
+
+
+///////////////////
+//  called when someone hands in a job bag
+///////////////////
+
+function PayForJobCompleted (byref ev)
+	var bag := ev.item;
+	var player := ev.source;
+
+	if (GetObjProperty (bag, "merchant") != me.serial)
+		say("I didn't ask for that.");
+		MoveItemToContainer (bag, player.backpack);
+		return;
+	endif
+
+	var endtime := GetObjProperty (bag, "endtime");
+	if ( ReadGameClock() > endtime )
+		say("You didn't complete this order in time.");
+		DestroyItem (bag);
+		return;
+	endif
+
+	var count := 0;
+	foreach item in EnumerateItemsInContainer (bag)
+		if (GetObjProperty(item, "job") == bag.serial)
+			count := count + 1;
+		endif
+	endforeach
+
+	if (!count)
+		say ("Just what are you trying to pull?");
+		return;
+	endif
+
+	var jobattribute := GetAttributeIDBySkillID (GetObjProperty (bag, "jobtype"));
+
+	var goldamount := count * CINT(GetAttribute (player, jobattribute)/5);
+	if (!goldamount)
+		goldamount := count;
+		say("This is some crappy workmanship.  I'll only pay " + goldamount + " gold for this.");
+	else
+		say("Good job! Here is your " + goldamount + " gold.");
+	endif
+
+	CreateItemInContainer (player.backpack, UOBJ_GOLD_COIN, goldamount);
+	PlaySoundEffect (me, 0x38);
+	DestroyItem (bag);
+
+	var playerjobs := GetGlobalProperty ("#jobs_for_account_"+player.acctname);
+	if (!playerjobs)
+		playerjobs := dictionary;
+	endif
+	playerjobs.insert (ReadGameClock(), goldamount);
+	SetGlobalProperty ("#jobs_for_account_"+player.acctname, playerjobs);
+endfunction
+
+
+
+
+///////////////////
+//  called when someone does a quest for the merchant
+///////////////////
+
+function PayForItemDelivery (byref ev)
+	var parms := array { };
+	parms[1] := me;
+	parms[2] := ev.source;
+	parms[3] := ev.item;
+	start_script (":merchants:merchant_quest", parms);
+endfunction
+
+
+
+
+///////////////////
+//  determines if the item is one that can be bought when using 'sell bag', 'sell all', or one of
+//  other others
+///////////////////
+
+function IsBuyableItem (byref character, byref item, byref from_bag)
+	if ( item.newbie )
+		return 0;
+	elseif (IsMagicalItem (item) )
+		say ("Ooh, " + item.desc);
+		return 0;
+	elseif (GetObjProperty (item, "questitem") )
+		Say ("Ooh, this looks important.");
+		return 0;
+	elseif (GetObjProperty (item, "ownerserial") )
+		Say (item.desc + " is marked!");
+		return 0;
+	elseif (GetObjProperty (item, "slave") )
+		Say (item.desc + " is marked!");
+		return 0;
+	elseif (item.buyprice and item.buyprice < 0)
+		return 0;
+	endif
+
+	if (!from_bag)
+		if (item.objtype == UOBJ_GOLD_COIN)
+			return 0;
+		elseif (IsContainer (item))
+			if (len (EnumerateItemsIncontainer (item)))
+				return 0;
+			endif
+		endif
+
+		return 1;
+	endif
+
+	var account := character.acct;
+	if (!account)
+		return;
+	endif
+
+	var sell_options := account.GetProp ("sell_options");
+	if (!sell_options)
+		sell_options := array {0, 0, 0, 0, 0, 0, 0, 0};
+	elseif (len (sell_options) < 8)
+		SendSysMessage (character, "Resetting 'sell bag' options");
+		account.EraseProp ("sell_options");
+		sell_options := array {0, 0, 0, 0, 0, 0, 0, 0};
+	elseif (len (sell_options) < 9)
+		repeat
+			sell_options.append (0);
+		until (len (sell_options) == 9);
+	endif
+
+	case (item.objtype)
+		UOBJ_GOLD_COIN:
+			return 0;
+
+		UOBJ_GEM_AMBER:
+		UOBJ_GEM_STAR_SAPPHIRE:
+		UOBJ_GEM_EMERALD:
+		UOBJ_GEM_SAPPHIRE:
+		UOBJ_GEM_RUBY:
+		UOBJ_GEM_CITRINE:
+		UOBJ_GEM_AMETHYST:
+		UOBJ_GEM_TOURMALINE:
+		UOBJ_GEM_DIAMOND:
+			return sell_options[1];
+
+		UOBJ_BLACK_PEARL:
+		UOBJ_BLOOD_MOSS:
+		UOBJ_GARLIC:
+		UOBJ_GINSENG:
+		UOBJ_MANDRAKE_ROOT:
+		UOBJ_NIGHTSHADE:
+		UOBJ_SULFUROUS_ASH:
+		UOBJ_SPIDER_SILK:
+			return sell_options[2];
+
+		UOBJ_LIGHT_HEAL_POTION:
+		UOBJ_HEAL_POTION:
+		UOBJ_GREATER_HEAL_POTION:
+		UOBJ_LESSER_POISON_POTION:
+		UOBJ_POISON_POTION:
+		UOBJ_GREATER_POISON_POTION:
+		UOBJ_DEADLY_POISON_POTION:
+		UOBJ_LESSER_EXPLOSION_POTION:
+		UOBJ_EXPLOSION_POTION:
+		UOBJ_GREATER_EXPLOSION_POTION:
+		UOBJ_LESSER_AGILITY_POTION:
+		UOBJ_AGILITY_POTION:
+		UOBJ_GREATER_AGILITY_POTION:
+		UOBJ_REFRESH_POTION:
+		UOBJ_FULL_REFRESH_POTION:
+		UOBJ_LESSER_STRENGTH_POTION:
+		UOBJ_STRENGTH_POTION:
+		UOBJ_GREATER_STRENGTH_POTION:
+		UOBJ_LESSER_CURE_POTION:
+		UOBJ_CURE_POTION:
+		UOBJ_GREATER_CURE_POTION:
+		UOBJ_NIGHTSIGHT_POTION:
+			return sell_options[3];
+			
+		UOBJ_HIDE:
+		UOBJ_RED_HIDE:
+		UOBJ_BLUE_HIDE:
+		UOBJ_BROWN_HIDE:
+		UOBJ_GREEN_HIDE:
+		UOBJ_SILVER_HIDE:
+		0x26b1:
+		0x26b2:
+		0x26b3:
+		0x26b4:
+		0x26b5:
+		0x26b6:
+			return sell_options[4];
+
+		UOBJ_EGG:
+		UOBJ_RAW_RIB:
+		UOBJ_RAW_FISHSTEAK:
+		UOBJ_RAW_BIRD:
+		UOBJ_RAW_HAM:
+		UOBJ_BACON_SLAB:
+		UOBJ_RAW_SAUSAGE:
+		UOBJ_RAW_CHICKEN_LEG:
+		UOBJ_RAW_LEG_OF_LAMB:
+			return sell_options[5];
+
+		0x0DF2:	//wand
+		0x0DF3:	//wand
+		0x0DF4:	//wand
+		0x0DF5:	//wand
+			return sell_options[6];
+			
+		UOBJ_SHOVEL:
+		UOBJ_IRON_SHOVEL:
+		UOBJ_BRONZE_SHOVEL:
+		UOBJ_DULL_COPPER_SHOVEL:
+		UOBJ_COPPER_SHOVEL:
+		UOBJ_ONYX_SHOVEL:
+		UOBJ_PYRITE_SHOVEL:
+		UOBJ_MALACHITE_SHOVEL:
+		UOBJ_AZURITE_SHOVEL:
+		UOBJ_RUBYSTEEL_SHOVEL:
+		UOBJ_BLUESTEEL_SHOVEL:
+			return sell_options[8];
+	endcase
+
+	if (IsContainer (item))
+		if (len (EnumerateItemsIncontainer (item)))
+			return 0;
+		endif
+		return sell_options[7];
+	endif
+	
+	//Scrolls
+	if (item.objtype >= 0x1f2d and item.objtype <= 0x1f6c)
+		return sell_options[9];
+	elseif (item.objtype == UOBJ_BLANK_SCROLL)
+		return sell_options[9];
+	endif
+
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  Makes a log of items sold
+///////////////////
+
+function LogSold (byref who)
+	var elemkey := who.name + "(" + who.acctname + ")";
+
+	var logfile := array { };
+	var prop:= struct {};
+    	prop .+ name;
+    	prop .+ value;
+
+	foreach item in EnumerateItemsInContainer( inv_pb )
+		if ( (GetObjProperty(item, "ownerserial")) and 
+		   (GetObjProperty(item, "ownerserial") != who.serial) )
+			prop.name := "Owned by: "+ GetObjProperty(item, "ownername");
+			prop.value := "item: " + item.name;
+			logfile.append( prop );
+		endif
+
+		DestroyItem( item );
+	endforeach
+
+	if ( len(logfile) )
+		AppendConfigFileElem( "itemssold", "SOLD BY", elemkey, logfile );
+		UnloadConfigFile("itemssold");
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  when a player enters the NPCs range, this function makes them
+//  yell a greeting
+///////////////////
+
+function GreetCustomer (byref customer)
+	if (customer.npctemplate or customer.concealed)
+		return;
+	endif
+
+	if (RandomInt (3))
+		return;
+	endif
+
+	TurnToward (customer);
+	case (RandomInt (10) )
+		0:
+			Say (customer.name + "!");
+		1:
+			Say ("Welcome to my shop!");
+		2:
+			Say ("Let me know if you need help.");
+		3:
+			Say ("Welcome to my shop!");
+		4:
+			Say ("I sell only the finest goods in all Britannia!");
+		5:
+			Say ("Can I help you with anything?");
+		6:
+			Say ("You won't find a better deal anywhere else!");
+		7:
+			Say (customer.name + "!  Its good to see you again.");
+		8:
+			Say ("Come in!  Let me show you my wares.");
+		9:
+			Say ("Ah, " + customer.name + ", one of my best customers returns!");
+	endcase
+
+endfunction
+
+
+
+
+///////////////////
+//  Called when the merchant is restarted
+///////////////////
+
+function DoMerchantStartupSetup ()
+	var MyTemplateElem := GetNpcTemplateElem (me.npctemplate);
+	if (!MyTemplateElem)
+		KillMe ();
+	endif
+	merchant_type := MyTemplateElem.MerchantType;
+	if (!merchant_type)
+		merchant_type := "mage";
+	endif
+	
+	//used to destroy the merchant's storage areas when he dies
+	SetObjProperty (me, "serial", me.serial);
+
+	var storage := FindStorageArea ("Merchant Storage");
+	if (!storage)
+		exit;
+	endif
+
+	inv_fs := find_or_create_item (storage, me.serial + " FS", 0xE7C);
+	inv_pb := find_or_create_item (storage, me.serial + " PB", 0xE7C);
+	inv_1c := find_or_create_item (storage, me.serial + " 1C", 0xE7C);
+	if (!inv_fs or !inv_pb or !inv_1c)
+		KillMe ();
+	endif
+
+	var mytown := FindMyTown (me);
+	if (!mytown)
+		return;
+	endif
+
+	set_critical (1);
+	var merchantarray := GetGlobalProperty ("#merchants_of_town_" + mytown);
+	if (!merchantarray)
+		merchantarray := array {};
+	endif
+
+	if (!(me.serial in merchantarray))
+		merchantarray.append (me.serial);
+		SetGlobalProperty ("#merchants_of_town_" + mytown, merchantarray);
+	endif
+	set_critical (0);
+endfunction
+
+
+
+
+///////////////////
+//  causes the merchant to enter fight mode, which starts a seperate AI script
+///////////////////
+
+function Fight (byref opponent)
+
+	SetObjProperty (me, "opponent", opponent.serial);
+	SetObjProperty (me, "oldscript", me.script);
+
+	me.script := ":fight_ai:warrior_fight_ai";
+	RestartScript (me);
+
+endfunction
+
+function EnableMainEvents()
+	DisableEvents (SYSEVENT_LEFTAREA + SYSEVENT_DISENGAGED + SYSEVENT_OPPONENT_MOVED );
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_ENTEREDAREA, 4);
+	EnableEvents (SYSEVENT_ITEM_GIVEN, 3);
+	EnableEvents (SYSEVENT_SPEECH, 1);
+endfunction
+
+function DisableMainEvents()
+	DisableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED + SYSEVENT_ENTEREDAREA);
+	DisableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN);
+endfunction

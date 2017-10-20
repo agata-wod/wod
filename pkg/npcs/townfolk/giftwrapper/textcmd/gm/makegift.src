@@ -1,0 +1,50 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/magicitems";
+include "include/accounts";
+include "include/string";
+include "include/magic";
+
+program dotcmd_makegift (character)
+	MakeChristmasGift (character.acctname);
+
+endprogram
+
+
+
+function MakeChristmasGift (acctname)
+	var bankbox := FindBankBox (acctname);
+	if (!bankbox)
+		Syslog ("Error finding bankbox of " + acctname);
+		return;
+	endif
+
+	var gift1 := CreateItemInContainer (bankbox, 0xB010, 1);
+	if (!gift1)
+		return 0;
+	endif
+	
+	gift1.graphic := 10290;
+	gift1.color := 272;
+	gift1.name := "A Christmas Gift";
+	gift1.usescript := ":giftwrapper:christmasgift";
+	gift1.movable := 0;
+	
+	var gift2 := CreateItemInContainer (bankbox, 0xB010, 1);
+	if (!gift1)
+		Syslog ("Christmas Error! player " + acctname + " did not get their second gift");
+		return 1;
+	endif
+	gift2.graphic := 10294;
+	gift2.color := 38;
+	gift2.name := "A Christmas Gift";
+	gift2.usescript := ":giftwrapper:christmasgift";
+	gift2.movable := 0;
+		
+	
+	
+		
+	return;
+endfunction

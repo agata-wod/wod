@@ -1,0 +1,231 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/eventid";
+include "include/utility";
+include "include/itemtypes";
+include "../pkg/items/housing/house";
+
+program Place_Deed (character, deed)
+	if (!ReserveItem (deed))
+		SendSysMessage (character, "You can't use this right now.");
+		return;
+	endif
+
+	var sign := FindHouseSign (character);
+	if (!sign)
+		SendSysMessage (character, "You must be in your house to use this!");
+		return;
+	endif
+
+	var maxlockdowns := GetMaxLockdowns (sign);
+	var lockdowns := GetLockdowns (sign);
+
+	if (lockdowns >= maxlockdowns)
+		SendSysMessage (character, "You don't have any more lockdowns left.");
+		return;
+	endif
+
+	var characterx := character.x;
+	var charactery := character.y;
+
+	var select_menu := CreateMenu ("Select banner type:");
+	AddMenuItem (select_menu, 0x15AE, "Banner on gold pole, South");
+	AddMenuItem (select_menu, 0x15AF, "Banner on gold pole, East");
+	AddMenuItem (select_menu, 0x15B0, "Banner on silver pole, South");
+	AddMenuItem (select_menu, 0x15B1, "Banner on silver pole, East");
+	
+	AddMenuItem (select_menu, 0x1613, "2 part banner, North-south");
+	AddMenuItem (select_menu, 0x15A5, "2 part banner, East-west");
+	
+	AddMenuItem (select_menu, 0x161e, "3 part banner, North-South");
+	AddMenuItem (select_menu, 0x1587, "3 part banner, East-West");
+
+	var selected_item := SelectMenuItem2 (character, select_menu);
+	if (!selected_item.index)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (characterx != character.x or charactery != character.y)
+		return;
+	endif
+
+	var item;
+	case (selected_item.index)
+		1:
+		2:
+		3:
+		4:
+			var offset := selected_item.index-1;
+			Select_menu := CreateMenu ("Select Banner type:");
+			AddMenuItem (select_menu, (0x15AE+offset), "Banner");
+			AddMenuItem (select_menu, (0x15B2+offset), "Banner");
+			AddMenuItem (select_menu, (0x15B6+offset), "Banner");
+			AddMenuItem (select_menu, (0x15BA+offset), "Banner");
+			AddMenuItem (select_menu, (0x15BE+offset), "Banner");
+			AddMenuItem (select_menu, (0x15C2+offset), "Banner");
+			AddMenuItem (select_menu, (0x15C6+offset), "Banner");
+			AddMenuItem (select_menu, (0x15CA+offset), "Banner");
+			AddMenuItem (select_menu, (0x15CE+offset), "Banner");
+			AddMenuItem (select_menu, (0x15D2+offset), "Banner");
+			AddMenuItem (select_menu, (0x15D6+offset), "Banner");
+			AddMenuItem (select_menu, (0x15DA+offset), "Banner");
+			AddMenuItem (select_menu, (0x15DE+offset), "Banner");
+			AddMenuItem (select_menu, (0x15E2+offset), "Banner");
+			AddMenuItem (select_menu, (0x15E6+offset), "Banner");
+			AddMenuItem (select_menu, (0x15EA+offset), "Banner");
+			AddMenuItem (select_menu, (0x15EE+offset), "Banner");
+			AddMenuItem (select_menu, (0x15F2+offset), "Banner");
+			selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			Select_menu := CreateMenu ("Select banner height:");
+			AddMenuItem (select_menu, 0, "Low");
+			AddMenuItem (select_menu, 0, "Medium");
+			AddMenuItem (select_menu, 0, "High");
+			AddMenuItem (select_menu, 0, "Very High");
+			var selected_height := SelectMenuItem2 (character, select_menu);
+			if (!selected_height)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				return;
+			endif
+
+			DestroyItem (deed);
+			var z_offset := (selected_height.index*10)-10;
+			item := CreateItemAtLocation (character.x, character.y, character.z+z_offset, selected_item.objtype, 1, character.realm);
+			item.movable := 0;
+			SetObjProperty (item, "lockeddown", sign.serial);
+		5:
+		6:
+			if (lockdowns + 1 >= maxlockdowns)
+				SendSysMessage (character, "You don't have enough lockdowns left.");
+				return;
+			endif
+
+			var offset := 0;
+			if (selected_item.index == 5)
+				offset := 111;
+			endif
+
+			select_menu := CreateMenu ("Select Banner type:");
+			AddMenuItem (select_menu, (0x15A0+offset), "Banner");
+			AddMenuItem (select_menu, (0x15A2+offset), "Banner");
+			AddMenuItem (select_menu, (0x15A4+offset), "Banner");
+			AddMenuItem (select_menu, (0x15A6+offset), "Banner");
+			AddMenuItem (select_menu, (0x15A8+offset), "Banner");
+			AddMenuItem (select_menu, (0x15AA+offset), "Banner");
+			AddMenuItem (select_menu, (0x15AC+offset), "Banner");
+			selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				return;
+			endif
+
+			var itemserials := array{};
+			item := CreateItemAtLocation (character.x, character.y, character.z, selected_item.objtype, 1, character.realm);
+			itemserials.append (item.serial);
+			item.movable := 0;
+			SetObjProperty (item, "lockeddown", sign.serial);
+			SetObjProperty (item, "deedobjtype", deed.objtype);
+
+			if (offset)
+				item := CreateItemAtLocation (character.x, character.y-1, character.z, selected_item.objtype+1, 1, character.realm);
+				itemserials.append (item.serial);
+				item.movable := 0;
+				SetObjProperty (item, "lockeddown", sign.serial);
+				SetObjProperty (item, "deedobjtype", deed.objtype);
+			else
+				item := CreateItemAtLocation (character.x+1, character.y, character.z, selected_item.objtype+1, 1, character.realm);
+				itemserials.append (item.serial);
+				item.movable := 0;
+				SetObjProperty (item, "lockeddown", sign.serial);
+				SetObjProperty (item, "deedobjtype", deed.objtype);
+			endif
+
+			foreach serial in itemserials
+				var item := SystemFindObjectBySerial (serial);
+				SetObjProperty (item, "otheritems", itemserials);
+			endforeach
+			DestroyItem (deed);
+		7:
+		8:
+			if (lockdowns + 2 >= maxlockdowns)
+				SendSysMessage (character, "You don't have enough lockdowns left.");
+				return;
+			endif
+
+			var offset := 0;
+			if (selected_item.index == 7)
+				offset := 151;
+			endif
+
+			select_menu := CreateMenu ("Select Banner type:");
+			AddMenuItem (select_menu, (0x1587+offset), "Banner");
+			AddMenuItem (select_menu, (0x158A+offset), "Banner");
+			AddMenuItem (select_menu, (0x158D+offset), "Banner");
+			AddMenuItem (select_menu, (0x1595+offset), "Banner");
+			selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				return;
+			endif
+
+			var itemserials := array{};
+			item := CreateItemAtLocation (character.x, character.y, character.z, selected_item.objtype, 1, character.realm);
+			itemserials.append (item.serial);
+			item.movable := 0;
+			SetObjProperty (item, "lockeddown", sign.serial);
+			SetObjProperty (item, "deedobjtype", deed.objtype);
+
+			if (offset)
+				item := CreateItemAtLocation (character.x, character.y-1, character.z, selected_item.objtype+1, 1, character.realm);
+				itemserials.append (item.serial);
+				item.movable := 0;
+				SetObjProperty (item, "lockeddown", sign.serial);
+				SetObjProperty (item, "deedobjtype", deed.objtype);
+
+				item := CreateItemAtLocation (character.x, character.y+1, character.z, selected_item.objtype-1, 1, character.realm);
+				itemserials.append (item.serial);
+				item.movable := 0;
+				SetObjProperty (item, "lockeddown", sign.serial);
+				SetObjProperty (item, "deedobjtype", deed.objtype);
+			else
+				item := CreateItemAtLocation (character.x-1, character.y, character.z, selected_item.objtype-1, 1, character.realm);
+				itemserials.append (item.serial);
+				item.movable := 0;
+				SetObjProperty (item, "lockeddown", sign.serial);
+				SetObjProperty (item, "deedobjtype", deed.objtype);
+
+				item := CreateItemAtLocation (character.x+1, character.y, character.z, selected_item.objtype+1, 1, character.realm);
+				itemserials.append (item.serial);
+				item.movable := 0;
+				SetObjProperty (item, "lockeddown", sign.serial);
+				SetObjProperty (item, "deedobjtype", deed.objtype);
+			endif
+
+			foreach serial in itemserials
+				var item := SystemFindObjectBySerial (serial);
+				SetObjProperty (item, "otheritems", itemserials);
+			endforeach
+			DestroyItem (deed);			
+	endcase
+endprogram
+
+

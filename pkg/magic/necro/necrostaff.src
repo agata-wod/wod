@@ -1,0 +1,142 @@
+use cfgfile;
+use basic;
+use os;
+use uo;
+
+include "include/eventid";
+include "include/client";
+include "include/utility";
+include "include/sysevent";
+include "../pkg/magic/necro/necro";
+include "include/math";
+
+program necrostaff (parms)
+	var character := parms[1];
+	var staff := parms[2];
+	var equiptime := parms[3];
+
+	//allows the staff to listen
+	RegisterForSpeechEvents (staff, 1);
+	EnableEvents (SYSEVENT_SPEECH, 0);
+	
+	var ev;
+	while (staff)
+		ev := wait_for_event (120);
+		if (ev and ev.type == EVID_SPEECH)
+			if (!IsEquipped (character, staff, equiptime))
+				return;
+			endif
+			if (ev.source == character)
+				ProcessSpeechEvent (staff, ev);
+			endif
+        	endif
+	endwhile
+endprogram
+
+
+
+
+///////////////////
+//  makes sure that the staff is actually equiped and not listening in the player's
+//  backpack or something
+///////////////////
+
+function IsEquipped (character, staff, equiptime)
+	if (GetObjProperty (staff, "#equiptime") != equiptime)
+		return 0;
+	endif
+
+	var weaponone := GetEquipmentByLayer (character, LAYER_HAND1);
+	if (weaponone and weaponone == staff)
+		return 1;
+	endif
+	var weapontwo := GetEquipmentByLayer (character, LAYER_HAND2);
+	if (weapontwo and weapontwo == staff)
+		return 1;
+	endif
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Determines if the speech event is a valid necro spell
+///////////////////
+
+function ProcessSpeechEvent (staff, event)
+	if (staff)
+	endif
+	//a quick search to see if we need to bother looking for which spell to cast:
+	var me := event.source;
+	var text := lower( event.text );
+	var powerwords := "dice corpus sine nomine expergefaceret nutu magistri supplicare animus ex corporis resolveretur enervare ulties manum necarent manes turbidi sollictique vocam manes sollicti mihi infundite nutu magistri se compellere manes turbidi sollictique resolverent umbrae tenebrae miserere animi non digna ferentis fluctus puter se aresceret umbrae tenebrae venarent nox nutu magistri se resolvere manes sollicti mi compellere";
+
+	if ( powerwords[ text ] )
+		//they said one of those words up there, anyway
+		TryToCast(me,text);
+		return;
+	elseif (lower(event.text) == "i do not need reagents" and event.source.cmdlevel)
+		SetObjProperty (event.source, "#noreagents", 1);
+		SendSysMessage (event.source, "Reagent consumption off");
+	elseif (lower(event.text) == "i need reagents" and event.source.cmdlevel)
+		EraseObjProperty (event.source, "#noreagents");
+		SendSysMessage (event.source, "Reagent consumption on");
+	else
+		//they didn't say any powerwords
+		return;
+	endif
+
+endfunction
+
+function TryToCast(me, powerwords)
+
+	var spellcfg := readconfigfile ("spells");
+	var i, spellid, script;
+	for (i := 65; i < 81; i := i + 1)
+		if ( lower(spellcfg[i].PowerWords) == powerwords )
+			spellid := i;
+			script := spellcfg[i].Script;
+			break;
+		endif
+	endfor
+
+	if (!spellid)
+		//what they said didn't matched the powerwords verbatim
+		return;
+	endif
+
+	var tome := FindObjtypeInContainer (me.backpack, 0xa100);
+	if (!tome)
+		return;
+	endif
+
+	//someone really like bitmap flag deallies so lets decypher this mess
+	i := 1;
+	var GreaterFlag := cint(GetObjProperty(tome, "Greater"));
+	var LesserFlag := cint(GetObjProperty(tome, "Lesser"));
+
+	var LSpellArray := array{78,65,66,67,68,69,80,77};
+	var GSpellArray := array{70,71,72,79,73,74,75,76};
+
+	for ( i := 1; i < 9; i := i + 1 )
+		if (FlagCheck(LesserFlag, i)==1)
+			if (LSpellArray[i] == spellid)
+				SetObjProperty (me, "#NoNecroWords", 1);
+				CastNecroSpell (me, spellid);
+				return;
+			endif
+		endif
+		if (FlagCheck(GreaterFlag, i)==1)
+			if ( GSpellArray[i] == spellid )
+				SetObjProperty (me, "#NoNecroWords", 1);
+				CastNecroSpell (me, spellid);
+				return;
+			endif
+		endif
+	endfor
+
+	//we didn't find the spell they cast in their book
+	return;
+
+endfunction

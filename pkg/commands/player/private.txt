@@ -1,0 +1,1 @@
+.private will enable or disable private-mode.  While in private mode, you will not show up in the .online list and cannot receive messages via .msg.

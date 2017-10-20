@@ -1,0 +1,519 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/string";
+include "include/spawn";
+include "../pkg/guilds/guilds";
+
+var quests_available;
+var head_quest_cfg_file := ReadConfigFile (":adventurers_guild:quests_heads");
+
+program givequest (parms)
+	var questmaster := parms[1];
+	var player := parms[2];
+	if (!questmaster or !player)
+		return;
+	endif
+
+	set_critical (1);
+	if (GetObjProperty (questmaster, "#givequest"))
+		if (GetProcess (GetObjProperty (questmaster, "#givequest")))
+			PrintTextAbovePrivate (questmaster, "Just a minute, please - I'm helping somebody else", player);
+			return;
+		endif
+	endif
+	SetObjProperty (questmaster, "#givequest", GetPid ());
+	set_critical (0);
+
+	//make sure they don't already have a quest
+	if (GetObjProperty (player, "guild_quest") )
+		var quest_parms := GetObjProperty (player, "guild_quest");
+		if (quest_parms [7] < ReadGameClock () )
+			PrintTextAbovePrivate (questmaster, "Looks like you didn't get that last one done on time...", player);
+			EraseObjProperty (player, "guild_quest");
+			EraseObjProperty (questmaster, "#givequest");
+			return;
+		endif
+
+		PrintTextAbovePrivate (questmaster, "You already have a quest!", player);
+		sleep (1);
+		var quest_desc := GetQuestDescription (quest_parms);
+		if (!quest_desc)
+			PrintTextAbovePrivate (questmaster, "Damned if I know what it is, though.", player);
+			EraseObjProperty (questmaster, "#givequest");
+			return;
+		endif
+
+		PrintTextAbovePrivate (questmaster, quest_desc, player);
+		sleep (1);
+		if (YesNo (player, "End Quest?") )
+			PrintTextAbovePrivate (questmaster, "Well, I must say I'm disappointed...", player);
+			AddGuildRankingPoints (player, (0-RandomInt (5) - 5), "adventurers_guild");
+			var starttime := CINT (quest_parms[10]);
+			if (starttime)
+				if (starttime + 3600 > ReadGameClock())
+					sleep (1);
+					PrintTextAbovePrivate (questmaster, "Giving up that quickly - you should be ashamed of yourself", player);
+					SetObjProperty (player, "#guild_quest_timer", ReadGameClock()+3600);
+				endif
+			endif
+			EraseObjProperty (player, "guild_quest");
+		endif
+		EraseObjProperty (questmaster, "#givequest");
+		return;
+	endif
+
+	//make sure they don't owe us any money
+	if (DetermineMoneyOwed (player))
+		PrintTextAbovePrivate (questmaster, "You owe us " + DetermineMoneyOwed (player) + " gold!  No quests till you pay up!", player);
+		EraseObjProperty (questmaster, "#givequest");
+		return;
+	endif
+	
+	//If they've quit a quest, they can't do another one for an hour
+	if (GetObjProperty (player, "#guild_quest_timer"))
+		if (GetObjProperty (player, "#guild_quest_timer") > ReadGameClock())
+			PrintTextAbovePrivate (questmaster, "What, you want to give up on another quest ALREADY?", player);
+			sleep (1);
+			PrintTextAbovePrivate (questmaster, "I don't think so.  Come back later.", player);
+			return;
+		endif
+	endif
+
+	//Now we load the quests that are available
+	quests_available := GetObjProperty (questmaster, "#quests_available");
+	RebuildQuestsAvailable (questmaster);
+
+	var thisquest;
+	var questmenu := CreateMenu ("These quests are available:");
+	for i := 1 to len (quests_available)
+		thisquest := quests_available [i];
+
+		var quest_desc := GetNewQuestDescription (thisquest);
+		if (!quest_desc)
+			PrintTextAbovePrivate (questmaster, "Sorry, but I'm having a bit of a problem right now.", player);
+			EraseObjProperty (questmaster, "#quests_available");
+			EraseObjProperty (questmaster, "#givequest");
+			return;
+		endif
+
+		AddMenuItem (questmenu, 0, quest_desc);
+	endfor
+
+	var quest_chosen := SelectMenuItem2 (player, questmenu);
+	if (!quest_chosen.index)
+		PrintTextAbovePrivate (questmaster, "OK, I understand.  Maybe next time.", player);
+		EraseObjProperty (questmaster, "#givequest");
+		return;
+	endif
+	
+	if (quest_chosen.index == 1 or quest_chosen.index == 2)
+		SetObjProperty (questmaster, "#firstgroupcounter", CINT (GetObjProperty (questmaster, "#firstgroupcounter"))+1);
+	elseif (quest_chosen.index == 3 or quest_chosen.index == 4)
+		SetObjProperty (questmaster, "#secondgroupcounter", CINT (GetObjProperty (questmaster, "#secondgroupcounter"))+1);
+	endif
+
+	var chosen_quest := quests_available [quest_chosen.index];
+	if (!DoQuestSetup (chosen_quest, player) )
+		PrintTextAbovePrivate (questmaster, "Sorry, but I'm having a bit of a problem right now. (bad setup)", player);
+		EraseObjProperty (questmaster, "#givequest");
+		return;
+	endif
+
+	PrintTextAbovePrivate (questmaster, "Good luck!", player);
+	RemoveQuest (questmaster, quest_chosen.index);
+	SetObjProperty (questmaster, "#quests_available", quests_available);
+	EraseObjProperty (questmaster, "#givequest");
+endprogram
+
+
+
+
+///////////////////
+//  adds a new quest to those already available
+///////////////////
+
+function RebuildQuestsAvailable (questmaster)
+	if (!quests_available)
+		quests_available := array{};
+	endif
+
+	for i := 1 to 6
+		if (!quests_available[i] or !len (quests_available[i]))
+			quests_available[i] := array{};
+		endif
+	endfor
+	
+	for i := 1 to 2
+		var firstgroup := GetObjProperty (questmaster, "#firstgroup");
+		var firstgroupcounter := CINT (GetObjProperty (questmaster, "#firstgroupcounter"));
+		var thisquest := quests_available[i];
+		if (!len (thisquest))
+			if (firstgroupcounter and firstgroupcounter > RandomInt (10) + 5)
+				SetObjProperty (questmaster, "#firstgroupcounter", 0);
+				firstgroup := 0;
+			endif
+			thisquest := GetNewHeadQuest (questmaster, firstgroup, "#firstgroup");
+			if (thisquest and len (thisquest))
+				quests_available[i] := thisquest;
+			endif
+		endif
+	endfor
+	
+	for i := 3 to 4
+		var secondgroup := GetObjProperty (questmaster, "#secondgroup");
+		var secondgroupcounter := CINT (GetObjProperty (questmaster, "#secondgroupcounter"));
+		var thisquest := quests_available[i];
+		if (!len (thisquest))
+			if (secondgroupcounter and secondgroupcounter > RandomInt (10) + 5)
+				SetObjProperty (questmaster, "#secondgroupcounter", 0);
+				secondgroup := 0;
+			endif
+			thisquest := GetNewHeadQuest (questmaster, secondgroup, "#secondgroup");
+			if (thisquest and len (thisquest))
+				quests_available[i] := thisquest;
+			endif
+		endif
+	endfor
+
+	for i := 5 to 6
+		var thisquest := quests_available[i];
+		if (!len (thisquest))
+			thisquest := GetNewItemQuest (questmaster);
+			if (thisquest and len (thisquest))
+				quests_available[i] := thisquest;
+			endif
+		endif
+	endfor
+
+	SetObjProperty (questmaster, "#quests_available", quests_available);
+endfunction
+
+
+
+
+///////////////////
+//  Get a new head quest based on the group index, or, if there is no group index, make a new one
+///////////////////
+
+function GetNewHeadQuest (questmaster, group_index, group_prop_name)
+	var new_quest := array{};
+
+	//Make sure we can load the quests_heads.cfg file
+	if (!head_quest_cfg_file)
+		Syslog ("ERROR - Can't open adventurers guild head quest cfgfile!");
+		return 0;
+	endif
+
+	//If no NPC group is supplied, get a new one
+	if (!group_index)
+		var main_index := FindConfigElem (head_quest_cfg_file, "main_index");
+		if (!main_index)
+			Syslog ("ERROR - Can't find main head quest index!");
+			return 0;
+		endif
+		
+		var all_groups := GetConfigStringArray (main_index, "subindex");
+		if (!len (all_groups))
+			Syslog ("ERROR - Main head quest index is empty!");
+			return 0;
+		endif
+		
+		group_index := all_groups [RandomInt (len (all_groups)) + 1];
+		SetObjProperty (questmaster, group_prop_name, group_index);
+	endif
+
+	var groupelem := FindConfigElem (head_quest_cfg_file, group_index);
+	if (!groupelem)
+		Syslog ("Can't find group elem " + group_index);
+		EraseObjProperty (questmaster, group_prop_name);
+		return 0;
+	endif
+	
+	var all_group_quests := GetConfigStringArray (groupelem, "quest");
+	if (!len (all_group_quests))
+		Syslog (group_index + " head quest index is empty!");
+		return 0;
+	endif
+
+	var attempts := 0;
+	var done := 1;
+	var chosen_quest_key, chosen_quest, npctemplate;
+	repeat
+		attempts := attempts + 1;
+		chosen_quest_key := all_group_quests [RandomInt (len (all_group_quests)) + 1];
+		chosen_quest := FindConfigElem (head_quest_cfg_file, chosen_quest_key);
+		if (!chosen_quest)
+			Syslog ("error opening " + chosen_quest_key + " quest in adventurers guild quest cfgfile!");
+			return 0;
+		endif
+	
+		npctemplate := chosen_quest.npctemplate;
+		if (npctemplate)
+			for tempcounter := 1 to 4
+				var tempcurq := quests_available [tempcounter];
+				if (tempcurq)
+					var temptemplate := tempcurq[5];
+					if (temptemplate == npctemplate)
+						done := 0;
+					endif
+				endif
+			endfor
+		endif
+	until (attempts > 10 or done == 1);
+
+	var amount := RandomDiceRoll (chosen_quest.number);
+	var each_points := CDBL (chosen_quest.points);
+	
+	var time := RandomInt (4) + 2; 
+	var time_coefficient := 1.0;
+	for i := 1 to (4-time)
+		time_coefficient := time_coefficient * 1.2;
+	endfor
+	if (time_coefficient > 1.5)
+		time_coefficient := 1.5;
+	endif
+
+	var points := CINT (1.5 * each_points * amount * time_coefficient);
+
+	new_quest[1] := ":adventurers_guild:quests_heads";
+	new_quest[2] := chosen_quest_key;
+	new_quest[3] := UOBJ_HEAD;
+	new_quest[4] := "npctemplate";
+	new_quest[5] := npctemplate;
+	new_quest[6] := amount;
+	new_quest[7] := time;	//in days
+	new_quest[8] := points;
+
+	return new_quest;
+endfunction	
+	
+	
+	
+	
+function GetNewItemQuest (questmaster)
+	if (questmaster)
+	endif
+	var new_quest := array{};
+	var quest_cfg_file := ReadConfigFile (":adventurers_guild:quests_items");
+	if (!quest_cfg_file)
+		Syslog ("Can't open adventurers guild items quest cfgfile!");
+		return;
+	endif
+
+	var items_entry := FindConfigElem (quest_cfg_file, "items");
+	var possible_items := GetConfigStringArray (items_entry, "Item");
+	var theitem := possible_items[RandomInt (len (possible_items)) + 1];
+	if (CINT (theitem) )
+		theitem := CINT (theitem);
+	else
+		theitem := CINT (GetObjtypeByName (theitem));
+	endif
+	if (!theitem)
+		Syslog ("Error trying to figure out item!");
+		return;
+	endif
+
+	var intkeyarray := GetConfigIntKeys (quest_cfg_file);
+	var number_of_keys := len (intkeyarray);
+	if (!number_of_keys)
+		Syslog ("No entries in adventurers guild quest cfgfile!");
+		return;
+	endif
+
+	var chosen_quest_number := RandomInt (number_of_keys) + 1;
+	var chosen_quest_key := intkeyarray [chosen_quest_number];
+
+	var chosen_quest := FindConfigElem (quest_cfg_file, chosen_quest_key);
+	if (!chosen_quest)
+		Syslog ("error opening " + chosen_quest_key + " quest in adventurers guild quest cfgfile!");
+		return;
+	endif
+
+	var points := 20 + RandomInt (10);
+	var time := RandomInt (4) + 2;
+	var time_coefficient := 1.0;
+	for i := 1 to (4-time)
+		time_coefficient := time_coefficient * 1.1;
+	endfor
+	if (time_coefficient > 1.5)
+		time_coefficient := 1.5;
+	endif
+
+	points := CINT (points * time_coefficient);
+
+	var names_cfg_file := ReadConfigFile ( ":npcs:names" );
+	var elem := FindConfigElem (names_cfg_file, (5+RandomInt(2)));
+	var number_of_names := GetConfigInt (elem, "Count");
+
+	var name_position := RandomInt (number_of_names) + 1;
+	var thename := GetConfigString (elem, "Name"+name_position);
+
+	var madeitem := CreateItemAtLocation (0, 0, 0, theitem, 1, REALM_BRITANNIA);
+	if (!madeitem)
+		return;
+	endif
+	var itemdesc := madeitem.desc;
+	DestroyItem (madeitem);
+	thename := CSTR (thename + "'s " + TruncateArticle (itemdesc) );
+
+	new_quest[1] := ":adventurers_guild:quests_items";
+	new_quest[2] := chosen_quest_key;
+	new_quest[3] := theitem;
+	new_quest[4] := "questitem";
+	new_quest[5] := thename;
+	new_quest[6] := 1;
+	new_quest[7] := time;	//in days
+	new_quest[8] := points;
+
+	return new_quest;
+endfunction
+
+
+
+
+///////////////////
+//  removed the quests in the given position
+///////////////////
+
+function RemoveQuest (questmaster, questnumber)
+	quests_available[questnumber] := array{};
+	SetObjProperty (questmaster, "#quests_available", quests_available);
+endfunction
+
+
+
+
+///////////////////
+//  figures out a good way to phrase what the quest is
+///////////////////
+
+function GetQuestDescription (quest_parms)
+	var timeleft := quest_parms[7] - ReadGameClock();
+	var daysleft := CINT (timeleft/86400);
+	if (daysleft < 1)
+		daysleft := 1;
+	endif
+
+	var quest_cfg_file := ReadConfigFile (quest_parms[1]);
+	if (!quest_cfg_file)
+		Syslog ("Can't open adventurers guild quest cfgfile for description!");
+		return 0;
+	endif
+
+	var chosen_quest := FindConfigElem (quest_cfg_file, quest_parms[2]);
+	if (!chosen_quest)
+		Syslog ("error opening " + quest_parms[2] + " quest in adventurers guild quest cfgfile!");
+		return 0;
+	endif
+
+	if (quest_parms [1] == ":adventurers_guild:quests_heads")
+		var desc_plural := chosen_quest.desc_plural;
+		var thestring := CSTR ("Bring me the heads of " + quest_parms[6] + " " + desc_plural + " within " 
+					+ daysleft + " day");
+		if (daysleft > 1)
+			thestring := thestring + "s.";
+		else
+			thestring := thestring + ".";
+		endif
+		return thestring;
+	elseif (quest_parms [1] == ":adventurers_guild:quests_items")
+		var regionname := chosen_quest.dungeonname;
+		var thestring := CSTR ("Find " + quest_parms[5] + " in " + regionname + " within " 
+					+ daysleft + " day");
+		if (daysleft > 1)
+			thestring := thestring + "s.";
+		else
+			thestring := thestring + ".";
+		endif
+		return thestring;
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  figures out a good way to phrase what the quest is for new quests
+///////////////////
+
+function GetNewQuestDescription (quest_parms)
+	var daysleft := quest_parms[7];
+	var quest_cfg_file := ReadConfigFile (quest_parms[1]);
+
+	if (!quest_cfg_file)
+		Syslog ("Can't open adventurers guild quest cfgfile for new desc!");
+		return 0;
+	endif
+
+	var chosen_quest := FindConfigElem (quest_cfg_file, quest_parms[2]);
+	if (!chosen_quest)
+		Syslog ("error opening " + quest_parms[2] + " quest in adventurers guild quest cfgfile!");
+		return 0;
+	endif
+
+	if (quest_parms [1] == ":adventurers_guild:quests_heads")
+		var desc_plural := chosen_quest.desc_plural;
+		var thestring := CSTR ("Bring me the heads of " + quest_parms[6] + " " + desc_plural + " within " 
+					+ daysleft + " days for " + quest_parms[8] + " tickets.");
+		return thestring;
+	elseif (quest_parms [1] == ":adventurers_guild:quests_items")
+		var regionname := chosen_quest.dungeonname;
+		var thestring := CSTR ("Find " + quest_parms[5] + " in " + regionname + " within " 
+					+ daysleft + " days for " + quest_parms[8] + " tickets.");
+		return thestring;
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  If the quest needs to do any setup, this function is the one that does it
+///////////////////
+
+function DoQuestSetup (chosen_quest, player)
+	//Don't need to do any major setup for the heads quests
+	if (chosen_quest [1] == ":adventurers_guild:quests_heads")
+		var quest_parms := array{};
+		quest_parms [1] := chosen_quest[1];
+		quest_parms [2] := chosen_quest[2];
+		quest_parms [3] := chosen_quest[3];
+		quest_parms [4] := chosen_quest[4];
+		quest_parms [5] := chosen_quest[5];
+		quest_parms [6] := chosen_quest[6];
+		quest_parms [7] := ReadGameClock() + chosen_quest[7]*86400;
+		quest_parms [8] := chosen_quest[8];
+		quest_parms [9] := 0;
+		quest_parms [10] := ReadGameClock();
+		SetObjProperty (player, "guild_quest", quest_parms);
+		return 1;
+
+	//for the 'search for the item' quests, we just have to set the region.  The
+	//script 'guild_monsterdeath' does the rest
+	elseif (chosen_quest [1] == ":adventurers_guild:quests_items")
+		var quest_parms := array{};
+		quest_parms [1] := chosen_quest[1];
+		quest_parms [2] := chosen_quest[2];
+		quest_parms [3] := chosen_quest[3];
+		quest_parms [4] := chosen_quest[4];
+		quest_parms [5] := chosen_quest[5];
+		quest_parms [6] := chosen_quest[6];
+		quest_parms [7] := ReadGameClock() + chosen_quest[7]*86400;
+		quest_parms [8] := chosen_quest[8];
+		quest_parms [9] := 0;
+		quest_parms [10] := ReadGameClock();
+		SetObjProperty (player, "guild_quest", quest_parms);
+		return 1;
+	endif
+
+	return 0;
+endfunction
+
+
+
+

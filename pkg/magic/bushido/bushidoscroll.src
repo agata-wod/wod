@@ -1,0 +1,140 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/magic";
+include "include/attributes";
+
+var itemdesc_cfg := ReadConfigFile (":*:itemdesc");
+var circle_cfg := readconfigfile ("::circles");
+
+program use_scroll (character, scroll)
+	if (!itemdesc_cfg)
+		SendSysMessage (character, "Unable to open itemdesc.cfg file!");
+		return;
+	endif
+
+
+	if (!ReserveItem(scroll))
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+
+	//a couple of special scroll cases...
+	case (scroll.objtype)
+		0x1f68:
+			var summoned_serial := GetObjProperty (character, "#summoned_elemental_air");
+			if (summoned_serial)
+				var summoned := SystemFindObjectBySerial (summoned_serial);
+				if (summoned)
+					SendSysMessage (character, "You already have an air elemental!");
+					return 0;
+				endif
+			endif
+		0x1f6a:
+			var summoned_serial := GetObjProperty (character, "#summoned_elemental_earth");
+			if (summoned_serial)
+				var summoned := SystemFindObjectBySerial (summoned_serial);
+				if (summoned)
+					SendSysMessage (character, "You already have an earth elemental!");
+					return 0;
+				endif
+			endif
+		0x1f6b:
+			var summoned_serial := GetObjProperty (character, "#summoned_elemental_fire");
+			if (summoned_serial)
+				var summoned := SystemFindObjectBySerial (summoned_serial);
+				if (summoned)
+					SendSysMessage (character, "You already have a fire elemental!");
+					return 0;
+				endif
+			endif
+		0x1f6c:
+			var summoned_serial := GetObjProperty (character, "#summoned_elemental_water");
+			if (summoned_serial)
+				var summoned := SystemFindObjectBySerial (summoned_serial);
+				if (summoned)
+					SendSysMessage (character, "You already have a water elemental!");
+					return 0;
+				endif
+			endif
+		0x1f69:
+			var summoned_serial := GetObjProperty (character, "#summoned_daemon");
+			if (summoned_serial)
+				var summoned := SystemFindObjectBySerial (summoned_serial);
+				if (summoned)
+					SendSysMessage (character, "You couldn't possibly control two daemons");
+					return 0;
+				endif
+			endif
+	endcase
+
+	var spellid := GetSpellId (scroll);
+	var circle := GetSpellCircleBySpellID (spellid);
+	if (GetManaCostBySpellCircle (circle) > CINT (GetVital (character, "Mana")/100))
+		PrintTextAbovePrivate (character, "Not enough mana!", character);
+		return;
+	endif
+
+	if (GetAttribute (character, ATTRIBUTEID_MAGERY) < (GetSpellDifficulty (spellid) - 20) )
+		PrintTextAbovePrivate (character, "You have no chance of casting this spell", character);
+		return;
+	endif
+
+	if (GetObjProperty(character, "#scroll"))
+		if (GetObjProperty (character, "#scroll") > ReadGameClock() )
+			SendSysmessage (character, "You are busy doing something else.");
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#scroll", (ReadGameClock()+4));
+
+	PerformAction (character, ANIM_CAST_DIR);
+	SpeakPowerWords (character, spellid);
+	Detach ();
+
+	if (CanCastSpell (character, circle) and FreeHands (character))
+		if (CheckSkill (character, SKILLID_MAGERY, GetSpellDifficulty (spellid) - 20, 0 ) )
+			SubtractAmount (scroll, 1);
+			StartSpellEffect (character, spellid);
+			ReleaseItem (scroll);
+			sleepms (GetTimeDelayByCircle (circle));
+			EraseObjProperty (character, "#scroll");
+			return;
+		endif
+	endif
+
+	PlaySoundEffect (character, 0x005d);
+	PlayObjectCenteredEffect (character, 0x3735,0x0a, 0x1e);
+	ReleaseItem (scroll);
+	sleepms (GetTimeDelayByCircle (circle));
+	EraseObjProperty (character, "#scroll");
+endprogram
+
+
+
+
+///////////////////
+//  Determines the mana cost for the given spell
+///////////////////
+
+function GetTimeDelayByCircle (circle)
+	if (circle > 3)
+		circle := circle - 1;
+	else
+		circle := 1;
+	endif
+	return cint(circle_cfg[circle].Delay);
+endfunction
+
+
+
+
+///////////////////
+//  Determines the spellid for the given scroll
+///////////////////
+
+function GetSpellId (magicitem)
+	return itemdesc_cfg[ magicitem.objtype ].spellid;
+endfunction

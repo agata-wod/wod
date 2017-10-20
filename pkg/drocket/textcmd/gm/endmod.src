@@ -1,0 +1,30 @@
+use uo;
+use os;
+use vitals;
+
+include "include/dotempmods";
+
+program endmods (character, text)
+	if (text)
+	endif
+	set_critical(1);
+
+	var currentmods := GetObjProperty (character, "#mods");
+	if (currentmods)
+		foreach mmod in currentmods
+			UndoTheMod (character, mmod[1], mmod[2] );
+		endforeach
+	endif
+
+	currentmods := GetObjProperty (character, "mods");
+	if (currentmods)
+		foreach mmod in currentmods
+			UndoTheMod (character, mmod[1], mmod[2] );
+		endforeach
+	endif
+	
+	EraseObjProperty (character, "#mods");
+	EraseObjProperty (character, "mods");
+	RecalcVitals (character);
+	set_critical(0);
+endprogram

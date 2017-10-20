@@ -1,0 +1,853 @@
+/////////////////////////////////////////////////////
+// info.src -- Organized info UI for mobiles
+//
+// Usage: Target a mobile to view its stats, skills,
+//        etc. Also can change values
+//
+/////////////////////////////////////////////////////
+
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/attributes";
+include "../pkg/npcs/npcinfo";
+
+
+var layout := array {};
+var data := array {};
+
+program textcmd_info (character, text)
+	var who;
+	if (!text)
+		SendSysmessage (character, "Select a MOBILE.");
+		who := Target (character , TGTOPT_NOCHECK_LOS);
+		if (!who or !GetVitalMaximumValue (who, "Life"))
+			SendSysmessage (character, "Invalid selection.");
+			return;
+		endif
+	else
+		text := Lower (text);
+		who := FindOnlinePlayerByName (character, text);
+		if (!who)
+			SendSysMessage (character, "Unable to find given player name");
+			return;
+		endif
+	endif
+	
+	var done := 0;
+	repeat
+		BuildGump (character, who);
+		var result := SendDialogGump (character, layout, data);
+		if (result[0] == error)
+			SendSysMessage (character, "Error opening gump");
+			return;
+		elseif (!result[0])
+			SendSysMessage (character, "Done.");
+			return;
+		endif
+	
+		if (!who)
+			SendSysMessage (character, "Target no longer exists");
+			return;
+		endif
+
+		//Needed for the radio buttons
+		var reskey;
+		foreach key in (result.keys)
+			if( key >= 1000 )
+				reskey := key;
+			endif
+		endforeach
+
+	    case (result[0])
+			1:   //fall through intentional
+			2:
+			3:
+			4:
+			5:
+			6:
+			7:
+			9:
+			11:
+			13:
+				EditStat (who , character , result[0]);
+			16:
+				EditSkill (who , character , reskey-1000);
+			17:
+				if (who.frozen)
+					who.frozen := 0;
+					SendSysmessage (character, who.name + " is unfrozen.");
+				else
+					who.frozen := 1;
+					SendSysmessage (character, who.name + " is frozen.");
+				endif
+			18:
+				SelectNewLootgroup (character, who);
+			19:
+				if (!who.npctemplate)
+					DisconnectClient (who);
+				endif
+			20:
+				MoveObjectToLocation( who , 5281 , 1185 , 0, _DEFAULT_REALM, MOVEOBJECT_FORCELOCATION );
+			21:
+				if (who.acctname)
+					if (character.cmdlevel < 3)
+						SendSysMessage (character, "Sorry, but you are not authorized to do that");
+					else
+						var bankbox := FindBankBox (who.acctname);
+						if (bankbox)
+							SendOpenSpecialContainer (character, bankbox);
+						else
+							SendSysMessage (character, "Can't find bankbox!");
+						endif
+					endif
+				else
+					SendSysmessage (character, "Only can be used on players.");
+				endif
+			22:
+				if (character.cmdlevel < 3)
+					SendSysMessage (character, "Sorry, but you are not authorized to do that");
+				else
+					SendOpenSpecialContainer (character, who.backpack);
+				endif
+			23:
+				MoveObjectToLocation (who, character.x, character.y, character.z, character.realm);
+			24:
+				SetName (who, RequestInput (character, character.backpack, "Enter a new name."));
+			default:
+				SendSysMessage (character, "Error - bad selection.");
+		endcase
+	until (done or !character);
+endprogram
+
+
+
+function EditStat (who, character, result)
+	SendSysmessage (character, "Caution! Values are changed immediately, Integers only!");
+	var newval := SendTextEntryGump (character, "Enter new value", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 4, "");
+	if (!newval)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	if (newval == "0")
+		newval := 0;
+	else
+		newval := CINT (newval);
+		if (!newval)
+			SendSysMessage (character, "Invalid value.");
+			return;
+		endif
+	endif
+
+	case (result)
+		1:	SetAttributeBaseValue (who, "Strength", newval*10);
+			RecalcVitals (who);
+		2:	SetAttributeBaseValue (who, "Intelligence", newval*10);
+			RecalcVitals (who);
+		3:	SetAttributeBaseValue (who, "Dexterity", newval*10);
+			RecalcVitals (who);
+		4:	SetAttributeTemporaryMod (who, "Strength", newval*10);
+			RecalcVitals (who);
+		5:	SetAttributeTemporaryMod (who, "Intelligence", newval*10);
+			RecalcVitals (who);
+		6:	SetAttributeTemporaryMod (who, "Dexterity", newval*10);
+			RecalcVitals (who);
+
+		7:	SetVital (who, "Life", newval*100);
+		9:	SetVital (who, "Mana", newval*100);
+		11:	SetVital (who, "Stamina", newval*100);
+		13:	who.ar_mod := newval;
+	endcase
+endfunction
+
+function EditSkill (who, character, skill);
+	var newval := SendTextEntryGump (character, "Enter new value", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 4, "");
+	if (!newval)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	if (newval == "0" or newval == "0.0")
+		newval := 0;
+	else
+		newval := CINT (CDBL (newval) * 10);
+		if (!newval)
+			SendSysMessage (character, "Invalid value.");
+			return;
+		endif
+	endif
+
+	SetAttributeBaseValue (who, GetAttributeIDBySkillID (skill), newval);
+endfunction
+
+
+
+
+
+
+
+///////////////////
+//  Creates the gump to be displayed
+///////////////////
+
+function BuildGump (character, thetarget)
+	if (thetarget.acct)
+		var acct := thetarget.acct;
+		for counter := 1 to 7
+			var player := acct.GetCharacter (counter);
+			if (player)
+				SendSysMessage (character, "Character: " + player.name);
+				SendSysMessage (character, "Serial: " + player.serial);
+			endif
+		endfor
+
+		var housevalue := GetAccountHouseValue (thetarget.acctname);
+		if (!housevalue)
+			housevalue := 0;
+		endif
+		SendSysMessage (character, "House Value: " + housevalue);
+	endif
+
+	layout := array {
+		"nodispose",
+		"page 0",
+		"resizepic 0 50 2620 310 470",
+
+		//The text at the top for moving to different sections of the gump
+		"text 20 59 5 0",				//character name
+		"text 20 84 40 1",				//stats page
+		"button 68 81 2640 2641 0 1",
+		"text 114 84 40 2",				//first skills page
+		"button 168 81 2640 2641 0 2",
+		"text 208 84 40 3",				//last page
+		"button 256 81 2640 2641 0 5",
+		"button 285 63 2118 2117 1 1 0",	//Cancel button
+
+		//The stats page
+		"page 1",
+
+		"button 15 125 1210 1209 1 1 1",		//change base strength
+		"text 45 120 40 4",
+		"text 240 120 40 5",
+		"button 15 185 1210 1209 1 1 4",		//change temp strength
+		"text 45 180 40 10",
+		"text 240 180 40 11",
+
+		"button 15 145 1210 1209 1 1 2",		//change base intelligence
+		"text 45 140 40 6",
+		"text 240 140 40 7",
+		"button 15 205 1210 1209 1 1 5",		//change temp intelligence
+		"text 45 200 40 12",
+		"text 240 200 40 13",
+
+		"button 15 165 1210 1209 1 1 3",		//change base dex
+		"text 45 160 40 8",
+		"text 240 160 40 9",
+		"button 15 225 1210 1209 1 1 6",		//change temp dex
+		"text 45 220 40 14",
+		"text 240 220 40 15",
+
+		"button 15 245 1210 1209 1 1 7",		// hp
+		"text 45 240 40 16",
+		"text 220 240 40 17",
+		"button 15 265 1210 1209 1 1 9",		// mana
+		"text 45 260 40 18",
+		"text 220 260 40 19",
+		"button 15 285 1210 1209 1 1 11",		// stam
+		"text 45 280 40 20",
+		"text 220 280 40 21",
+
+		"text 45 310 40 22",				//ar, uneditable
+		"text 240 310 40 23",
+		"button 15 335 1210 1209 1 1 13",		//ar_mod
+		"text 45 330 40 24",
+		"text 240 330 40 25",
+		"text 45 350 40 26",				//weight, uneditable
+		"text 240 350 40 27",
+
+		"text 30 420 40 142",				//accountname
+		"text 150 420 40 143",
+		"text 30 440 40 144",				//cmdlevel, or lootgroup
+		"text 150 440 40 145",
+		"",								//change lootgroups, for NPCs
+		"text 30 460 40 146",				//position
+		"text 80 480 40 147",
+
+		"page 2",
+		"text 14 110 40 30",
+		"text 175 110 40 31",
+		"radio 280 115 2362 2361 0 1000",
+		"text 14 125 40 32",
+		"text 175 125 40 33",
+		"radio 280 130 2362 2361 0 1001",
+		"text 14 140 40 34",
+		"text 175 140 40 35",
+		"radio 280 145 2362 2361 0 1002",
+		"text 14 155 40 36",
+		"text 175 155 40 37",
+		"radio 280 160 2362 2361 0 1003",
+		"text 14 170 40 38",
+		"text 175 170 40 39",
+		"radio 280 175 2362 2361 0 1004",
+		"text 14 185 40 40",
+		"text 175 185 40 41",
+		"radio 280 190 2362 2361 0 1005",
+		"text 14 200 40 42",
+		"text 175 200 40 43",
+		"radio 280 205 2362 2361 0 1006",
+		"text 14 215 40 44",
+		"text 175 215 40 45",
+		"radio 280 220 2362 2361 0 1007",
+		"text 14 230 40 46",
+		"text 175 230 40 47",
+		"radio 280 235 2362 2361 0 1008",
+		"text 14 245 40 48",
+		"text 175 245 40 49",
+		"radio 280 250 2362 2361 0 1009",
+		"text 14 260 40 50",
+		"text 175 260 40 51",
+		"radio 280 265 2362 2361 0 1010",
+		"text 14 275 40 52",
+		"text 175 275 40 53",
+		"radio 280 280 2362 2361 0 1011",
+		"text 14 290 40 54",
+		"text 175 290 40 55",
+		"radio 280 295 2362 2361 0 1012",
+		"text 14 305 40 56",
+		"text 175 305 40 57",
+		"radio 280 310 2362 2361 0 1013",
+		"text 14 320 40 58",
+		"text 175 320 40 59",
+		"radio 280 325 2362 2361 0 1014",
+		"text 14 335 40 60",
+		"text 175 335 40 61",
+		"radio 280 340 2362 2361 0 1015",
+		"text 14 350 40 62",
+		"text 175 350 40 63",
+		"radio 280 355 2362 2361 0 1016",
+		"text 14 365 40 64",
+		"text 175 365 40 65",
+		"radio 280 370 2362 2361 0 1017",
+		"text 14 380 40 66",
+		"text 175 380 40 67",
+		"radio 280 385 2362 2361 0 1018",
+		"text 14 395 40 68",
+		"text 175 395 40 69",
+		"radio 280 400 2362 2361 0 1019",
+		"text 14 410 40 70",
+		"text 175 410 40 71",
+		"radio 280 415 2362 2361 0 1020",
+		"text 14 425 40 72",
+		"text 175 425 40 73",
+		"radio 280 430 2362 2361 0 1021",
+		"text 14 440 40 74",
+		"text 175 440 40 75",
+		"radio 280 445 2362 2361 0 1022",
+		"button 285 465 2648 2647 0 3",
+		"button 215 460 2130 2129 3 2 16", //okay
+		"button 150 460 2121 2120 1 2 -1",  //cancel
+
+		"page 3",
+		"text 14 110 40 76",
+		"text 175 110 40 77",
+		"radio 280 115 2362 2361 0 1023",
+		"text 14 125 40 78",
+		"text 175 125 40 79",
+		"radio 280 130 2362 2361 0 1024",
+		"text 14 140 40 80",
+		"text 175 140 40 81",
+		"radio 280 145 2362 2361 0 1025",
+		"text 14 155 40 82",
+		"text 175 155 40 83",
+		"radio 280 160 2362 2361 0 1026",
+		"text 14 170 40 84",
+		"text 175 170 40 85",
+		"radio 280 175 2362 2361 0 1027",
+		"text 14 185 40 86",
+		"text 175 185 40 87",
+		"radio 280 190 2362 2361 0 1028",
+		"text 14 200 40 88",
+		"text 175 200 40 89",
+		"radio 280 205 2362 2361 0 1029",
+		"text 14 215 40 90",
+		"text 175 215 40 91",
+		"radio 280 220 2362 2361 0 1030",
+		"text 14 230 40 92",
+		"text 175 230 40 93",
+		"radio 280 235 2362 2361 0 1031",
+		"text 14 245 40 94",
+		"text 175 245 40 95",
+		"radio 280 250 2362 2361 0 1032",
+		"text 14 260 40 96",
+		"text 175 260 40 97",
+		"radio 280 265 2362 2361 0 1033",
+		"text 14 275 40 98",
+		"text 175 275 40 99",
+		"radio 280 280 2362 2361 0 1034",
+		"text 14 290 40 100",
+		"text 175 290 40 101",
+		"radio 280 295 2362 2361 0 1035",
+		"text 14 305 40 102",
+		"text 175 305 40 103",
+		"radio 280 310 2362 2361 0 1036",
+		"text 14 320 40 104",
+		"text 175 320 40 105",
+		"radio 280 325 2362 2361 0 1037",
+		"text 14 335 40 106",
+		"text 175 335 40 107",
+		"radio 280 340 2362 2361 0 1038",
+		"text 14 350 40 108",
+		"text 175 350 40 109",
+		"radio 280 355 2362 2361 0 1039",
+		"text 14 365 40 110",
+		"text 175 365 40 111",
+		"radio 280 370 2362 2361 0 1040",
+		"text 14 380 40 112",
+		"text 175 380 40 113",
+		"radio 280 385 2362 2361 0 1041",
+		"text 14 395 40 114",
+		"text 175 395 40 115",
+		"radio 280 400 2362 2361 0 1042",
+		"text 14 410 40 116",
+		"text 175 410 40 117",
+		"radio 280 415 2362 2361 0 1043",
+		"text 14 425 40 118",
+		"text 175 425 40 119",
+		"radio 280 430 2362 2361 0 1044",
+		"text 14 440 40 120",
+		"text 175 440 40 121",
+		"radio 280 445 2362 2361 0 1045",
+		"button 285 85 2650 2651 0 2",
+		"button 285 465 2648 2647 0 4",
+		"button 215 460 2130 2129 3 2 16", //okay
+		"button 150 460 2121 2120 1 2 -1",  //cancel
+
+		"page 4",
+		"text 14 110 40 122",
+		"text 175 110 40 123",
+		"radio 280 115 2362 2361 0 1046",
+		"text 14 125 40 124",
+		"text 175 125 40 125",
+		"radio 280 130 2362 2361 0 1047",
+		"text 14 140 40 126",
+		"text 175 140 40 127",
+		"radio 280 145 2362 2361 0 1048",
+		"text 14 155 40 148",
+		"text 175 155 40 149",
+		"radio 280 160 2362 2361 0 1049",
+		"text 14 170 40 150",
+		"text 175 170 40 151",
+		"radio 280 175 2362 2361 0 1050",
+		"text 14 185 40 152",
+		"text 175 185 40 153",
+		"radio 280 190 2362 2361 0 1051",
+		"text 14 200 40 154",
+		"text 175 200 40 155",
+		"radio 280 205 2362 2361 0 1052",
+		"text 14 215 40 156",
+		"text 175 215 40 157",
+		"radio 280 220 2362 2361 0 1053",
+		"text 14 230 40 158",
+		"text 175 230 40 159",
+		"radio 280 235 2362 2361 0 1054",
+		"text 14 245 40 160",
+		"text 175 245 40 161",
+		"radio 280 250 2362 2361 0 1055",
+		"text 14 260 40 162",
+		"text 175 260 40 163",
+		"radio 280 265 2362 2361 0 1056",
+		"text 14 275 40 164",
+		"text 175 275 40 165",
+		"radio 280 280 2362 2361 0 1057",
+		"button 285 85 2650 2651 0 3",
+		"button 215 460 2130 2129 3 2 16", //okay
+		"button 150 460 2121 2120 1 2 -1",  //cancel
+
+		"page 5",
+
+		"button 15 115 2640 2641 1 0 17",
+		"text 50 120 40 129",
+		"button 15 145 2640 2641 1 0 19",
+		"text 50 150 40 131",
+		"button 15 175 2640 2641 1 0 20",
+		"text 50 180 40 132",
+		"button 15 205 2640 2641 1 0 21",
+		"text 50 210 40 133",
+		"button 15 235 2640 2641 1 0 22",
+		"text 50 240 40 134",
+		"button 15 265 2640 2641 1 0 23",
+		"text 50 270 40 135",
+
+		"gumppic 20 330 2621",
+		"text 14 345 40 136",
+		"text 110 345 40 137",
+		"text 14 375 40 138",
+		"text 110 375 40 139",
+		"text 14 405 40 140",
+		"text 110 405 40 141"
+	};
+
+	data := array {
+		"Info On: " + thetarget.name,
+		"Stats",				//1
+		"Skills",				//2
+		"Other",				//3
+		"Base Str",			//4
+		CSTR (CINT (GetAttributeBaseValue (thetarget, "Strength")/10)),
+		"Base Int",			//6
+		CSTR (CINT (GetAttributeBaseValue (thetarget, "Intelligence")/10)),
+		"Base Dex",			//8
+		CSTR (CINT (GetAttributeBaseValue (thetarget, "Dexterity")/10)),
+		"Str Mod (Temp)",		//10
+		CSTR (CINT (GetAttributeTemporaryMod (thetarget, "Strength")/10)),
+		"Int Mod (Temp)",		//12
+		CSTR (CINT (GetAttributeTemporaryMod (thetarget, "Intelligence")/10)),
+		"Dex Mod (Temp)",		//14
+		CSTR (CINT (GetAttributeTemporaryMod (thetarget, "Dexterity")/10)),
+		"HP/MHP",				//16
+		CSTR (CINT (GetVital (thetarget, "Life")/100) + "/" + CINT (GetVitalMaximumValue (thetarget, "Life")/100)),
+		"MP/MMP",				//18
+		CSTR (CINT (GetVital (thetarget, "Mana")/100) + "/" + CINT (GetVitalMaximumValue (thetarget, "Mana")/100)),
+		"ST/MST",				//20
+		CSTR (CINT (GetVital (thetarget, "Stamina")/100) + "/" + CINT (GetVitalMaximumValue (thetarget, "Stamina")/100)),
+		"Base AR (equipment)",	//22
+		CSTR (thetarget.ar - thetarget.ar_mod),
+		"AR Mod (temp)",		//24
+		CSTR (thetarget.ar_mod),
+		"Weight (backpack)",	//26
+		CSTR (thetarget.backpack.weight),
+
+		"",					//28, unused for now
+		"",					//29, unused for now
+		
+		"0 Alchemy",			//30
+		"",
+		"1 Anatomy",			//32
+		"",
+		"2 Animal Lore",		//34
+		"",
+		"3 Item ID",			//36
+		"",
+		"4 Arms Lore",			//38
+		"",
+		"5 Parry",			//40
+		"",
+		"6 Leadership",			//42
+		"",
+		"7 Blacksmithy",		//44
+		"",
+		"8 Bowcraft",			//46
+		"",
+		"9 Peacemaking",		//48
+		"",
+		"10 Camping",			//50
+		"",
+		"11 Carpentry",		//52
+		"",
+		"12 Cartography",		//54
+		"",
+		"13 Cooking",			//56
+		"",
+		"14 Detect Hidden",		//58
+		"",
+		"15 Discordance",		//60
+		"",
+		"16 Invocation",		//62
+		"",
+		"17 Healing",			//64
+		"",
+		"18 Fishing",			//66
+		"",
+		"19 Forensics",		//68
+		"",
+		"20 Herding",			//70
+		"",
+		"21 Hiding",			//72
+		"",
+		"22 Provoke",			//74
+		"",
+		"23 Inscription",		//76
+		"",
+		"24 Lockpicking",		//78
+		"",
+		"25 Magery",			//80
+		"",
+		"26 Magic Resist",		//82
+		"",
+		"27 Tactics",			//84
+		"",
+		"28 Snooping",			//86
+		"",
+		"29 Musicianship",		//88
+		"",
+		"30 Poisoning",		//90
+		"",
+		"31 Archery",			//92
+		"",
+		"32 Necromancy",		//94
+		"",
+		"33 Stealing",			//96
+		"",
+		"34 Tailoring",		//98
+		"",
+		"35 Taming",			//100
+		"",
+		"36 Taste ID",			//102
+		"",
+		"37 Tinkering",		//104
+		"",
+		"38 Tracking",			//106
+		"",
+		"39 Veterinary",		//108
+		"",
+		"40 Swords",			//110
+		"",
+		"41 Maces",			//112
+		"",
+		"42 Fencing",			//114
+		"",
+		"43 Wrestling",		//116
+		"",
+		"44 Lumberjack",		//118
+		"",
+		"45 Mining",			//120
+		"",
+		"46 Meditation",		//122
+		"",
+		"47 Stealth",			//124
+		"",
+		"48 Remove Trap",		//126
+		"",
+		"Edit",				//128
+		"Freeze/Unfreeze",
+		"Lootgroup: Default",	//130 
+		"Kick",
+		"Jail",				//132
+		"Open Bank",
+		"Open Pack",			//134
+		"Summon",
+		"Weapon:",			//136
+		"",
+		"Damage:",			//138
+		"",
+		"HP/MAX:",			//140
+		"",
+		"Acctname:",			//142
+		"",
+		"CmdLevel:",			//144
+		"",
+		"Position (x/y/z)",		//146
+		CSTR (thetarget.x + " / " + thetarget.y + " / " + thetarget.z),
+		"49 AoS Necromancy",		//148
+		"",
+		"50 Focus",			//150
+		"",
+		"51 Chivalry",			//152
+		"",
+		"52 Bushido",			//154
+		"",
+		"53 Ninjitsu",			//156
+		"",
+		"54 Spellweaving",			//158
+		"",
+		"55 Mysticism",			//160
+		"",
+		"56 Imbuing",			//162
+		"",
+		"57 Throwing",			//164
+		""
+	};
+	
+	
+	case (thetarget.cmdlevel)
+		0:	data[146] := "Player";
+		1:	data[146] := "Counselor";
+		2:	data[146] := "Seer";
+		3:	data[146] := "GM";
+		4:	data[146] := "Admin";
+		5:	data[146] := "Development";
+	endcase
+	if (thetarget.acctname)
+		if (character.cmdlevel < 3)
+			data[144] := "(hidden)";
+		else
+			data[144] := thetarget.acctname;
+		endif
+	else
+		data[143] := "NPCTemplate:";
+		data[144] := thetarget.npctemplate;
+
+		//Changable lootgroup
+		data[145] := "NPCLootgroup:";
+		layout[49] := "text 45 440 40 144";
+		layout[51] := "button 15 445 1210 1209 1 0 18";
+		if (GetObjProperty (thetarget, "override_lootgroup"))
+			data[146] := GetObjProperty (thetarget, "override_lootgroup");
+		else
+			data[146] := "default";
+		endif
+	endif
+	
+	FillInSkills (thetarget);
+	FillInWeapon (thetarget);
+endfunction
+
+function FillInSkills (who)
+	for i := 0 to 48
+		var str := CSTR (GetAttributeBaseValue (who, GetAttributeIDBySkillID (i)));
+		if (!str or !len (str))
+			str := "0.0";
+		else
+			str [len(str), 1] := "."+ str [len(str), 1];
+			if (CDBL (str) < 1)
+				str := "0" + str;
+			endif
+		endif
+		var arraypos := i*2 + 32;
+		var bonus := GetAttributeTemporaryMod (who, GetAttributeIDBySkillID (i));
+		if (bonus)
+			bonus := CSTR (bonus);
+			bonus [len(bonus), 1] := "."+ bonus [len(bonus), 1];
+			if (CDBL (bonus) < 1 and CDBL (bonus) > 0)
+				str := "0" + bonus;
+			endif
+			str := str + " (" + bonus + ")";
+		endif
+		
+		data[arraypos] := str;
+	endfor
+	for i := 49 to 57
+		var str := CSTR (GetAttributeBaseValue (who, GetAttributeIDBySkillID (i)));
+		if (!str or !len (str))
+			str := "0.0";
+		else
+			str [len(str), 1] := "."+ str [len(str), 1];
+			if (CDBL (str) < 1)
+				str := "0" + str;
+			endif
+		endif
+		var arraypos := i*2 + 52;
+		var bonus := GetAttributeTemporaryMod (who, GetAttributeIDBySkillID (i));
+		if (bonus)
+			bonus := CSTR (bonus);
+			bonus [len(bonus), 1] := "."+ bonus [len(bonus), 1];
+			if (CDBL (bonus) < 1 and CDBL (bonus) > 0)
+				str := "0" + bonus;
+			endif
+			str := str + " (" + bonus + ")";
+		endif
+		
+		data[arraypos] := str;
+	endfor
+endfunction
+
+function FillInWeapon ( who )
+	var itemdesc := ReadConfigFile (":*:itemdesc");
+	var npcdesc := ReadConfigFile (":*:npcdesc");
+
+	if(who.weapon)
+		var idx := find (who.weapon.name, "[", 1); //ignore maker's mark
+		if (idx!=0)
+			var tempn := who.weapon.desc;
+			tempn := tempn [1, idx-1];
+			data[138] := tempn;
+		else
+			if(who.weapon.desc == "nodraw")
+				data[138] := "Wrestling";
+			else
+				data[138] := who.weapon.desc;
+			endif
+		endif
+
+		var dam := itemdesc[who.weapon.objtype].Damage;
+		if(!dam)
+			data[140] := "n/a";
+		else
+			data[140] := dam;
+		endif
+
+		data[142] := who.weapon.hp + " / " + who.weapon.maxhp;
+	else
+		data[138] := "n/a";
+		data[140] := "n/a";
+		data[142] := "n/a";
+
+		if(who.npctemplate)
+			var weap := npcdesc[who.npctemplate].AttackSkillId;      
+			if (weap)
+				data[138] := weap;
+			endif
+
+			var dam := npcdesc[who.npctemplate].AttackDamage;
+			if( dam )
+				data[140] := dam;
+			endif
+ 
+			var ar := npcdesc[who.npctemplate].AR;      
+			if (ar)
+				data[142] := "AR: " + ar;
+			endif
+		endif
+	endif
+endfunction
+
+
+function SelectNewLootgroup (character, who)
+	if (!who.npctemplate)
+		SendSysmessage (character, "You can only use this on NPCs");
+		return;
+	endif
+	
+	var newnpctemplate := SendTextEntryGump (character, "Enter the npctemplate for the loot dropped", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "('none' for no loot, blank for default)");
+	if (!newnpctemplate)
+		EraseObjProperty (who, "override_lootgroup");
+		SendSysmessage (character, "Lootgroup set to default.");
+		return;
+	elseif (newnpctemplate == "none")
+		SetObjProperty (who, "override_lootgroup", "none");
+		SendSysmessage (character, "This NPC will not drop any loot now.");
+		return;
+	else
+		if (!GetNpcTemplateElem (newnpctemplate))
+			EraseObjProperty (who, "override_lootgroup");
+			SendSysmessage (character, "Unable to find npctemplate/lootgroup.  Reset to default");
+			return;
+		endif
+		SetObjProperty (who, "override_lootgroup", newnpctemplate);
+		SendSysmessage (character, "NPC will now drop loot of " + newnpctemplate);
+		return;
+	endif
+endfunction
+
+
+
+///////////////////
+//  Tries to find the best match of an online character based on the provided name
+///////////////////
+
+function FindOnlinePlayerByName (character, name)
+	if (character)
+	endif
+	//Try to find an exact match first
+	foreach onlinechr in EnumerateOnlineCharacters()
+		if (lower (onlinechr.name) == name)
+			return onlinechr;
+		endif
+	endforeach
+	
+	//Then try to find someone who's name is at least close
+	foreach onlinechr in EnumerateOnlineCharacters()
+		var thename := lower (onlinechr.name);
+		if (thename[name])
+			return onlinechr;
+		endif
+	endforeach
+	return 0;
+endfunction
+
+
+
+

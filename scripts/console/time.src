@@ -1,0 +1,11 @@
+use uo;
+
+include "include/clock";
+
+program time( cmd )
+    if (cmd)
+    endif
+
+    print("System Message: The time in game is " + GetTimeofDay() );
+
+endprogram

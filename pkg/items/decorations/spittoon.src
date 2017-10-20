@@ -1,0 +1,13 @@
+use uo;
+use os;
+
+program rotate_item (character, item)
+	if (Distance (character, item) > 3)
+		return;
+	endif
+
+	PrintTextAbove (character, "*spits*");
+	PlaySoundEffect (item, 0x224);
+	sleepms (500);
+	PlaySoundEffect (item, 0x240);
+endprogram

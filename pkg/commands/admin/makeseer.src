@@ -1,0 +1,30 @@
+use uo;
+use os;
+
+program makeseer( me )
+
+	var seer := Target( me, TGTOPT_NOCHECK_LOS );
+	if (!seer.acctname)
+		SendSysMessage (me, "That is not a player.");
+		return;
+	endif
+
+	seer.cmdlevel := 3;
+
+	SetPriv ( seer, "hearghosts" );
+	SetPriv ( seer, "clotheany" );
+	SetPriv ( seer, "seeghosts" );
+	SetPriv ( seer, "seehidden" );
+	SetPriv ( seer, "losany" );
+	SetPriv ( seer, "dblclickany" );
+	SetPriv ( seer, "seeinvisitems" );
+
+endprogram
+
+function SetPriv(who, priv)
+
+	GrantPrivilege ( who, priv );
+	who.enable ( priv );
+	SendSysMessage (who, priv + " enabled.");
+
+endfunction

@@ -1,0 +1,250 @@
+///////////////////
+//  this program is called when an NPC tries to cast a spell.  It handles all of the spellcasting.  This
+//  script should be run as script_run_to_completion.  The parms are:
+//		[1] - the caster of the spell
+//		[2] - the target of the spell
+//		[3] - the script of the spell to be cast
+///////////////////
+
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/magic";
+include "include/attributes";
+include "../pkg/npcs/npc_util";
+include "../pkg/npcs/npcinfo";
+
+program npc_cast_spell (parms)
+	var caster := parms[1];
+	var cast_on := parms[2];
+	var spellname := parms[3];
+
+	case (spellname)
+		"summonskel":
+			SummonSkel (caster, cast_on);	
+		default:
+			var SpellID := GetSpellID (spellname);
+			if (!spellID)
+				return;
+			endif
+
+			If (!PrepareToCast (caster, cast_on, spellid))
+				return;
+			endif
+
+			var parms := array{};
+			parms[1] := "#MOB";
+			parms[2] := caster;
+			parms[3] := cast_on;
+
+			detach();
+			start_script( spellname, parms );
+		endcase
+endprogram
+
+
+
+
+///////////////////
+//  performs assorted check to make sure we can cast the spell
+///////////////////
+
+function PrepareToCast (caster, cast_on, spellid)
+	if (!CheckLoSAt (caster, cast_on.x, cast_on.y, cast_on.z))
+		return 0;
+	endif
+
+	if (CINT (GetVital (caster, "Mana")/100) < GetManaCostBySpellID (spellid))
+		return 0;
+	endif
+
+	var MyTemplateElem := GetNpcTemplateElem (caster.npctemplate);
+	if (MyTemplateElem.saywords)
+		SpeakPowerWords (caster, spellid);
+		PerformAction (caster, GetCastAnimation (caster.graphic));
+		sleep (1);
+	endif
+
+	if (GetAttribute (caster, ATTRIBUTEID_MAGERY))
+		if (!CheckSkill (caster, SKILLID_MAGERY, GetSpellDifficulty (spellid), 0 ))
+			PlaySoundEffect (caster, 0x005d);
+			PlayObjectCenteredEffect (caster, 0x3735, 0x0a, 0x1e);
+			return 0;
+		endif
+	endif
+	
+	if (!ConsumeSpellManaCost (caster, GetSpellCircleBySpellID (spellid)))
+		return 0;
+	endif
+
+	return 1;
+endfunction
+
+
+
+///////////////////
+//  summons skeletons to fight for the caster
+///////////////////
+
+function SummonSkel (caster, onwho)
+
+	var nextsummons := GetObjProperty (caster, "#nextsummons");
+	if (!nextsummons)
+		nextsummons := 0;
+	endif
+
+	if (nextsummons < ReadGameClock())
+		return;
+	endif
+	SetObjProperty (caster, "#summons", ReadGameClock() + 60);
+
+	case (randomint(4))
+        	0: PrintTextAbove (caster, "Awake, my children! Come forth and take your rightful place!");
+        	1: PrintTextAbove (caster, "Come forth my minions!");
+        	2: PrintTextAbove (caster, "I call upon the forces of darkness to attend me!");
+        	3: PrintTextAbove (caster, "Mortal, you shall soon be my slave!");
+	endcase
+
+	SummonCreature (caster, "skeleton", onwho, 180);
+	SummonCreature (caster, "skeleton", onwho, 180);
+	SummonCreature (caster, "skeleton", onwho, 180);
+
+endfunction
+
+
+
+
+///////////////////
+//  determines the spellID for the given spell
+///////////////////
+
+Function GetSpellID (spellname)
+
+	var spellid := 0;
+
+	case (spellname)
+	":statmod_spells:clumsy":			spellid := 1;
+	":statmod_spells:feeblemind":			spellid := 3;
+	":misc_spells:heal":				spellid := 4;
+	":damage_spells:magicarrow":			spellid := 5;
+	":misc_spells:nightsight":			spellid := 6;
+	":statmod_spells:reactivearmor":		spellid := 7;
+	":statmod_spells:weaken":			spellid := 8;
+	":statmod_spells:agility":			spellid := 9;
+	":statmod_spells:cunning":			spellid := 10;
+	":poison_spells:cure":				spellid := 11;
+	":damage_spells:harm":				spellid := 12;
+	":statmod_spells:protection":			spellid := 15;
+	":statmod_spells:strength":			spellid := 16;
+	":statmod_spells:bless":				spellid := 17;
+	":damage_spells:fireball":			spellid := 18;
+	":poison_spells:poison":				spellid := 20;
+	":travel_spells:teleport":			spellid := 22;
+	":field_spells:wallofstone":			spellid := 24;
+	":poison_spells:archcure":			spellid := 25;
+	":statmod_spells:archprot":			spellid := 26;
+	":statmod_spells:curse":				spellid := 27;
+	":field_spells:firefield":			spellid := 28;
+	":misc_spells:gheal":				spellid := 29;
+	":damage_spells:lightning":			spellid := 30;
+	":misc_spells:manadrain":			spellid := 31;
+	":summoning_spells:blade_spirit":		spellid := 33;
+	":field_spells:dispel_field":			spellid := 34;
+	":misc_spells:reflect":				spellid := 36;
+	":damage_spells:mindblast":			spellid := 37;
+	":statmod_spells:paralyze":			spellid := 38;
+	":field_spells:poisonfield":			spellid := 39;
+	":summoning_spells:summon_creature":	spellid := 40;
+	":summoning_spells:dispel":			spellid := 41;
+	":damage_spells:ebolt":				spellid := 42;
+	":damage_spells:explosion":			spellid := 43;
+	":misc_spells:invisibility":			spellid := 44;
+	":statmod_spells:masscurse":			spellid := 46;
+	":field_spells:parafield":			spellid := 47;
+	":misc_spells:reveal":				spellid := 48;
+	":damage_spells:chain_lightning":		spellid := 49;
+	":field_spells:energy_field":			spellid := 50;
+	":damage_spells:fstrike":			spellid := 51;
+	":misc_spells:manavamp":				spellid := 53;
+	":summoning_spells:massdispel":		spellid := 54;
+	":damage_spells:meteor_swarm":		spellid := 55;
+	":statmod_spells:polymorph":			spellid := 56;
+	":damage_spells:earthquake":			spellid := 57;
+	":summoning_spells:vortex":			spellid := 58;
+	":misc_spells:resurrect":			spellid := 59;
+	":summoning_spells:summon_air":		spellid := 60;
+	":summoning_spells:summon_daemon":		spellid := 61;
+	":summoning_spells:summon_earth":		spellid := 62;
+	":summoning_spells:summon_fire":		spellid := 63;
+	":summoning_spells:summon_water":		spellid := 64;
+	":necro_spells:raisedead":			spellid := 71;
+	":necro_spells:summonspirit":			spellid := 74;
+	":necro_spells:plague":				spellid := 76;
+	":necro_spells:frostfield":			spellid := 77;
+	":necro_spells:darkness":			spellid := 78;
+	":necro_spells:wraithbreath":			spellid := 80;
+	":druid_spells:graspingroots":		spellid := 81;
+	":druid_spells:stingingswarm":		spellid := 82;
+	":druid_spells:tidalwave":			spellid := 83;
+	":druid_spells:natures_curse":		spellid := 92;
+	":druid_spells:snowstorm":		spellid := 94;
+	endcase
+
+	return spellid;
+endfunction
+
+
+
+
+///////////////////
+//  Decides what animation to used based on the caster's graphic
+///////////////////
+
+function GetCastAnimation (graphic)
+	case (graphic)
+		CID_ALLIGATOR:
+		CID_BROWN_BEAR:
+		CID_GRIZZLY_BEAR:
+		CID_POLAR_BEAR:
+		CID_BOAR:
+		CID_BULL:
+		CID_BULL2:
+		CID_BUNNY:
+		CID_CAT:
+		CID_CHICKEN:
+		CID_COW:
+		CID_COW2:
+		CID_DEER:
+		CID_DESERT_OSTARD:
+		CID_DOG:
+		CID_FOREST_OSTARD:
+		CID_FRENZIED_OSTARD:
+		CID_GOAT:
+		CID_GREAT_HART:
+		CID_TAN_HORSE:
+		CID_BROWN_HORSE:
+		CID_LIGHT_HORSE:
+		CID_GREY_HORSE:
+		CID_PACK_HORSE:
+		CID_LAVA_LIZARD:
+		CID_LLAMA:
+		CID_PACK_LLAMA:
+		CID_PANTHER:
+		CID_PIG:
+		CID_RAT:
+		CID_GIANT_RAT:
+		CID_SHEEP:
+		CID_SHEERED_SHEEP:
+		CID_WALRUS:
+		CID_WOLF:
+			return 0x7;
+		default:
+			return ANIM_CAST_DIR;
+	endcase
+endfunction
+
+

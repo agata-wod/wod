@@ -1,0 +1,282 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/skills";
+include "include/magicitems";
+include "../pkg/character/virtue/virtue";
+include ":weapons:abilityIcons";
+
+var itemdesc := ReadConfigFile (":*:itemdesc");
+
+program equip_item (who, item )
+	if(!IsOfAppropriateRace(who, item))
+		SendSysMessage (who, "The item isn't appropriate for your race!");
+		return 0;
+	endif
+	//Can't equip unidentified items
+	if (who.acctname or GetObjProperty (who, "master"))
+		if (!who.cmdlevel)
+			if (GetObjProperty (item, "suffix") or GetObjProperty (item, "prefix") or GetObjProperty (item, "tname") )
+				SendSysMessage (who, "You haven't identified that!");
+				return 0;
+			endif
+		endif
+	endif
+
+	//make sure that its not a .own'ed item
+	if (!IsOwner (who, item))
+		return 0;
+	endif
+
+	if (!CanWearVirtueShield (who, item))
+		return 0;
+	endif
+
+	if (FishingPoleEquipped (who, item))
+		return 0;
+	endif
+
+	var skilladv := GetObjProperty (item, "skilladv");
+	if (skilladv or skilladv == 0)
+		EquipItemWithSkillMod (who, item);
+	endif
+
+	if (item.isa (POLCLASS_WEAPON))
+		if (GetObjProperty (who, "#disarmed") and GetObjProperty (who, "#disarmed") > ReadGameClock())
+			SendSysMessage (who, "Too soon!");
+			return 0;
+		endif
+		EraseObjProperty (who, "#weaponability");
+		ResetWeaponAbilities (who);
+		if (!item.hitscript)
+			item.hitscript := ":weapons:mainhit";
+		endif
+	endif
+
+	DoSpecialGraphicChanges (item);
+	DoStatMods (who, item);
+	DoEquipSpell (who, item);
+	return 1;
+endprogram
+
+
+///////////////////
+//  determines if the item is .own'ed, and if it is, it won't permit it to be equipped by anyone but
+//  the owner and the owner's henchmen
+///////////////////
+
+function IsOwner (byref who, byref item)
+	if (!GetObjProperty (item, "ownerserial"))
+		return 1;
+	endif
+
+	var ownerserial := GetObjProperty (item, "ownerserial");
+	if (ownerserial == who.serial)
+		return 1;
+	endif
+
+	if (who.npctemplate)
+		var master := GetObjProperty (who, "master");
+		if  (master and ownerserial != master)
+			PrintTextAbove (who, "I can't use that, it belongs to " + GetObjProperty (item, "ownername"));
+			return 0;
+		else
+			return 1;
+		endif
+	endif
+
+	SendSysMessage (who, "You can't use that, it belongs to " + GetObjProperty (item, "ownername"));
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  if the item is one that gives a stat mod, this does it
+///////////////////
+
+function DoStatMods (byref who, byref it)
+	if (GetObjProperty (it, "str"))
+		var newstrmod := GetAttributeTemporaryMod (who, "Strength") + CINT (GetObjProperty (it, "str") * 10);
+		SetAttributeTemporaryMod (who, "Strength", newstrmod);
+		RecalcVitals (who);
+	endif
+	if (GetObjProperty (it, "int") )
+		var newintmod := GetAttributeTemporaryMod (who, "Intelligence") + CINT (GetObjProperty (it, "int") * 10);
+		SetAttributeTemporaryMod (who, "Intelligence", newintmod);
+		RecalcVitals (who);
+	endif
+	if (GetObjProperty (it, "dex") )
+		var newdexmod := GetAttributeTemporaryMod (who, "Dexterity") + CINT (GetObjProperty (it, "dex") * 10);
+		SetAttributeTemporaryMod (who, "Dexterity", newdexmod);
+		RecalcVitals (who);
+	endif
+	
+	var penalty := CINT (itemdesc[it.objtype].DexPenalty);
+	if (penalty)
+		var newdexmod := GetAttributeTemporaryMod (who, "Dexterity") - penalty * 10;
+		SetAttributeTemporaryMod (who, "Dexterity", newdexmod);
+		RecalcVitals (who);
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  if the item has a spell associated with it, this function starts it
+///////////////////
+
+function DoEquipSpell (byref who, byref it)
+	if (GetObjProperty (it, "equipspell"))
+		var parms := array{ };
+		parms[1] := who;
+		parms[2] := it;
+		parms[3] := ReadGameClock();
+		setobjproperty (it, "#equiptime", parms[3]);
+
+		var spellname := GetObjProperty (it, "equipspell");
+		start_script (":magic:"+spellname, parms);
+	endif
+	
+	//Start staff listeners for druid and necro staves
+	if (it.objtype == UOBJ_DRUID_STAFF)
+		var parms :=array { };
+		parms[1] := who;
+		parms[2] := it;
+		parms[3] := ReadGameClock();
+		SetObjProperty (it, "#equiptime", parms[3]);
+		start_script (":druid:druidstaff", parms);
+
+	elseif (it.objtype == UOBJ_NECRO_STAFF)
+		var parms := array{ };
+		parms[1] := who;
+		parms[2] := it;
+		parms[3] := ReadGameClock();
+		SetObjProperty (it, "#equiptime", parms[3]);
+		start_script (":necromancy:necrostaff", parms);
+	endif
+	
+endfunction
+
+
+
+
+///////////////////
+//  if the item is a death shroud, modify its graphic (So its doesn't show up as a text graphic)
+///////////////////
+
+function DoSpecialGraphicChanges (byref it)
+	if (it.objtype == 0x204E)
+		it.graphic := 0x204E;
+	elseif (it.graphic == 0x13da)
+		SetObjProperty (it, "equipitemgraphic", 0x13da);
+		it.graphic := 0x13cb;
+	elseif (it.graphic == 0x13d5)
+		SetObjProperty (it, "equipitemgraphic", 0x13d5);
+		it.graphic := 0x13c6;
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  if the item is a virtue shield, only NPCs and virtue guards can equip it
+///////////////////
+
+function CanWearVirtueShield (byref who, byref it)
+	if (who.npctemplate)
+		return 1;
+	endif
+
+	if (who.cmdlevel)
+		return 1;
+	endif
+
+	var guardtype := 0;
+	var guardname;
+	case (it.objtype)
+		0x1bc4: 
+		0x422a:
+			guardtype := 1; //order
+			guardname := "an Order";
+		0x1bc3:
+		0x4228:
+			guardtype := 2; //chaos
+			guardname := "a Chaos";
+		default: return 1;
+	endcase
+
+	var guard := GetObjProperty (who, "guardtype");
+	if (!guard) 
+		SendSysMessage(who, "You are not a Virtue Guard!");
+		return 0;
+	endif
+
+	if (guard != guardtype)
+		SendSysMessage (who, "You are not " + guardname + " Guard!");
+		return 0;
+	endif
+
+	var leadership := GetAttributeBaseValue (who, "Leadership");
+	if (leadership < 900)
+		SendSysMessage (who, "It is better to have a lion lead an army of sheep");
+		SendSysMessage (who, "Than a sheep lead an army of lions.");
+		who.title_prefix := "";
+		who.title_suffix := "";
+		EraseObjProperty (who, "guardtype");
+		return 0;
+	endif
+
+	var players_virtue := GetVirtueAmount (who);
+	if (players_virtue < 0)
+		SendSysMessage (who, "You're a disgrace to the Virtues.");
+		who.title_prefix := "";
+		who.title_suffix := "";
+		EraseObjProperty (who, "guardtype");
+		return 0;
+	endif
+
+	var shrines := GetObjProperty (who, "shrines");
+	if (!shrines)
+		shrines := 0;
+	endif
+
+	if (shrines != 255)
+		who.title_prefix := "Squire ";
+		return 1;
+	endif
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  you can't equip a fishing pole with a weapon
+///////////////////
+
+function FishingPoleEquipped (byref who, byref it)
+	var hand2 := GetEquipmentByLayer (who, LAYER_HAND2);
+	if (hand2.objtype == 0x0dbf)
+		//I'm holding a fishing pole.  Can't equip a weapon, but can equip something else
+		if (it.isa (POLCLASS_WEAPON))
+			return 1;
+		else
+			return 0;
+		endif
+	elseif (it.objtype == 0x0dbf)
+		var hand1 := GetEquipmentByLayer (who, LAYER_HAND1);
+		if (hand1)
+			return 1;//equipping a pole while I have a weapon
+		else
+			return 0;
+		endif
+	endif
+
+	return 0;
+endfunction

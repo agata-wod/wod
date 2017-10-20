@@ -1,0 +1,167 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/itemtypes";
+include "include/gumps";
+include "include/skills";
+
+program do_itemid (character)
+	if (GetObjProperty (character, "#useskill"))
+		if (GetProcess (GetObjProperty (character, "#useskill")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#useskill", GetPid());
+
+	SendSysMessage (character, "Select an object to identify.");
+	var the_item := TargetCoordinates (character);
+	the_item := the_item.item;
+	if (!the_item)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+	
+	if (GetObjProperty (the_item, "ownerserial") )
+		if (GetObjProperty (the_item, "tname") or GetObjProperty (the_item, "prefix") or GetObjProperty (the_item, "suffix"))
+			SendSysMessage (character, "You can't identify .own'ed items!");
+			return;
+		endif
+	endif
+	
+	if(!CheckSkill (character, SKILLID_MAGERY, -1, 0))
+		SendSysmessage (character, "I'm not sure...");
+		return;
+	endif
+
+	if (GetObjProperty (the_item, "tname"))
+		the_item.name := GetObjProperty (the_item, "tname");
+		EraseObjProperty (the_item, "tname");
+		EraseObjProperty (the_item, "prefix");
+		EraseObjProperty (the_item, "suffix");
+		EraseObjProperty (the_item, "unidentified");
+	elseif (GetObjProperty (the_item, "prefix") or GetObjProperty (the_item, "suffix"))
+		var newname := the_item.desc;
+		if (IsWand (the_item))
+			if (GetObjProperty (the_item, "suffix"))
+				newname := newname + " " + GetObjProperty (the_item, "suffix");
+			endif
+		else
+			if (GetObjProperty (the_item, "prefix"))
+				if (newname ["magic"])
+					var space := find( the_item.desc, "c", 1 );
+					var currdesc := the_item.desc;
+					newname := currdesc [space+1,len(the_item.desc)];
+				endif
+				newname := GetObjProperty( the_item, "prefix" ) + " magic " + newname;
+			endif
+		endif
+		if (newname["  "])
+			repeat
+				newname ["  "] := " ";
+			until (!newname["  "]);
+		endif
+
+		the_item.name := newname;
+		EraseObjProperty (the_item, "prefix");
+		EraseObjProperty (the_item, "suffix");
+		EraseObjProperty (the_item, "unidentified");
+	endif
+
+	DisplayInfoGump (character, the_item);
+endprogram
+
+
+
+///////////////////
+//  A special gump that displays information about the item using an HTML gump
+///////////////////
+
+function DisplayInfoGump (character, item)
+	var thestring := "";
+	if (item.ar_mod)
+		thestring := thestring + "AR Bonus: " + item.ar_mod + "<br>";
+	endif
+	if (item.dmg_mod)
+		thestring := thestring + "Damage Bonus: " + item.dmg_mod + "<br>";
+	endif
+
+	if (GetObjProperty (item, "str"))
+		var stat_bonus := GetObjProperty (item, "str");
+		thestring := thestring + "Strength Bonus: " + stat_bonus + "<br>";
+	endif
+	if (GetObjProperty (item, "int"))
+		var stat_bonus := GetObjProperty (item, "int");
+		thestring := thestring + "Intelligence Bonus: " + stat_bonus + "<br>";
+	endif
+	if (GetObjProperty (item, "dex"))
+		var stat_bonus := GetObjProperty (item, "dex");
+		thestring := thestring + "Dexterity Bonus: " + stat_bonus + "<br>";
+	endif
+	
+	if (GetObjProperty (item, "skilladv"))
+		var skillid := GetObjproperty (item, "skilladv");
+		var skillname := GetSkillName (skillid);
+		var skillbonus := GetObjProperty (item, CStr("skill"+skillid));
+		thestring := thestring + "Skill Bonus: +" + skillbonus + " " + skillname + "<br>";
+	endif
+	if (GetObjProperty (item, "protpoison"))
+		var pcharges := GetObjProperty (item, "protpoison");
+		thestring := thestring + "Poison Protection: " + pcharges + " charges<br>";
+	endif
+
+	if (GetObjProperty (item, "damage_soak_fire"))
+		var pcharges := GetObjProperty (item, "damage_soak_fire");
+		thestring := thestring + "Fire Protection: " + pcharges + " points<br>";
+	endif
+	if (GetObjProperty (item, "damage_soak_cold"))
+		var pcharges := GetObjProperty (item, "damage_soak_cold");
+		thestring := thestring + "Cold Protection: " + pcharges + " points<br>";
+	endif
+	if (GetObjProperty (item, "damage_soak_electrical"))
+		var pcharges := GetObjProperty (item, "damage_soak_electrical");
+		thestring := thestring + "Electrical Protection: " + pcharges + " points<br>";
+	endif
+
+
+	if (GetObjProperty (item, "charges"))
+		var scharges := GetObjProperty (item, "charges");
+		var itemspellname := GetObjProperty (item, "itemspellname");
+		if (!itemspellname)
+			itemspellname := "Spell";
+		endif
+		thestring := thestring + itemspellname + " Charges: " + scharges + " charges<br>";
+	endif
+	
+	if (GetObjProperty (item, "etherial") )
+		thestring := thestring + "<b>Etherial:</b> (Almost appearing to have a will of their own, etherial items appear for a time to help a cause or a person in need, then tend to vanish as mysteriously as they appeared)<br>";
+	endif
+
+	if (GetObjProperty (item, "flavortext") )
+		var flavortext := GetObjProperty (item, "flavortext");
+		
+		while (flavortext ["  "])
+			flavortext["  "] := " ";
+		endwhile;
+		
+		thestring := thestring + "<b>Description:</b> " + flavortext + "<br>";
+	endif
+
+	if (thestring != "")
+		SendStringAsHtmlWindow (character, thestring, item.desc);
+	else
+		SendSysMessage (character, "It appears to be a " + item.desc);
+	endif
+endfunction
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,95 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/eventid";
+include "include/attributes";
+
+program skill_hide ( hider )
+	if (GetObjProperty (hider, "#useskill"))
+		if (GetProcess (GetObjProperty (hider, "#useskill")))
+			PrintTextAbovePrivate (hider, "I am already performing another action.", hider);
+			return;
+		endif
+	endif
+	SetObjProperty (hider, "#useskill", GetPid());
+
+	if (hider.warmode)
+		PrintTextAbovePrivate (hider, "You cannot hide while in War Mode.", hider );
+		return;
+	endif
+
+	var mount := GetEquipmentByLayer (hider, 25);
+	if (mount)
+		PrintTextAbovePrivate (hider, "You cannot hide while mounted.", hider);
+		return;
+	endif
+
+	var range := GetHideRange (GetAttribute (hider, ATTRIBUTEID_HIDING));
+	PrintTextAbovePrivate (hider, "You start looking for a place to hide", hider);
+
+	var x := hider.x;
+	var y := hider.y;
+	var bystanders;
+
+	repeat
+		bystanders := ListHostiles (hider, range, LH_FLAG_LOS);
+		if (len(bystanders) > 0)
+			PrintTextAbovePrivate (hider, "You cannot hide as there are hostiles in view!", hider);
+			return;
+		endif
+
+		if (CheckSkill (hider, SKILLID_HIDING , -1 , 0))
+			hider.hidden := 1;
+			PrintTextAbovePrivate (hider, "You have hidden yourself well", hider);
+		else
+			for i := 1 to 8
+				sleep (1);
+				if (hider.x !=x or hider.y != y or hider.hidden)
+					return;
+				endif
+				if (i == 4)
+					PrintTextAbovePrivate( hider, "You continue trying to hide..." , hider );
+				endif
+			endfor
+		endif
+	until (hider.x !=x or hider.y != y or hider.hidden);
+	EraseObjProperty (hider, "#useskill");
+
+	if (!hider.hidden)
+		return;
+	endif
+
+	detach();
+	var duration := ReadGameClock() + (10 * 360);
+
+	var ev := struct;
+	ev.+type := EVID_ENTEREDAREA;
+	ev.+source := hider;
+
+	while (hider and hider.hidden and ReadGameClock() < duration)
+		sleepms(500);
+	endwhile
+
+	hider.hidden := 0;
+
+	//range of 4 for hidden creatures, range of 15 for others
+	foreach critter in ListMobilesNearLocationEx (hider.x, hider.y, hider.z, 15, LISTEX_FLAG_NORMAL, hider.realm)
+		SendEvent (critter, ev);
+	endforeach
+
+	foreach critter in ListMobilesNearLocationEx (hider.x, hider.y, hider.z, 4, LISTEX_FLAG_HIDDEN, hider.realm)
+		SendEvent (critter, ev);
+	endforeach
+endprogram
+
+
+function getHideRange ( skill )
+	var range := 9 - CINT (skill/10);
+	if (range < 1)
+		range := 1;
+	endif
+
+	return range;
+endfunction

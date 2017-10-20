@@ -1,0 +1,97 @@
+use uo;
+use os;
+
+include "include/client";
+include "../pkg/world/weather/weather";
+
+program helpnext (me)
+	var helpmenu := CreateMenu ("Select a help page to clear:");
+	var foundpages := array{};
+	
+	foreach plr in EnumerateOnlineCharacters ();
+		if (GetObjProperty (plr, "HELP"))
+			foundpages.append (plr);
+			AddMenuItem (helpmenu, 0, plr.name);
+		endif
+	endforeach
+	
+	if (!len (foundpages))
+		SendSysMessage (me, "There are no help pages.");
+		return;
+	endif
+
+	var helppage := SelectMenuItem2 (me, helpmenu);
+	if (!helppage)
+		SendSysMessage (me, "Canceled");
+		return;
+	endif
+
+	var player := foundpages [helppage.index];
+	if (!player)
+		SendSysMessage (me, "That player doesn't seem to exist");
+		return;
+	endif
+	
+	MoveObjectToLocation( me, player.x-2, player.y-2, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+	SetWeatherForPlayer (me);
+	me.facing := 3;
+	
+	SendSysMessage (me, "HELP PAGE from :" + player.name, FONT_NORMAL, 38 );
+	var timer := GetObjProperty (player, "HELPTIMER");
+	var timerdesc := "Age unknown";
+	if (timer)
+		timerdesc := GetTimerDesc (timer);
+	endif
+
+	SendSysMessage (me, timerdesc, FONT_NORMAL, 41);
+	var thehelppage := GetObjProperty (player, "HELP");
+	foreach line in thehelppage
+		SendSysMessage (me, line, FONT_NORMAL, 41);
+	endforeach
+
+	EraseObjProperty (player, "HELP");
+	EraseObjProperty (player, "HELPTIMER");
+endprogram
+
+
+
+
+function GetTimerDesc (timer)
+	var age := ReadGameClock () - timer;
+	if (!age or age < 0)
+		return "This is a brand new page.";
+	endif
+
+	var days := CINT (age/86400);
+	age := age - days*86400;
+	
+	var hours := CINT (age/3600);
+	age := age - hours*3600;
+	
+	var minutes := CINT (age/60);
+	
+	var tempstring := "";
+	if (days)
+		if (days > 1)
+			tempstring := CSTR ("This page is " + days + " days, " + hours + " hours and " + minutes + " minutes old.");
+		else
+			tempstring := CSTR ("This page is " + days + " day, " + hours + " hours and " + minutes + " minutes old.");
+		endif
+	elseif (hours)
+		if (hours > 1)
+			tempstring := CSTR ("This page is " + hours + " hours and " + minutes + " minutes old.");
+		else
+			tempstring := CSTR ("This page is " + hours + " hour and " + minutes + " minutes old.");
+		endif
+	elseif (minutes)
+		if (minutes > 1)
+			tempstring := CSTR ("This page is " + minutes + " minutes old.");
+		else
+			tempstring := CSTR ("This page is " + minutes + " minute old.");
+		endif
+	else
+		tempstring := "This page is brand new.";
+	endif
+	
+	return tempstring;
+endfunction

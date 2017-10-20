@@ -1,0 +1,97 @@
+
+use uo;
+
+program get_coords( user , item )
+	if (item)
+	endif
+
+	//tile position: x and y and z
+	var x := user.x;
+	var y := user.y;
+//	var z := user.z;
+
+	//center tile: cx and cy
+	var cx:= 1323;
+	var cy:= 1624;
+
+	//height and width of map: nx and ny	
+	var nx := 5120;
+	var ny := 4096;
+
+	//degrees: tile position less center tile * 360, etc:
+	var dx := ( (x - Cx) * 360 ) / Nx;
+	var dy := ( (y - Cy) * 360 ) / Ny;
+	var mx := 0;
+	var my := 0;
+
+	//minutes: number to the left of the decimal:
+	if ( cint( cint(dx) - dx ) )
+		mx := cint(dx)-1;
+	else	
+		mx := cint(dx);
+	endif
+
+	if ( cint( cint(dy) - dy ) )
+		my := cint(dy)-1;
+	else
+		my := cint(dy);
+	endif
+
+	//degrees: number to right of the decimal times 60:
+	dx := ( (dx - mx) * 60 );
+	dx := ( (dy - my) * 60 );
+
+	//convert E and S to N or W if degrees < 0 or > 180:
+	var dirx := "E";
+	var diry := "S";
+
+	while ( ( dx < 0 ) or (dx > 180) )
+	if ( dx < 0 )
+		dx := dx + 180;
+		if (dirx == "E")
+			dirx := "W";
+		else
+			dirx := "E";
+		endif
+	elseif ( dx > 180 )
+		dx := dx - 180;
+		if (dirx == "W")
+			dirx := "E";
+		else
+			dirx := "W";
+		endif
+	endif		
+	endwhile		
+
+	while ( (dy < 0) or (dy > 180) )
+	if ( dy < 0 )
+		dy := dy + 180;
+		if (diry == "N")
+			diry := "S";
+		else
+			diry := "N";
+		endif
+	elseif ( dy > 180 )
+		dy := dy - 180;
+		if (diry == "S")
+			diry := "N";
+		else
+			diry := "S";
+		endif
+	endif		
+	endwhile		
+	var coordstring := dx + "o" + mx + dirx + ", " + dy + "o" + my + diry;
+
+    PrintTextAbovePrivate( user  , "( " + user.x + " , " + user.y + " , " + user.z + " )" , user );
+    PrintTextAbovePrivate( user  , coordstring , user );
+
+endprogram
+function Mod(Numerator, Denominator)
+
+	While (Numerator > Denominator)
+		Numerator := Numerator - Denominator;
+	endwhile
+
+	return Numerator;
+
+endfunction

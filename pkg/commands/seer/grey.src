@@ -1,0 +1,23 @@
+Use uo;
+Use os;
+
+program grey ( me )
+
+	if (GetObjProperty(me,"#grey"))
+		EraseObjProperty (me, "#grey");
+		me.SetCriminal (0);
+		SendSysmessage (me, "Criminal flag will expire in under two minutes.");
+		return;
+	endif
+
+	var starttime := ReadGameClock ();
+	SetObjProperty (me, "#grey", starttime);
+
+	while (GetObjProperty (me, "#grey") and GetObjProperty (me, "#grey") == starttime)
+		me.SetCriminal (1);
+		sleep (120);
+	endwhile
+	if (!me.criminal)
+		SendSysMessage (me, "Criminal flag has expired");
+	endif
+endprogram

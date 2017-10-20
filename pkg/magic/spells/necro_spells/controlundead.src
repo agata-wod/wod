@@ -1,0 +1,59 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 3;
+
+program cast_controlundead (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	cast_on := CheckMagicReflection (caster, cast_on);
+	if (!cast_on)
+		return;
+	endif
+
+	//make sure the targetted creature is really undead
+	var powerlevel := IsAnUndeadCreature (cast_on.npctemplate);
+	if (!powerlevel)
+		SendSysMessage (caster, "This can only be cast on undead creatures.");
+		return;
+	endif
+
+	if (powerlevel > 1 and GetAttribute (caster, ATTRIBUTEID_NECROMANCY) < 71)
+		SendSysMessage (caster, "That creature is too strong to control!");
+		return;
+	elseif (powerlevel > 2 and GetAttribute (caster, ATTRIBUTEID_NECROMANCY) < 91)
+		SendSysMessage (caster, "That creature is too strong to control!");
+		return;
+	elseif (powerlevel > 3)
+		SendSysMessage (caster, "That creature is too strong to control!");
+		return;
+	endif
+
+	var oldscript := cast_on.script;
+	SetObjProperty (cast_on, "master", caster.serial);
+	cast_on.script := "::tamed";
+	RestartScript (cast_on);
+
+	detach();
+	
+	cast_on.script := oldscript;
+	sleep ((GetAttribute (caster, ATTRIBUTEID_NECROMANCY) + GetAttribute (caster, ATTRIBUTEID_MAGERY))*2);
+	cast_on.script := oldscript;
+	cast_on.dexterity_mod := 0;
+	cast_on.setmaster (0);
+	EraseObjProperty (cast_on, "master");	
+	RestartScript (cast_on);
+	return 1;
+endprogram

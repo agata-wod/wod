@@ -1,0 +1,290 @@
+use uo;
+use os;
+use http;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/string";
+include "include/accounts";
+include "include/www";
+include "../pkg/items/housing/house";
+
+
+program ViewAccountInformation ()
+	LogWWWPageAccess (QueryIP());
+	WriteHTML ("<html><head><title>Account Information</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+	
+	var acctname := QueryParam ("acctname");
+	if (!acctname)
+		WriteHTML ("Please enter an account name");
+		WriteHTML ("<form method=GET action=account_info.ecl>");
+		WriteHTML ("Account name: <input name=acctname>");
+		WriteHTML ("<input id=submit1 name=submit1 type=submit value=Search>");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	
+	var acct := FindAccount (acctname);
+	if (!acct)
+		WriteHTML ("That account does not exist</body></html>");
+		return;
+	endif
+	
+	var characters := array {};
+	var add_second_column := 0;
+	for i := 1 to 7
+		characters[i] := acct.GetCharacter(i);
+		if (characters[i].ip)
+			add_second_column := 1;
+		endif
+	endfor
+	
+	var add_delete := 0;
+	var online_gm := FindOnlineAccountByIP (QueryIP());
+	if (online_gm and online_gm.cmdlevel)
+		add_delete := 1;
+		add_second_column := 1;
+	endif
+	
+	WriteHTML ("<center><b>Account name: </b> " + acctname + "</center><br>");
+	WriteHTML ("<center><font size=-1><a href=change_password.ecl?acctname=" + acctname + ">Change password</a></font></center><br>");
+	
+	var lastlogon := GetAccountLastLogon (acctname);
+	if (lastlogon > 60)
+		WriteHTML ("<center><font size=-1><a href=nukeaccount.ecl?acctname=" + acctname + ">Nuke Account</a></font></center><br>");
+	endif
+	
+	
+	WriteHTML ("<table border=1 align=center width=60% cellpadding=5><tr>");
+	WriteHTML ("<td align=right>Character 1</td>");
+	if (characters[1])
+		WriteHTML ("<td><a href=character_info.ecl?serial=" + characters[1].serial + ">" + characters[1].name + "</a></td>");
+		if (add_second_column)
+			if (characters[1].ip)
+				WriteHTML ("<td>Online</td>");
+			elseif (add_delete)
+				WriteHTML ("<td><a href=delete_character.ecl?acctname=" + acctname + "&charnum=" + 1 + "&charserial=" + characters[1].serial + ">Delete character</a></td>");
+			else
+				WriteHTML ("<td>-</td>");
+			endif
+		endif
+	else
+		WriteHTML ("<td>-none-</td>");
+		if (add_second_column)
+			WriteHTML ("<td>-</td>");
+		endif
+	endif
+	
+	WriteHTML ("</tr><tr>");
+	WriteHTML ("<td align=right>Character 2</td>");
+	if (characters[2])
+		WriteHTML ("<td><a href=character_info.ecl?serial=" + characters[2].serial + ">" +characters[2].name + "</a></td>");
+		if (add_second_column)
+			if (characters[2].ip)
+				WriteHTML ("<td>Online</td>");
+			elseif (add_delete)
+				WriteHTML ("<td><a href=delete_character.ecl?acctname=" + acctname + "&charnum=" + 2 + "&charserial=" + characters[2].serial + ">Delete character</a></td>");
+			else
+				WriteHTML ("<td>-</td>");
+			endif
+		endif
+	else
+		WriteHTML ("<td>-none-</td>");
+		if (add_second_column)
+			WriteHTML ("<td>-</td>");
+		endif
+	endif
+	
+	WriteHTML ("</tr><tr>");
+	WriteHTML ("<td align=right>Character 3</td>");
+	if (characters[3])
+		WriteHTML ("<td><a href=character_info.ecl?serial=" + characters[3].serial + ">" +characters[3].name + "</a></td>");
+		if (add_second_column)
+			if (characters[3].ip)
+				WriteHTML ("<td>Online</td>");
+			elseif (add_delete)
+				WriteHTML ("<td><a href=delete_character.ecl?acctname=" + acctname + "&charnum=" + 3 + "&charserial=" + characters[3].serial + ">Delete character</a></td>");
+			else
+				WriteHTML ("<td>-</td>");
+			endif
+		endif
+	else
+		WriteHTML ("<td>-none-</td>");
+		if (add_second_column)
+			WriteHTML ("<td>-</td>");
+		endif
+	endif
+	
+	WriteHTML ("</tr><tr>");
+	WriteHTML ("<td align=right>Character 4</td>");
+	if (characters[4])
+		WriteHTML ("<td><a href=character_info.ecl?serial=" + characters[4].serial + ">" +characters[4].name + "</a></td>");
+		if (add_second_column)
+			if (characters[4].ip)
+				WriteHTML ("<td>Online</td>");
+			elseif (add_delete)
+				WriteHTML ("<td><a href=delete_character.ecl?acctname=" + acctname + "&charnum=" + 4 + "&charserial=" + characters[4].serial + ">Delete character</a></td>");
+			else
+				WriteHTML ("<td>-</td>");
+			endif
+		endif
+	else
+		WriteHTML ("<td>-none-</td>");
+		if (add_second_column)
+			WriteHTML ("<td>-</td>");
+		endif
+	endif
+	
+	WriteHTML ("</tr><tr>");
+	WriteHTML ("<td align=right>Character 5</td>");
+	if (characters[5])
+		WriteHTML ("<td><a href=character_info.ecl?serial=" + characters[5].serial + ">" +characters[5].name + "</a></td>");
+		if (add_second_column)
+			if (characters[5].ip)
+				WriteHTML ("<td>Online</td>");
+			elseif (add_delete)
+				WriteHTML ("<td><a href=delete_character.ecl?acctname=" + acctname + "&charnum=" + 5 + "&charserial=" + characters[5].serial + ">Delete character</a></td>");
+			else
+				WriteHTML ("<td>-</td>");
+			endif
+		endif
+	else
+		WriteHTML ("<td>-none-</td>");
+		if (add_second_column)
+			WriteHTML ("<td>-</td>");
+		endif
+	endif
+	
+	WriteHTML ("</tr><tr>");
+	WriteHTML ("<td align=right>Character 6</td>");
+	if (characters[6])
+		WriteHTML ("<td><a href=character_info.ecl?serial=" + characters[6].serial + ">" +characters[6].name + "</a></td>");
+		if (add_second_column)
+			if (characters[6].ip)
+				WriteHTML ("<td>Online</td>");
+			elseif (add_delete)
+				WriteHTML ("<td><a href=delete_character.ecl?acctname=" + acctname + "&charnum=" + 6 + "&charserial=" + characters[6].serial + ">Delete character</a></td>");
+			else
+				WriteHTML ("<td>-</td>");
+			endif
+		endif
+	else
+		WriteHTML ("<td>-none-</td>");
+		if (add_second_column)
+			WriteHTML ("<td>-</td>");
+		endif
+	endif
+	
+	WriteHTML ("</tr><tr>");
+	WriteHTML ("<td align=right>Character 7</td>");
+	if (characters[7])
+		WriteHTML ("<td><a href=character_info.ecl?serial=" + characters[7].serial + ">" +characters[7].name + "</a></td>");
+		if (add_second_column)
+			if (characters[7].ip)
+				WriteHTML ("<td>Online</td>");
+			elseif (add_delete)
+				WriteHTML ("<td><a href=delete_character.ecl?acctname=" + acctname + "&charnum=" + 7 + "&charserial=" + characters[7].serial + ">Delete character</a></td>");
+			else
+				WriteHTML ("<td>-</td>");
+			endif
+		endif
+	else
+		WriteHTML ("<td>-none-</td>");
+		if (add_second_column)
+			WriteHTML ("<td>-</td>");
+		endif
+	endif
+	
+	WriteHTML ("</tr></table>");
+	WriteHTML ("<table border=1 align=center width=60% cellpadding=5><tr>");
+	
+	
+	WriteHTML ("</tr><tr>");
+	WriteHTML ("<td align=right>Last logon</td>");
+	WriteHTML ("<td>" + lastlogon + " days ago</td>");
+	
+	var playtime := GetAccountProperty (acctname, "online_time");
+	var hours := CINT (playtime/3600);
+	WriteHTML ("</tr><tr>");
+	WriteHTML ("<td align=right>Total playtime</td>");
+	WriteHTML ("<td>" + hours + " hours</td>");
+	
+	
+	WriteHTML ("</tr><tr>");
+	WriteHTML ("<td align=right>Email Address</td>");
+	var account_email := GetAccountProperty (acctname, "account_email");
+	if (!account_email)
+		WriteHTML ("<td>unknown</td>");
+	else
+		WriteHTML ("<td><a href=mailto:" + account_email + ">" + account_email + "</a></td>");
+	endif
+	
+	WriteHTML ("</tr><tr>");
+	WriteHTML ("<td align=right>House Value</td>");
+	WriteHTML ("<td>" + GetAccountHouseValue (acctname) + " <a href=/item_logging/house_search.ecl?acctname=" + acctname + ">Find Houses</a></td>");
+	
+	
+	WriteHTML ("</tr></table>");
+	
+	WriteHTML ("<p><p align=center><b>Login record</b>");
+	
+	var logon_record := GetAccountProperty (acctname, "logon_record");
+	if (!logon_record)
+		WriteHTML ("<br>No record currently available");
+	else
+		var logon_keys := logon_record.keys();
+		if (!logon_keys.size())
+			WriteHTML ("<br>No record currently available");
+		else
+			WriteHTML ("<table align=center width=60% border=1>");
+			WriteHTML ("<tr><td>Time</td><td>Character</td><td>IP</td></tr>");
+			foreach key in logon_keys
+				var dict_elem := logon_record[key];
+				if (dict_elem)
+					WriteHTML ("<tr><td>" + dict_elem[1] + "</td><td>" + dict_elem[3] + "</td><td>" + dict_elem[2] + "</td></tr>");
+				endif
+			endforeach
+
+			WriteHTML ("</table>");
+		endif
+	endif	
+	WriteHTML ("</body></html>");
+endprogram
+
+
+
+
+
+
+///////////////////
+//  Figured out how long its been since an account has logged on, in days
+///////////////////
+
+function GetAccountLastLogon (accountname)
+	var account := FindAccount (accountname);
+	if (!account)
+		Syslog ("Error finding accountname " + accountname);
+		return 9999;
+	endif
+	
+	var logontime := 0;
+	for counter := 1 to 7
+		var player := account.GetCharacter (counter);
+		if (player)
+			var templogontime := GetObjProperty (player, "logontime");
+			if (templogontime and templogontime > logontime)
+				logontime := templogontime;
+			endif
+		endif
+	endfor
+	
+	var seconds := ReadGameClock () - logontime;
+	var days := CINT (seconds/86400);
+	return days;
+endfunction
+
+
+

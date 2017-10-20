@@ -1,0 +1,29 @@
+use uo;
+use cfgfile;
+use attributes;
+
+include "include/client";
+
+program clean(who, reg)
+	if (!reg.movable)
+		SendSysMessage (who, "You cannot clean this reagent now.");
+		return;
+	endif
+
+	if (!ReserveItem (reg))
+		SendSysMessage (who, "You cannot clean this reagent now.");
+		return;
+	endif
+
+	if (checkskill(who, SKILLID_ALCHEMY, -1, 0))
+		var cfg := readconfigfile("itemdesc");
+		var what := cfg[reg.objtype].product;
+		var howmuch := cfg[reg.objtype].produceamount;
+		createiteminbackpack(who, what, howmuch);
+		destroyitem(reg);
+		sendsysmessage(who, "You successfully cull the reagent");
+	else
+		destroyitem(reg);
+		sendsysmessage(who, "You pick the plant down to nothing");
+	endif
+endprogram

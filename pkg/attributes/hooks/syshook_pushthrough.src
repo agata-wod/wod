@@ -1,0 +1,63 @@
+use os;
+use uo;
+use cfgfile;
+use vitals;
+
+include "../pkg/npcs/npcinfo";
+
+exported function Pushthrough (walker, blockers)
+	if (walker.npctemplate)
+		return 1;
+	endif
+
+	var validblockers := array{};
+	foreach blocker in blockers
+		if (blocker.acctname)
+			if (blocker.hidden and !blocker.concealed)
+				SendSysMessage (walker, "You shove something invisible out of your way.");
+			endif
+		elseif (GetObjProperty (blocker, "master"))
+			if (blocker.hidden)
+				if (!GetObjProperty (blocker, "#specialhidden_nodamage"))
+					SendSysMessage (walker, "You shove something invisible out of your way.");
+				endif
+			endif
+		elseif (IsHostile (blocker))
+			validblockers.append (blocker);
+			if (blocker.hidden)
+				SendSysMessage (walker, "You shove something invisible out of your way.");
+			endif
+		endif
+	endforeach
+	if (!len (validblockers))
+		return 1;
+	endif
+	
+	//small change to try to help chasing down mobs
+	if (len (validblockers) == 1)
+		if (walker.facing == blockers[1].facing)
+			return 1;
+		elseif (walker.facing + 1 == blockers[1].facing)
+			return 1;
+		elseif (walker.facing - 1 == blockers[1].facing)
+			return 1;
+		elseif (walker.facing + 7 == blockers[1].facing + 8)
+			return 1;
+		elseif (walker.facing + 8 == blockers[1].facing + 7)
+			return 1;
+		endif
+	endif
+
+	if ((GetVital (walker, "Stamina") * 2) < GetVitalMaximumValue (walker, "Stamina"))
+		return 0;
+	endif
+	ConsumeVital (walker, "Stamina", 1000);
+	return 1;
+endfunction
+
+
+
+program SyshookPushthrough ()
+	Syslog ("Installing Pushthrough Hook.");
+	return 1;
+endprogram

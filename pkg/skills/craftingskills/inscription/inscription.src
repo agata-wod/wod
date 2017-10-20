@@ -1,0 +1,745 @@
+use uo;
+use basic;
+use cfgfile;
+use util;
+use os;
+
+include "include/math";
+include "include/client";
+include "include/objtype";
+include "include/gumps";
+include "include/crafting";
+include "include/attributes";
+include "../pkg/character/virtue/virtue";
+
+Const SOUND_EFFECT_INSCRIPTION := 0x50;
+Const SOUND_EFFECT_SPARKLE := 0x1e8;
+Const EFFECT_SPARKLE :=  0x373a;
+
+var config_file := ReadConfigFile ("inscription");
+var quick_scribe_mode := 0;
+
+program do_inscription (character, targetted_item)
+	if (GetObjProperty (character, "#useskill"))
+		if (GetProcess (GetObjProperty (character, "#useskill")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#useskill", GetPid());
+
+	if (!targetted_item)
+		SendSysmessage (character, "What would you like to inscribe?");
+		targetted_item := Target (character);
+		if (!targetted_item)
+			SendSysmessage (character, "Canceled.");
+			return;
+		endif
+
+		if (!Accessible (character, targetted_item))
+			SendSysmessage (character, "You can't reach that!");
+			return;
+		endif
+	endif
+
+	if (!ReserveItem (targetted_item))
+		SendSysMessage (character, "You can't use that right now!");
+		return;
+	endif
+
+	if (targetted_item.objtype == UOBJ_BLANK_SCROLL)
+		ScribeScroll (character, targetted_item);
+		return;
+	elseif (targetted_item.objtype >= 0x0DF2 and targetted_item.objtype <= 0x0DF5)
+		EnchantWand (character, targetted_item);
+	elseif (targetted_item.objtype <= 0xA110 and targetted_item.objtype >= 0xA101)
+		InscribeNecroSpell(character, targetted_item);
+	elseif (targetted_item.objtype >= 0xff0 and targetted_item.objtype <= 0xff4)
+		CopyBook (character, targetted_item);
+	elseif (targetted_item.objtype >= 0x17020 and targetted_item.objtype <= 0x17023)
+		CopyBook (character, targetted_item);
+	elseif (targetted_item.usescript == ":fishing:readnote")
+		CopyNote (character, targetted_item);
+	elseif (targetted_item.objtype == UOBJ_CONTRACT_BLACKSMITHY)
+		ModifySpecialOrderContract (character, targetted_item);
+	else
+		SendSysMessage(character, "You can't inscribe that!");
+	endif
+endprogram
+
+
+
+
+///////////////////
+//  Makes a copy of the targetted book
+///////////////////
+
+function CopyBook (character, book)
+	if (!character.cmdlevel)
+		SendSysMessage (character, "You can't inscribe that!");
+		return;
+	endif
+
+	var new_book := CreateItemInBackpack (character, book.objtype, 1);
+	if (!new_book)
+		PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+		return;
+	endif
+	foreach property in GetObjPropertyNames (book)
+		var value := GetObjProperty (book, property);
+		SetObjProperty (new_book, property, value);
+	endforeach
+endfunction
+
+
+
+
+///////////////////
+//  Makes a copy of the targetted note
+///////////////////
+
+function CopyNote (character, note)
+	if (!character.cmdlevel)
+		SendSysMessage (character, "You can't inscribe that!");
+		return;
+	endif
+
+	var new_note := CreateItemInBackpack (character, note.objtype, 1);
+	var note_content := GetObjProperty (note, "note");
+	SetObjProperty (new_note, "note", note_content);
+	new_note.usescript := ":fishing:readnote";
+endfunction
+
+
+
+
+///////////////////
+//  called when the character targets a magic wand to be enchanted
+///////////////////
+
+function EnchantWand (character, wand)
+	if (GetObjProperty (wand, "spellname") or GetObjProperty (wand, "spell"))
+		SendSysmessage (character, "That wand is already charged!");
+		return;
+	endif
+
+	SendSysmessage (character, "Select a focus");
+	var focus := Target (character);
+	if (!focus)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+
+	if (focus.objtype < 0x181d or focus.objtype > 0x1828)
+		SendSysMessage (character, "That is not a valid focus.");
+		return;
+	endif
+
+	if (!ReserveItem (focus) or !focus.movable)
+		SendSysMessage (character, "You cannot use that as a focus.");
+		return;
+	endif
+
+	if (!GetObjProperty (focus, "chargedby"))
+		SendSysmessage (character, "That focus has not been charged.");
+		return;
+	endif
+
+	var chargedby := GetObjProperty (focus, "chargedby");
+	var chargename := GetObjProperty (focus, "chargename");
+
+	var elem := config_file [focus.objtype];
+	var skill := elem.base_skill;
+	var skill_increment := elem.skill_increment;
+	var spellname := elem.spellname;
+	var suffix := elem.suffix;
+	var charge_multiplier := elem.charge_multiplier;
+	DestroyItem (focus);
+
+	if (!CheckSkill (character, SKILLID_INSCRIPTION, -1, 0) or !CheckSkill (character, SKILLID_MAGERY, -1, 0) )
+		SendSysmessage (character, "You fail, and destroy the item.");
+		DestroyItem (wand);
+		return;
+	endif
+
+	SendSysmessage (character, "Select a " + chargename + " for each charge you wish to place on the item");
+	var charges := 0;
+	var done := 0;
+	var targetted;
+	repeat
+		targetted := Target (character);
+		if (!targetted)
+			if (YesNo (character, "Done?"))
+				done := 1;
+			else
+				targetted := 1;
+			endif
+		elseif (!Accessible (character, targetted) or !ReserveItem (targetted) or !targetted)
+			SendSysmessage (character, "You can't use that!");
+			targetted := 1;
+		elseif (targetted and CINT (targetted.objtype) == CINT (chargedby))
+			if (CheckSkill (character, SKILLID_INSCRIPTION, skill, 0))
+				charges := charges + 1;
+				skill := skill + skill_increment;
+			else
+				done := 1;
+			endif
+			SubtractAmount (targetted, 1);
+			targetted := 1;
+		else
+			SendSysmessage (character, "That's not the right type of gem!");
+			targetted := 1;
+		endif
+	until (!targetted or done);
+	if (charges == 0)
+		SendSysmessage (character, "You fail to place any charges on the item.");
+		DestroyItem (wand);
+	endif
+
+	var total_charges := charge_multiplier*charges + RandomDiceRoll (CSTR (charge_multiplier+"d"+charges));
+
+	SetObjProperty (wand, "spell", spellname);
+	SetObjProperty (wand, "charges", total_charges);
+	wand.name := CSTR ("a wand " + suffix);
+	PlayObjectCenteredEffect(character, EFFECT_SPARKLE, 7,0x10);
+	PlaySoundEffect(character, SOUND_EFFECT_SPARKLE);
+endfunction
+
+
+
+
+///////////////////
+//  Called when the character chose a blank scroll as the item to be inscribed
+///////////////////
+
+function ScribeScroll (character, scroll)
+	var crafting_options := GetObjProperty (character, "crafting_options");
+	if (!crafting_options or len (crafting_options) < 2)
+		crafting_options := array {1, 0, 0};
+	elseif (len (crafting_options) < 2)
+		repeat
+			crafting_options.append (0);
+		until (len (crafting_options) >= 3);
+	endif
+	
+	if (crafting_options[3])
+		quick_scribe_mode := 1;
+	endif
+	
+	var selected_spell := SelectSpellToInscribe (character);
+	if (! selected_spell)
+		return;
+	endif
+
+	var elem := FindConfigElem (config_file, selected_spell);
+	var skill := GetConfigInt (elem, "skill");
+	var product := GetConfigInt(elem, "scroll");
+	var manacost := CINT(skill/3);
+
+	//things are more difficult when in quick-scribe mode
+	if (quick_scribe_mode)
+		skill := skill + 20;
+		if (skill > 120)
+			skill := 120;
+		endif
+	endif
+
+	SendSysMessage (character,"(" + elem.name + " - skill: "+ skill + ")" );
+	var cx := character.x;
+	var cy := character.y;
+	
+	
+	var craftingbag := FindCraftingBag (character);
+	repeat
+		if (CINT (GetVital (character, "Mana")/100) < manacost)
+			SendSysMessage(character, "You dont have enough mana and stop scribing.");
+			return;
+		endif
+		
+		PlaySoundEffect (character, 0x24a);
+		if (quick_scribe_mode)
+			sleep (2);
+		else
+			sleep (5);
+		endif
+
+		if (CINT (GetVital (character, "Mana")/100) < manacost)
+			SendSysMessage(character, "You dont have enough mana and stop scribing.");
+			return;
+		endif
+
+		if (!SubtractAmount (scroll, 1))
+			SendSysMessage (character, "Error: Unable to delete blank scroll");
+			return;
+		endif
+
+		if (CheckSkill (character, SKILLID_INSCRIPTION, skill, 0))
+			//occasional random failure in quick-scribe mode, just for fun
+			if (quick_scribe_mode)
+				if (RandomInt (20) == 1)
+					SetVital (character, "Mana", GetVital (character, "Mana") - manacost*50);
+					SendSysmessage (character, "You fail and destroy the scroll");
+				else
+					SetVital (character, "Mana", GetVital (character, "Mana") - manacost*100);
+					var thescroll := CreateItemInContainer (craftingbag, product);
+					if (!thescroll)
+						PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+						return;
+					endif
+		
+					if (!crafting_options[2] or !crafting_options[1])
+						SendSysmessage (character, "You create the scroll and put it in your backpack");
+					endif
+				endif
+			else
+				SetVital (character, "Mana", GetVital (character, "Mana") - manacost*100);
+				var thescroll := CreateItemInContainer (craftingbag, product);
+				if (!thescroll)
+					PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+					return;
+				endif
+	
+				if (!crafting_options[2] or !crafting_options[1])
+					SendSysmessage (character, "You create the scroll and put it in your backpack");
+				endif
+			endif
+		else
+			SetVital (character, "Mana", GetVital (character, "Mana") - manacost*50);
+			SendSysmessage (character, "You fail and destroy the scroll");
+		endif
+		
+		if (character.x != cx or character.y != cy)
+			SendSysmessage (character, "You stop scribing.");
+			return;
+		endif
+
+		if (!scroll)
+			SendSysMessage (character, "You stop scribing.");
+			return;
+		endif
+		
+		if (!crafting_options[1])
+			SendSysMessage (character, "You stop scribing.");
+			return;
+		endif
+		
+		sleep (3);
+	until (character.x != cx or character.y != cy);
+	SendSysmessage (character, "You stop scribing.");
+endfunction
+
+
+
+
+
+///////////////////
+//  Called by the ScribeScroll function, this function presents the user with a menu, off of which
+//  they can select what spell they wish to inscribe onto the scroll
+///////////////////
+
+function DetermineScroll (spellid)
+	if (spellid < 8)
+		spellid := mod(spellid,7) + 1;
+	endif
+	return spellid + 7980;
+endfunction		
+
+Function SelectSpellToInscribe (character)
+	var scrolls := dictionary;
+	var circles := array {};
+	foreach item in EnumerateItemsInContainer (character.backpack)
+//		if (item.container.objtype == UOBJ_SPELLBOOK)
+//			if (!scrolls.exists (item.objtype))
+//				scrolls.insert (item.objtype, 1);
+//				var elem := FindConfigElem (config_file, item.objtype);
+//				var thecircle := GetConfigInt (elem, "circle");
+//				circles[thecircle] := 1;
+//			endif
+//		endif
+		if (item.objtype == UOBJ_SPELLBOOK)
+			var containedspells := item.spells();
+			foreach spell in containedspells
+				var scroll := DetermineScroll(spell);
+				if (!scrolls.exists (scroll))
+					scrolls.insert (scroll, 1);
+					var elem := FindConfigElem (config_file, scroll);
+					var thecircle := GetConfigInt (elem, "circle");
+					circles[thecircle] := 1;
+				endif
+			endforeach
+		endif
+	endforeach
+	
+	if (!scrolls.keys())
+		SendSysMessage (character, "You don't have a spellbook!");
+		return;
+	endif
+	
+	var gump_layout := array {
+		"nodispose",
+		"page 0",
+		"resizepic 20 20 5170 400 320",
+		"text 110 50 0 0",
+		"button 100 285 2104 2103 1 0 99",	//quick-scribe
+		"text 115 280 0 9",
+		"button 290 280 242 242 1 0 0",	//cancel button
+		"page 1"
+	};
+	var gump_data := array {
+		"Select a circle:",
+		"Circle 1",
+		"Circle 2",
+		"Circle 3",
+		"Circle 4",
+		"Circle 5",
+		"Circle 6",
+		"Circle 7",
+		"Circle 8",
+		"Quick-scribe (Off)"
+	};
+	if (circles[1])
+		gump_layout.append ("button 80 80 2240 2240 1 0 1");
+		gump_layout.append ("tilepic 80 80 8384");
+		gump_layout.append ("text 75 130 0 1");
+	endif
+	if (circles[2])
+		gump_layout.append ("button 160 80 2240 2240 1 0 2");
+		gump_layout.append ("tilepic 160 80 8385");
+		gump_layout.append ("text 155 130 0 2");
+	endif
+	if (circles[3])
+		gump_layout.append ("button 240 80 2240 2240 1 0 3");
+		gump_layout.append ("tilepic 240 80 8386");
+		gump_layout.append ("text 235 130 0 3");
+	endif
+	if (circles[4])
+		gump_layout.append ("button 320 80 2240 2240 1 0 4");
+		gump_layout.append ("tilepic 320 80 8387");
+		gump_layout.append ("text 315 130 0 4");
+	endif
+	if (circles[5])
+		gump_layout.append ("button 80 180 2240 2240 1 0 5");
+		gump_layout.append ("tilepic 80 180 8388");
+		gump_layout.append ("text 75 230 0 5");
+	endif
+	if (circles[6])
+		gump_layout.append ("button 160 180 2240 2240 1 0 6");
+		gump_layout.append ("tilepic 160 180 8389");
+		gump_layout.append ("text 155 230 0 6");
+	endif
+	if (circles[7])
+		gump_layout.append ("button 240 180 2240 2240 1 0 7");
+		gump_layout.append ("tilepic 240 180 8390");
+		gump_layout.append ("text 235 230 0 7");
+	endif
+	if (circles[8])
+		gump_layout.append ("button 320 180 2240 2240 1 0 8");
+		gump_layout.append ("tilepic 320 180 8391");
+		gump_layout.append ("text 315 230 0 8");
+	endif
+
+	var selected_circle := 0;
+	repeat
+		if (quick_scribe_mode)
+			gump_data[10] := "Quick-scribe (On)";
+		else
+			gump_data[10] := "Quick-scribe (Off)";
+		endif
+	
+		var gump_return := SendDialogGump (character, gump_layout, gump_data);
+		if (!gump_return and gump_return[0] != 0)
+			SendSysMessage (character, "You must close other gumps before you can use this.");
+			return;
+		elseif (gump_return[0] == 0)
+			SendSysMessage (character, "Canceled.");
+			return;
+		elseif (gump_return[0] == 99)
+			if (quick_scribe_mode)
+				SendSysMessage (character, "Quick-scribe mode is now turned off.");
+				quick_scribe_mode := 0;
+			else
+				SendSysMessage (character, "Quick-scribe mode is now turned on.");
+				SendSysMessage (character, "Scroll creation is faster, but tends to fail much more often.");
+				quick_scribe_mode := 1;
+			endif
+		else
+			selected_circle := gump_return[0];
+		endif
+	until (selected_circle);
+
+	var startingscroll := 7981 + ( (selected_circle-1)*8);
+	gump_layout := array {
+		"nodispose",
+		"page 0",
+		"resizepic 20 20 5170 400 320",
+		"text 110 50 0 0",
+		"button 190 280 242 242 1 0 0",
+		"page 1"
+	};
+	gump_data := array {
+		"Select a spell:"
+	};
+	var stringcounter := 1;
+	
+	if (scrolls[startingscroll])
+		gump_layout.append ("button 80 80 2240 2240 1 0 1");
+		var elem := FindConfigElem(config_file, startingscroll);
+		gump_layout.append ("tilepic 80 80 " + GetConfigInt(elem, "graphic"));
+		if (elem.line1)
+			gump_layout.append ("text " + (60+elem.line1offset) + " 130 0 " + stringcounter);
+			gump_data.append (elem.line1);
+			stringcounter := stringcounter + 1;
+		endif
+		if (elem.line2)
+			gump_layout.append ("text " + (60+elem.line2offset) + " 150 0 " + stringcounter);
+			gump_data.append (elem.line2);
+			stringcounter := stringcounter + 1;
+		endif
+	endif
+	if (scrolls[startingscroll+1])
+		gump_layout.append ("button 160 80 2240 2240 1 0 2");
+		var elem := FindConfigElem(config_file, startingscroll+1);
+		gump_layout.append ("tilepic 160 80 " + GetConfigInt(elem, "graphic"));
+		if (elem.line1)
+			gump_layout.append ("text " + (140+elem.line1offset) + " 130 0 " + stringcounter);
+			gump_data.append (elem.line1);
+			stringcounter := stringcounter + 1;
+		endif
+		if (elem.line2)
+			gump_layout.append ("text " + (140+elem.line2offset) + " 150 0 " + stringcounter);
+			gump_data.append (elem.line2);
+			stringcounter := stringcounter + 1;
+		endif
+	endif
+	if (scrolls[startingscroll+2])
+		gump_layout.append ("button 240 80 2240 2240 1 0 3");
+		var elem := FindConfigElem(config_file, startingscroll+2);
+		gump_layout.append ("tilepic 240 80 " + GetConfigInt(elem, "graphic"));
+		if (elem.line1)
+			gump_layout.append ("text " + (220+elem.line1offset) + " 130 0 " + stringcounter);
+			gump_data.append (elem.line1);
+			stringcounter := stringcounter + 1;
+		endif
+		if (elem.line2)
+			gump_layout.append ("text " + (220+elem.line2offset) + " 150 0 " + stringcounter);
+			gump_data.append (elem.line2);
+			stringcounter := stringcounter + 1;
+		endif
+	endif
+	if (scrolls[startingscroll+3])
+		gump_layout.append ("button 320 80 2240 2240 1 0 4");
+		var elem := FindConfigElem(config_file, startingscroll+3);
+		gump_layout.append ("tilepic 320 80 " + GetConfigInt(elem, "graphic"));
+		if (elem.line1)
+			gump_layout.append ("text " + (300+elem.line1offset) + " 130 0 " + stringcounter);
+			gump_data.append (elem.line1);
+			stringcounter := stringcounter + 1;
+		endif
+		if (elem.line2)
+			gump_layout.append ("text " + (300+elem.line2offset) + " 150 0 " + stringcounter);
+			gump_data.append (elem.line2);
+			stringcounter := stringcounter + 1;
+		endif
+	endif
+	if (scrolls[startingscroll+4])
+		gump_layout.append ("button 80 180 2240 2240 1 0 5");
+		var elem := FindConfigElem(config_file, startingscroll+4);
+		gump_layout.append ("tilepic 80 180 " + GetConfigInt(elem, "graphic"));
+		if (elem.line1)
+			gump_layout.append ("text " + (60+elem.line1offset) + " 230 0 " + stringcounter);
+			gump_data.append (elem.line1);
+			stringcounter := stringcounter + 1;
+		endif
+		if (elem.line2)
+			gump_layout.append ("text " + (60+elem.line2offset) + " 250 0 " + stringcounter);
+			gump_data.append (elem.line2);
+			stringcounter := stringcounter + 1;
+		endif
+	endif
+	if (scrolls[startingscroll+5])
+		gump_layout.append ("button 160 180 2240 2240 1 0 6");
+		var elem := FindConfigElem(config_file, startingscroll+5);
+		gump_layout.append ("tilepic 160 180 " + GetConfigInt(elem, "graphic"));
+		if (elem.line1)
+			gump_layout.append ("text " + (140+elem.line1offset) + " 230 0 " + stringcounter);
+			gump_data.append (elem.line1);
+			stringcounter := stringcounter + 1;
+		endif
+		if (elem.line2)
+			gump_layout.append ("text " + (140+elem.line2offset) + " 250 0 " + stringcounter);
+			gump_data.append (elem.line2);
+			stringcounter := stringcounter + 1;
+		endif
+	endif
+	if (scrolls[startingscroll+6])
+		gump_layout.append ("button 240 180 2240 2240 1 0 7");
+		var elem := FindConfigElem(config_file, startingscroll+6);
+		gump_layout.append ("tilepic 240 180 " + GetConfigInt(elem, "graphic"));
+		if (elem.line1)
+			gump_layout.append ("text " + (220+elem.line1offset) + " 230 0 " + stringcounter);
+			gump_data.append (elem.line1);
+			stringcounter := stringcounter + 1;
+		endif
+		if (elem.line2)
+			gump_layout.append ("text " + (220+elem.line2offset) + " 250 0 " + stringcounter);
+			gump_data.append (elem.line2);
+			stringcounter := stringcounter + 1;
+		endif
+	endif
+	if (scrolls[startingscroll+7])
+		gump_layout.append ("button 320 180 2240 2240 1 0 8");
+		var elem := FindConfigElem(config_file, startingscroll+7);
+		gump_layout.append ("tilepic 320 180 " + GetConfigInt(elem, "graphic"));
+		if (elem.line1)
+			gump_layout.append ("text " + (300+elem.line1offset) + " 230 0 " + stringcounter);
+			gump_data.append (elem.line1);
+			stringcounter := stringcounter + 1;
+		endif
+		if (elem.line2)
+			gump_layout.append ("text " + (300+elem.line2offset) + " 250 0 " + stringcounter);
+			gump_data.append (elem.line2);
+			stringcounter := stringcounter + 1;
+		endif
+	endif	
+	
+	var gump_return := SendDialogGump (character, gump_layout, gump_data);
+	if (!gump_return and gump_return[0] != 0)
+		SendSysMessage (character, "You must close other gumps before you can use this.");
+		return;
+	elseif (gump_return[0] == 0)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	
+	return (gump_return[0] + startingscroll - 1);
+endfunction
+
+
+
+
+
+///////////////////
+//  Called when the character chooses to inscribe a necro scroll
+///////////////////
+
+function InscribeNecroSpell(character, the_item)
+    
+	SendSysmessage( character, "Select the infernal tome in which to inscribe." );
+	var the_book := target(character);
+	if (!the_book)
+		SendSysmessage(character, "Targetting canceled.");
+		return;
+	endif 
+    
+	if (! Accessible(character, the_book))
+		SendSysmessage (character, "You can't reach that!");
+		return;
+	endif
+    
+	if (the_book.objtype != 0xA100)
+		SendSysmessage (character, "You must select a necromatic spellbook.");
+		return;
+	endif
+
+	if (!ReserveItem (the_book))
+		SendSysMessage (character, "You cannot use that item right now.");
+		return;
+	endif
+
+	var elem := FindConfigElem(config_file, the_item.objtype);
+	var skill := GetConfigInt(elem, "skill");
+	var FlagRegister := GetConfigInt(elem, "flagset");
+	var Flag := GetConfigInt(elem, "flag");
+	var Circle := "";
+
+	if ( GetAttribute (character, ATTRIBUTEID_INSCRIPTION) < (skill-20) )
+		SendSysMessage(character, "You have no chance of scribing that.");
+		return;
+	endif
+
+	if (FlagRegister == 1)
+		Circle := "Lesser";
+	else
+		Circle := "Greater";
+	endif
+
+	FlagRegister := CInt (GetObjProperty (the_book, Circle) );
+
+	if (FlagCheck(FlagRegister, Flag) == 1)
+		SendSysMessage(character, "That spell is already inscribed.");
+		return;
+	endif
+
+	if ( CheckSkill(character, SKILLID_INSCRIPTION, skill, 0 ) )
+		PlaySoundEffect(character, SOUND_EFFECT_INSCRIPTION); 
+		PlayObjectCenteredEffect( the_book, EFFECT_SPARKLE, 10,10);
+		SubtractAmount (the_item,1);
+		SendSysmessage (character, "You inscribe the spell into your Codex.");
+		FlagRegister := FlagSet(FlagRegister, Flag);
+		FlagRegister := CStr(FlagRegister);
+		SetObjProperty(the_book, Circle, FlagRegister);
+	else
+		SendSysmessage (character, "You fail, and botch the scroll!");
+		SubtractAmount(the_item,1);
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Players are able to modify contracts to get more money
+///////////////////
+
+function ModifySpecialOrderContract (character, contract)
+	var required_items := GetObjProperty (contract, "required_items");
+	if (!required_items)
+		SendSysMessage (character, "Error:  That bulk order deed seems to be broken...");
+		return;
+	elseif (required_items.size() < 8)
+		SendSysMessage (character, "Error:  That bulk order deed seems to be broken...");
+		return;
+	endif
+
+	if (required_items[9])
+		SendSysMessage (character, "That contract has already been modified.");
+		return;
+	endif
+	
+	//This is an evil action
+	AddVirtue (character, (0-(3+RandomInt(4))));
+
+	var contract_value := required_items[7];
+	if (!contract_value)
+		SendSysMessage (character, "Error:  Unknown contract value.");
+		return;
+	endif
+	
+	if (!CheckSkill (character, SKILLID_INSCRIPTION, -1, 0))
+		SendSysMessage (character, "You fail, destroying the contract in the process.");
+		DestroyItem (contract);
+		return;
+	elseif (!CheckSkill (character, SKILLID_STEALING, -1, 0))
+		SendSysMessage (character, "You fail, destroying the contract in the process.");
+		DestroyItem (contract);
+		return;
+	endif
+	
+	var bonus_percentage := CINT (GetAttribute (character, ATTRIBUTEID_INSCRIPTION)/10) + CINT (GetAttribute (character, ATTRIBUTEID_STEALING)/8);
+	if (bonus_percentage < 10.)
+		bonus_percentage := 10;
+	endif
+
+	var new_contract_value := CINT ((contract_value * bonus_percentage) / 100 ) + contract_value;
+	required_items[9] := new_contract_value;
+	SetObjProperty (contract, "required_items", required_items);
+
+	SendSysMessage (character, "You successfully modify the contract");
+endfunction
+
+
+
+
+
+
+

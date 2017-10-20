@@ -1,0 +1,262 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+include "../pkg/items/housing/house";
+include "../pkg/world/weather/weather";
+var spell_circle := 4;
+
+Const BUTTONID_BUY_SLOT := 999;
+
+program cast_recall (parms, spellid)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	
+	var caster_x := caster.x;
+	var caster_y := caster.y;
+
+	//recall_settings [1] = number of recall locations allowed
+	//each one after that is a location {x, y, z, name}
+	var recall_settings := GetObjProperty (caster, "spell_recall_settings");
+	if (!recall_settings or len (recall_settings) < 2)
+		SendSysMessage (caster, "Resetting recall locations to default");
+		recall_settings := array{1, array{1328, 1624, 50, "Britain castle", _DEFAULT_REALM}};
+		SetObjProperty (caster, "spell_recall_settings", recall_settings);
+	endif
+
+	var gump_layout := array {
+		"nodispose",
+		"page 0",
+		"resizepic 20 20 2620 400 300",
+		"gumppic 25 50 2621",
+		"gumppic 145 50 2621",
+		"text 30 29 200 0",	
+		"text 280 29 200 1",	
+		"text 365 29 200 2",	
+
+		"text 30 70 200 3",	
+		"text 30 100 200 5",
+		"text 30 130 200 7",
+		"text 30 160 200 9",
+		"text 30 190 200 11",
+		"text 90 230 200 13",
+		"button 190 270 243 241 1 0 0"
+	};
+	
+	var gump_data := array {
+		"Locations",
+		"Recall",
+		"Mark",
+		"1:",
+		"",
+		"2:",
+		"",
+		"3:",
+		"",
+		"4:",
+		"",
+		"5:",
+		"",
+		"No more slots available for sale"
+	};
+	
+	for i := 1 to 5
+		if (i <= recall_settings[1])
+			if (recall_settings[i+1])
+				var recall_loc := recall_settings[i+1];
+				if (recall_loc [4])
+					gump_data [(i*2+3)] := recall_loc[4];
+				else
+					gump_data [(i*2+3)] := "Unknown";
+				endif
+				gump_layout.append ("text 50 " + (i*30 + 40) + " 200 " + (i*2+2));
+				if (recall_loc[1] and recall_loc[2])
+					gump_layout.append ("button 290 " + (i*30 + 36) + " 2640 2641 1 0 " + i);
+				endif
+				gump_layout.append ("button 370 " + (i*30 + 36) + " 2640 2641 1 0 " + (100 + i));
+			else
+				gump_data [(i*2+3)] := "Empty";
+				gump_layout.append ("text 50 " + (i*30 + 40) + " 200 " + (i*2+2));
+				gump_layout.append ("button 370 " + (i*30 + 36) + " 2640 2641 1 0 " + (100 + i));
+			endif
+		else
+			gump_data [(i*2+3)] := "Slot Unavailable";
+			gump_layout.append ("text 50 " + (i*30 + 40) + " 1108 " + (i*2+2));
+		endif
+	endfor
+	
+	if (recall_settings[1] < 5)
+		var cost := recall_settings[1] * 100000;
+		gump_layout.append ("button 70 233 1210 1209 1 0 " + BUTTONID_BUY_SLOT);
+		gump_data[14] := "Buy additional slot for " + cost + " gold";
+	endif
+	
+	var gump_return := SendDialogGump (caster, gump_layout, gump_data);
+	if (!gump_return and gump_return[0] != 0)
+		SendSysMessage (caster, "You must close other gumps before you can do this.");
+		return 0;
+	endif
+	
+	if (caster_x != caster.x or caster_y != caster.y)
+		SendSysMessage (caster, "Canceled - you can't move while doing this.");
+		return 0;
+	endif
+
+	if (gump_return[0] == 0)
+		SendSysMessage (caster, "Canceled.");
+		return 0;
+		
+	//buy extra slots
+	elseif (gump_return[0] == BUTTONID_BUY_SLOT)
+		if (recall_settings[1] >= 5)
+			SendSysMessage (caster, "No more slots available!");
+			return;
+		endif
+		var cost := recall_settings[1] * 100000;
+		if (!caster.SpendGold (cost))
+			SendSysMessage (caster, "You don't have enough gold!");
+			return;
+		endif
+		recall_settings[1] := recall_settings[1] + 1;
+		SetObjProperty (caster, "spell_recall_settings", recall_settings);
+		SendSysMessage (caster, "Congratulations!");
+	
+	//Do the recall
+	elseif (gump_return[0] < 100)
+		var recall_loc := recall_settings [gump_return[0] + 1];
+		if (recall_loc [4])
+			SendSysMessage (caster, "Recalling to " + recall_loc[4]);
+		endif
+		
+		var tox := recall_loc[1];
+		var toy := recall_loc[2];
+		var toz := recall_loc[3];
+		var tor := recall_loc[5];
+		if (!tor)
+			tor := _DEFAULT_REALM;
+		endif
+		var sign := FindHouseSignAtLocation (tox, toy, tor);
+		if (sign)
+			if (!IsAFriend (sign, caster))
+				SendSysMessage (caster, "You can't recall to there!");
+				return 0;
+			endif
+		endif
+
+		if (tor == REALM_BRITANNIA and tox > 5118)
+			sendsysmessage (caster, "Invalid location");
+			return 0;
+		endif
+
+		PlaySoundEffect (caster, SFX_210);
+		sleepms (250);
+		MoveObjectToLocation( caster, tox, toy, toz, tor, MOVEOBJECT_NORMAL );
+		SetWeatherForPlayer (caster);
+		PlaySoundEffect (caster, SFX_SPELL_RECALL);
+		return 1;
+
+	//set location
+	else
+		var theloc := gump_return[0] - 100;
+		if (theloc > recall_settings[1])
+			SendSysMessage (caster, "Invalid slot selection.");
+			return 0;
+		endif
+
+		if (caster.x > 5118)
+			sendsysmessage (caster, "Invalid location");
+			return 0;
+		endif
+
+		SendSysMessage (caster, "Are you sure you want to make this your recall location?");
+		if (!YesNo (caster, "Confirm"))
+			SendSysMessage (caster, "Canceled.");
+			return 0;
+		endif
+
+		if (caster_x != caster.x or caster_y != caster.y)
+			SendSysMessage (caster, "Canceled - you can't move while doing this.");
+			return 0;
+		endif
+
+		var settings := array{caster.x, caster.y, caster.z, "Unknown location", caster.realm};
+		var text := SendTextEntryGump (caster, "Please enter a name for this location", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 20, "(20 character max)");
+		if (text)
+			settings[4] := text;
+		endif
+		recall_settings[theloc + 1] := settings;
+		SetObjProperty (caster, "spell_recall_settings", recall_settings);
+		SendSysMessage (caster, "Marked!");
+		return 1;
+	endif
+
+/*
+	var cast_on;
+	if (parms[1] = "#MOB")
+		cast_on := caster;
+	else
+		SendSysmessage (caster, "Select a rune to mark your homepoint, or click yourself.");
+		cast_on := Target (caster, TGTOPT_CHECK_LOS );
+		if (!cast_on)
+			return 0;
+		endif
+	endif
+
+	if (cast_on = caster)
+		var tox := Cint(GetObjProperty (cast_on, "homex"));
+		var toy := Cint(GetObjProperty (cast_on, "homey"));
+		var toz := Cint(GetObjProperty (cast_on, "homez"));
+		if (!tox)
+			tox := 1328;
+			toy := 1624;
+			toz := 50;
+		endif
+		var sign := FindHouseSignAtLocation (tox, toy);
+		if (sign)
+			if (!IsAFriend (sign, caster))
+				SendSysMessage (caster, "You can't recall to there!");
+				return 0;
+			endif
+		endif
+
+		PlaySoundEffect (caster, SFX_210);
+		sleepms (250);
+		MoveCharacterToLocation( caster, tox, toy, toz );
+		PlaySoundEffect (caster, SFX_SPELL_RECALL);
+	else
+		if (!Accessible(caster, cast_on))
+			SendSysmessage (caster, "You can't reach that!");
+		endif
+		if (cast_on.objtype != UOBJ_RECALL_RUNE)
+			SendSysmessage(caster, "That is not a marked recall rune!");
+			return 0;
+		endif
+
+		var tox := Cint(GetObjProperty( cast_on, "x" ));
+		var toy := Cint(GetObjProperty( cast_on, "y" ));
+		var toz := Cint(GetObjProperty( cast_on, "z" ));
+
+		if ( coordist( tox , toy , caster.x , caster.y ) > 10 )
+			SendSysmessage(caster, "You are not close enough to this rune's destination!");
+			return;
+		endif
+
+		PlayObjectCenteredEffect(  caster, FX_MARK_EFFECT, 10, 10);
+		PlaySoundEffect ( caster, SFX_SPELL_MARK );
+		SendSysmessage (caster, "This is now your homepoint!");
+		SetObjProperty (caster, "homex",tox);
+		SetObjProperty (caster, "homey",toy);
+		SetObjProperty (caster, "homez",toz);
+	endif
+	
+	*/
+	return 1;
+	
+	
+endprogram

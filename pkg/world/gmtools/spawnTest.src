@@ -1,0 +1,176 @@
+use uo;
+use os;
+
+//include "include/starteqp";
+include "include/key";
+include ":loot:loot";
+
+var chestarray := array {};
+
+program spawntest(item)
+  var rng := GetObjProperty(item,"range");
+  var amt := GetObjProperty(item,"amount");
+  var frq := GetObjProperty(item,"duration");
+  foreach thing in ListItemsNearLocation(cint(item.x), cint(item.y), cint(item.z), CInt(rng), item.realm)
+    if(GetObjProperty(thing,"link") == item.serial)
+      DestroyItem(thing);
+    endif
+  endforeach
+  if((!amt) or (!frq))
+    print("Chest Spawner " + item.serial + " at: " + item.x + ", " + item.y + " is improperly configured");
+    return;
+  endif
+  var chest, current, thechest, newamt;
+
+  thechest := "not used right now";
+  chest := "not used right now";
+
+  CreateTreasureChests(item, amt);
+  while(item)
+    sleep(frq);
+    CleanArray();
+
+    SetObjProperty(item, "chestarray", chestarray);
+
+    current := len(chestarray);
+    newamt := CInt(amt - current);
+    if(newamt > 0)
+      CreateTreasureChests(item, newamt);
+    endif
+    sleep(frq);
+  endwhile
+endprogram
+
+function cleanarray()
+  var newarray := array {};
+  foreach chest in chestarray
+    if((chest.locked == 0) || (!chest))
+      DestroyItem(chest);
+    elseif(chest)
+      newarray.append(chest);
+    endif
+  endforeach
+  chestarray := newarray;
+endfunction
+
+function CreateTreasureChests(item, amt)
+  var lvl := GetObjProperty(item, "level");
+  var rng := GetObjProperty(item, "range");
+  var newx, newy, newz, checker, type, gfx, lootgroup, chest, lockid, strength, traptype;
+
+  traptype := "notused";
+  strength := "notused";
+  lockid := "notused";
+  lootgroup := "notused";
+  lvl := "notused";
+
+  if(rng > 10)
+    rng := 10;
+  endif
+  var total := 0;
+  while(total < amt)
+    chest := 0;
+    checker  := 0;
+    while((checker == 0) && (item))
+      checker := 0;
+      newx := cint(item.x + RandomInt(rng) - RandomInt(rng));
+      newy := cint(item.y + RandomInt(rng) - RandomInt(rng));
+      newz:= cint(GetWorldHeight(newx, newy, item.realm));
+      if(len(ListItemsNearLocation(newx, newy, newz, 0, item.realm)) == 0)
+	type := RandomDiceRoll("d10");
+        case(type)
+          1: gfx := 3650;
+          2: gfx := 3651;
+          3: gfx := 3703;
+          4: gfx := 3648;
+          5: gfx := 3708;
+	  6: gfx := 3647;
+	  7: gfx := 3644;
+	  9: gfx := 3712;
+	 10: gfx := 3709;
+        endcase
+	chest := MakeLockedChestSpawner (gfx, 0, newx, newy, newz, item);
+        if(chest)
+          checker := 1;
+        else
+          checker := 0;
+        endif
+      endif
+      sleepms(10);
+    endwhile
+
+    //SetObjProperty(chest,"link", item.serial);
+    //chest.locked :=  1;
+    //chest.movable := 0;
+    //chest.usescript := ":tinkering:tinkerTraps";
+    //lockid := AllocLockId();
+    //SetObjProperty(chest, "lockid", lockid);
+    //SetObjProperty(chest, "level", lvl);
+    //strength := 0;
+    //case(lvl)
+    // 1: lootgroup := "chestspawner_1";
+    //  2: lootgroup := "chestspawner_2";
+    //  3: lootgroup := "chestspawner_3";
+    //  4: lootgroup := "chestspawner_4";
+    //  5: lootgroup := "chestspawner_5";
+    //endcase
+    //traptype := RandomInt(10)+1;
+    //if(traptype > 3)
+    //  traptype := 3;
+    //else
+    //  traptype := 2;
+    //endif
+    //SetObjProperty(chest, "trap_type", (CStr(traptype)));
+    //SetObjProperty(chest, "LockPickDiff", (strength - RandomInt(20)));
+    //SetObjProperty(chest, "trap_strength", strength);
+    //MakeLootInChest (chest, lootgroup);
+    //makeloot(chest, lootgroup);
+    //CreateFromGroup(chest, lootgroup);
+    
+    chestarray.append(chest);
+    total := total + 1;
+    sleepms(10);
+  endwhile
+endfunction
+
+function MakeLockedChestSpawner (chesttype, chest_quality, x, y, z, item)
+
+	var base_quality := CINT(chest_quality/2) + RandomInt(CINT(chest_quality/2));
+	var random_quality := CINT (((RandomInt (10)+1) * (RandomInt (10)+1))/10) + 1;
+	if (random_quality > base_quality)
+		base_quality := random_quality;
+	endif
+
+	if (base_quality > 10)
+		base_quality := 10;
+	endif
+	
+	var chest := CreateItemAtLocation( x, y, z, chesttype, amount := 1, realm := _DEFAULT_REALM );
+
+	if (!chest)
+		return 0;
+	endif
+
+	SetObjProperty (chest, "mobchest_spawntime", ReadGameClock ());
+	SetObjProperty (chest, "lockpicking", base_quality);
+	SetObjProperty (chest, "questitem", 1);
+        SetObjProperty(chest,"link", item.serial);
+
+	chest.locked := 1;
+	chest.movable := 0;
+	chest.name := "a locked chest";
+
+	//make traps
+	if (RandomInt (3) == 1)
+		case (RandomInt (3))
+			0:
+				SetObjProperty (chest, "trap", "explosion");
+			1:
+				SetObjProperty (chest, "trap", "poison");
+			2:
+				SetObjProperty (chest, "trap", "djinni");
+		endcase
+	endif
+
+	return chest;
+endfunction

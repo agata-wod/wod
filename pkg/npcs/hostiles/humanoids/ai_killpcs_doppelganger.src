@@ -1,0 +1,251 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/mainloop_killpcs_normal";
+include "../pkg/npcs/main_ai/main/sleepmode_normal";
+include "../pkg/npcs/main_ai/combat/fightmode_normal_default";
+include "../pkg/npcs/main_ai/combat/closedistance_default";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/main_ai/combat/gethelp_default";
+
+const HALT_THRESHOLD := 8; // how close before he attacks?
+var spellcast := 0;
+drop_anchor();
+
+program KillPlayers()
+	if (!me.backpack)
+		DoOnCreationSetup ();
+	endif
+	DoStartupSetup ();
+
+	if (getobjproperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	me.hidden := 1;
+	SetWarMode( 0 );
+	main_AI_loop();
+endprogram
+
+function process_combat_event (ev)
+	if (spellcast)
+		spellattack (ev.source);
+	endif
+	if (ev.type == EVID_DAMAGED)
+		if ((2 * GetVital (me, "Life")) < GetVitalMaximumValue (me, "Life"))
+			CastSpell(me,me,"gheal");
+			if (me.poisoned)
+				CastSpell (me, me, "cure");
+				if (RandomInt (2))
+					sleep (1);
+					CastSpell (me, ev.source, "poison");
+				endif
+			endif
+		endif
+		if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/10))
+			EraseObjProperty(me,"#flees");
+			flee(ev.source);
+		endif
+	endif
+
+endfunction
+
+function in_combat_event_loop (opponent)
+	DoMorph ();
+
+	if (spellcast)
+		spellattack (opponent);
+	endif
+endfunction
+
+function spellattack (opponent)
+	if (!GetObjProperty(me,"#lastbreath"))
+		SetObjProperty(me,"#lastbreath",ReadGameClock() + 5);
+	endif
+
+	if (GetObjProperty(me,"#lastbreath") > ReadGameClock() )
+		return;
+	endif
+
+	if (RandomInt(2)==1)
+		if (CheckLoSAt (me, opponent.x, opponent.y, opponent.z) and GetVital (me, "Mana") > 4000)
+			var weapon := GetEquipmentByLayer (me, LAYER_HAND1);
+			if (weapon)
+			MoveItemToContainer (weapon, me.backpack);
+				PlaySoundEffect (me, 0x0057);
+			endif
+
+			var shield := GetEquipmentByLayer (me, LAYER_HAND2);
+			if (shield)
+				MoveItemToContainer (shield, me.backpack);
+			endif
+			sleep (2);
+			cast_offensive_spell(me,opponent);
+			sleep (1);
+			
+			if (weapon)
+				PlaySoundEffect (me, 0x0057);
+				EquipItem (me, weapon);
+			endif
+			if (shield)
+				EquipItem (me, shield);
+			endif
+		endif	
+	endif
+
+	SetObjProperty(me,"#lastbreath",ReadGameClock() + 5);
+endfunction
+
+function post_combat()
+	DisableCombatEvents ();
+	EnableMainEvents ();
+
+	SetWarMode (0);
+	SetOpponent (0);
+
+	if (spellcast and GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/2))
+		CastSpell (me, me, "gheal");
+	endif
+
+	me.graphic := me.objtype;
+	me.color := 0;
+
+	sleep(1);
+	look_around();
+endfunction
+
+function prepare_for_fight(opponent)
+	if (opponent)
+	endif
+	DoMorph ();
+endfunction
+
+
+
+
+///////////////////
+//  makes the doppelganger morph to some player online
+///////////////////
+
+function DoMorph ()
+	var nextmorph := GetObjProperty (me, "#nextmorph");
+	if (!nextmorph)
+		if (me.graphic != 0x33)
+			nextmorph := ReadGameClock() + 5;
+		else
+			nextmorph := ReadGameClock() - 5;
+		endif
+	endif
+	
+	if (nextmorph > ReadGameClock())
+		return;
+	endif
+	SetObjProperty (me, "#nextmorph", ReadGameClock() + RandomInt(20) + 15);
+
+	var online_players := EnumerateOnlineCharacters ();
+	var total_players := len (online_players);
+	if (!total_players)
+		return;
+	endif
+	
+	var random_player, chosen_player;
+	var done := 0;
+	var tries := 0;
+	repeat
+		tries := tries + 1;
+		done := 1;
+		random_player := RandomInt (total_players) + 1;
+		chosen_player := online_players [random_player];
+		if (chosen_player.dead or chosen_player.cmdlevel)
+			chosen_player := 0;
+			done := 0;
+		endif
+	until (done or tries > 10);
+	
+	if (!chosen_player)
+		return;
+	endif
+
+	DisableMainEvents ();
+	me.concealed := 1;
+	set_critical (1);
+
+	foreach item in ListEquippedItems (me)
+		if (item != me.backpack)
+			DestroyItem (item);
+		endif
+	endforeach
+
+	me.SetCriminal (0);
+	me.graphic := chosen_player.graphic;
+	me.color:= chosen_player.color;
+	me.name := chosen_player.name;
+
+	foreach item in ListEquippedItems (chosen_player)
+		var newitem := CreateItemInContainer (me.backpack, item.objtype, 1);
+		if (newitem)
+			newitem.color := item.color;
+			newitem.graphic := item.graphic;
+			if (item.ar_mod)
+				newitem.ar_mod := item.ar_mod;
+			endif
+			if (item.name)
+				newitem.name := item.name;
+			endif
+			if (newitem.objtype == UOBJ_MOUNT)
+				SetObjProperty (newitem, "npctemplate", me.npctemplate);
+				SetObjProperty (newitem, "petname", GetObjProperty (item, "petname"));
+				SetObjProperty (newitem, "pethp", 50);
+				SetObjProperty (newitem, "petgraphic", GetObjProperty (item, "petgraphic"));
+				SetObjProperty (newitem, "notame", 1);
+			else
+				newitem.newbie := 1;
+			endif
+			if (!EquipItem (me, newitem))
+				DestroyItem (newitem);
+			endif
+		endif
+	endforeach
+
+	var myweapon := GetEquipmentByLayer (me,  LAYER_HAND1);
+	if (myweapon)
+		myweapon.dmg_mod := 10;
+		if ( myweapon.objtype == UOBJ_BOW )
+			var ammo := CreateItemInInventory (me.backpack, UOBJ_ARROW, 25);
+			ammo.newbie := 1;
+		elseif ( myweapon.objtype == UOBJ_CROSSBOW )
+			var ammo := CreateItemInInventory (me.backpack, UOBJ_BOLT, 25);
+			ammo.newbie := 1;
+		elseif ( myweapon.objtype == UOBJ_HEAVY_CROSSBOW )
+			var ammo := CreateItemInInventory (me.backpack, UOBJ_BOLT, 25);
+			ammo.newbie := 1;
+		elseif ( myweapon.objtype == UOBJ_FIRE_BOW )
+			var ammo := CreateItemInInventory (me.backpack, UOBJ_FIRE_ARROW, 25);
+			ammo.newbie := 1;
+		endif
+	endif
+
+	if (chosen_player.title_prefix)
+		me.title_prefix := chosen_player.title_prefix;
+	endif
+	if (chosen_player.title_suffix)
+		me.title_suffix := chosen_player.title_suffix;
+	endif
+
+	foreach attributeid in ListSkillAttributes ()
+		var skill := GetAttribute (chosen_player, attributeid) + 20;
+		SetAttributeBaseValue (me, attributeid, skill*10);
+	endforeach
+
+	if (GetAttribute (me, ATTRIBUTEID_MAGERY) > 100 and GetVital (me, "Mana") > 4000)
+		spellcast := 1;
+	endif
+
+	set_critical (0);
+	me.concealed := 0;
+	EnableCombatEvents ();
+endfunction

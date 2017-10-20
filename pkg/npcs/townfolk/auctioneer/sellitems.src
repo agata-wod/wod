@@ -1,0 +1,272 @@
+include "../pkg/npcs/townfolk/auctioneer/auctioneer";
+
+var gump_layout := array{};
+var gump_data := array{};
+var string_counter := 1;
+
+var itembox;
+
+program put_item_up_for_sale (parms)
+	var auctioneer := parms[1];
+	var player := parms[2];
+	var item := parms[3];
+	if (!auctioneer or !player or !item)
+		return;
+	endif
+	
+	if (!MoveItemToContainer (item, auctioneer.backpack) )
+		PrintTextAbovePrivate (auctioneer, "Whoops!", player);
+		MoveItemToContainer (item, player.backpack);
+		return;
+	endif
+	
+	if (!ReserveItem (item))
+		PrintTextAbovePrivate (auctioneer, "Whoops!", player);
+		MoveItemToContainer (item, player.backpack);
+		return;
+	endif
+	
+	if (IsStackableItem (item))
+		PrintTextAbovePrivate (auctioneer, "I'm afraid I can't handle stacks of items.  Sorry.", player);
+		MoveItemToContainer (item, player.backpack);
+		return;
+	endif
+	
+	if (GetObjProperty (item, "ownerserial"))
+		PrintTextAbovePrivate (auctioneer, "That has an owner's mark so I can't sell it.", player);
+		MoveItemToContainer (item, player.backpack);
+		return;
+	endif
+
+	if (GetObjProperty (player, "#auctioneerwindow"))
+		if (GetProcess (GetObjProperty (player, "#auctioneerwindow")))
+			return;
+			MoveItemToContainer (item, player.backpack);
+			return;
+		endif
+	endif
+	SetObjProperty (player, "#auctioneerwindow", GetPid());
+
+	PrintTextAbovePrivate (auctioneer, "What category should I put this in?", player);
+	var category := SelectCategory (player, "Select listing category");
+	if (!category)
+		PrintTextAbovePrivate (auctioneer, "Maybe next time, then.", player);
+		MoveItemToContainer (item, player.backpack);
+		EraseObjProperty (player, "#auctioneerwindow");
+		return;
+	endif
+
+	itembox := find_or_create_item (storage, category, UOBJ_BANKBOX);
+	if (!itembox)
+		PrintTextAbovePrivate (auctioneer, "Whoops!", player);
+		MoveItemToContainer (item, player.backpack);
+		EraseObjProperty (player, "#auctioneerwindow");
+		return;
+	endif
+
+	var allitems := ListRootItemsInContainer (itembox);
+
+	var other_items := 0;	
+	foreach item in allitems
+		var selleracctname := GetObjProperty (item, "selleracctname");
+		if (selleracctname and selleracctname == player.acctname)
+			other_items := other_items + 1;
+		endif
+	endforeach
+	if (other_items >= MAX_AUCTIONS_PER_CATEGORY)
+		PrintTextAbovePrivate (auctioneer, "You already have as many auctions in that category as you're allowed!", player);
+		MoveItemToContainer (item, player.backpack);
+		EraseObjProperty (player, "#auctioneerwindow");
+		return;
+	endif
+	
+	if (len (allitems) > 120)
+		PrintTextAbovePrivate (auctioneer, "I'm afraid I can't sell anything else in that category.", player);
+		sleep (1);
+		PrintTextAbovePrivate (auctioneer, "Please try again later.  Sorry.", player);
+		MoveItemToContainer (item, player.backpack);
+		EraseObjProperty (player, "#auctioneerwindow");
+		return;
+	endif
+
+	case (item.objtype)
+		UOBJ_BACKPACK:
+		UOBJ_BAG:
+		UOBJ_POUCH:
+		UOBJ_WOODEN_BOX_1:
+		UOBJ_WOODEN_BOX_2:
+		UOBJ_BASKET:
+		UOBJ_PICNIC_BASKET:
+			var tname := SendTextEntryGump (player, "How shall I advertise this item?" ,
+					TE_CANCEL_ENABLE, TE_STYLE_NORMAL);
+			if (tname)
+				item.name := tname;
+			endif
+	endcase
+
+	gump_layout := array {
+		"nodispose",
+		"page 0",
+		"resizepic 20 20 2600 500 380",
+		"resizepic 60 60 5120 60 60",
+		"tilepic 70 70 " + item.graphic,
+
+		"text 140 70 1327 0",			//"Item:"
+		"text 200 70 0 1",				//First line of item name
+		"text 220 85 0 2",				//Second line of item name
+
+		"text 140 110 1327 3",			//"Seller:"
+		"text 200 110 0 4",				//Seller name
+
+		"text 100 140 1327 5",			//"Enter the starting price"
+		"resizepic 270 140 3000 80 20",
+		"textentry 280 140 80 20 0 11 11",
+
+		"text 100 170 1327 6",			//"Number of Days (1-7):"
+		"resizepic 270 170 3000 80 20",
+		"textentry 280 170 80 20 0 12 12",
+
+		"text 100 220 1327 7",			//"Enter a description:"
+		"resizepic 110 240 3000 320 20",
+		"textentry 115 240 320 20 0 13 13",
+		"resizepic 110 260 3000 320 20",
+		"textentry 115 260 320 20 0 14 14",
+		"resizepic 110 280 3000 320 20",
+		"textentry 115 280 320 20 0 15 15",
+		"resizepic 110 300 3000 320 20",
+		"textentry 115 300 320 20 0 16 16",
+
+		"button 200 350 243 241 1 0 0",
+		"button 300 350 249 247 1 0 1"
+	};
+	
+	gump_data := array {
+		"Item:",						//0
+		item.desc,
+		"",
+		"Seller:",
+		player.name,
+
+		"Enter the starting price:",		//5
+		"Number of Days (1-7):",
+		"Enter a description:",
+		"",
+		"",
+		
+		"",							//10
+		"1",
+		"3",
+		"",
+		"",
+		"",
+		""
+	};
+
+	//Split the name into 2 parts if its too long for one line
+	var itemname := item.desc;
+	if (len (itemname) > 40)
+		var splitted := SplitWords (itemname);
+		var itemname1 := "";
+		var itemname2 := "";
+		var done := 0;
+		foreach word in splitted
+			if (!done)
+				if (len (itemname1) + len (word) < 40)
+					if (len (itemname1))
+						itemname1 := itemname1 + " " + word;
+					else
+						itemname1 := word;
+					endif
+				else
+					itemname2 := word;
+					done := 1;
+				endif
+			else
+				itemname2 := itemname2 + " " + word;
+			endif
+		endforeach
+		gump_data[2] := itemname1;
+		gump_data[3] := itemname2;
+	endif
+
+	var gump_return := SendDialogGump (player, gump_layout, gump_data);
+	if (!gump_return[1])
+		PrintTextAbovePrivate (auctioneer, "Maybe next time, then.", player);
+		MoveItemToContainer (item, player.backpack);
+		EraseObjProperty (player, "#auctioneerwindow");
+		return;
+	endif
+
+	var bidprice := CINT (DecodeGumpReturn (gump_return, 11));
+	if (!bidprice or bidprice < 1)
+		PrintTextAbovePrivate (auctioneer, "Maybe next time, then.", player);
+		SendSysMessage (player, "You must supply a starting bid price");
+		MoveItemToContainer (item, player.backpack);
+		EraseObjProperty (player, "#auctioneerwindow");
+		return;
+	endif
+
+	var minownedprice := CalculateCommision (bidprice);
+	if (minownedprice > 100)
+		minownedprice := 100;
+	endif
+	
+	if (DetermineGoldAvailable (player.acctname) < minownedprice)
+		PrintTextAbovePrivate (auctioneer, "You don't have enough in your account to cover that.", player);
+		SendSysMessage (player, "You need 10% of the starting bid in your account to sell an item");
+		MoveItemToContainer (item, player.backpack);
+		EraseObjProperty (player, "#auctioneerwindow");
+		return;
+	endif
+
+	var auctiontime := CINT (DecodeGumpReturn (gump_return, 12));
+	if (!auctiontime or auctiontime < 1)
+		PrintTextAbovePrivate (auctioneer, "Maybe next time, then.", player);
+		SendSysMessage (player, "Auctions must last at least 1 day");
+		MoveItemToContainer (item, player.backpack);
+		EraseObjProperty (player, "#auctioneerwindow");
+		return;
+	elseif (auctiontime > 7)
+		PrintTextAbovePrivate (auctioneer, "I'll just make that 7 days then,", player);
+		auctiontime := 7;
+	endif
+
+	var description := array{CSTR (DecodeGumpReturn (gump_return, 13)), CSTR (DecodeGumpReturn (gump_return, 14)), CSTR (DecodeGumpReturn (gump_return, 15)), CSTR (DecodeGumpReturn (gump_return, 16))};
+
+	if (!MoveItemToContainer (item, itembox))
+		PrintTextAbovePrivate (auctioneer, "I'm afraid I can't sell anything else in that category.", player);
+		sleep (1);
+		PrintTextAbovePrivate (auctioneer, "Please try again later.  Sorry.", player);
+		MoveItemToContainer (item, player.backpack);
+		EraseObjProperty (player, "#auctioneerwindow");
+		return;
+	endif
+	
+	var auction_end_time := ReadGameClock() + auctiontime*24*3600;
+	SetObjProperty (item, "endtime", auction_end_time);
+	SetObjProperty (item, "minbid", bidprice);
+	SetObjProperty (item, "sellerserial", player.serial);
+	SetObjProperty (item, "sellername", player.name);
+	SetObjProperty (item, "selleracctname", player.acctname);
+	SetObjProperty (item, "auctiondescription", description);
+
+	PrintTextAbovePrivate (auctioneer, "OK, I'll let you know how it goes!", player);
+	EraseObjProperty (player, "#auctioneerwindow");
+	return;
+endprogram
+
+
+
+function DecodeGumpReturn (byref gump_return, keyid)
+	var msg := CSTR (gump_return[keyid]);
+	if (msg == error)
+		return "";
+	endif
+	msg := msg[(find(msg, " ", 1)+1), len(msg)];
+	if (msg == error)
+		return "";
+	endif
+	return msg;
+endfunction
+
+

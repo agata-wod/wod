@@ -1,0 +1,1 @@
+.heal 1 will cause you to drink a greater heal potion. .heal 2 will cause you to cast the Greater Heal spell on youself.  .heal 3 will apply a bandage.  All the normal restrictions apply!

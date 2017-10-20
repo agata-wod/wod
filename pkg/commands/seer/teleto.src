@@ -1,0 +1,62 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+program teleto (character, text)
+	var targetted := target (character, TGTOPT_NOCHECK_LOS);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	
+	if (text)
+		DoGolocTeleport (character, targetted, text);
+		return;
+	endif
+
+	SendSysmessage (character, "Move where?");
+	var where := TargetCoordinates (character);
+	if (!where)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	MoveObjectToLocation( targetted, where.x, where.y, where.z, where.realm, MOVEOBJECT_FORCELOCATION );
+
+endprogram
+
+function DoGolocTeleport (character, targetted, text)
+	var cfgfile := readconfigfile ("golocs");
+	if (!cfgfile)
+		SendSysMessage (character, "Error reading goloc file");
+		return;
+	endif
+	text := Lower (text);
+	var tname := lower (character.acctname) + " " + text;
+	var elem := cfgfile[tname];
+	if (!elem)
+		tname := "all" + " " + text;
+		elem := cfgfile[tname];
+	endif
+
+	if (!elem)
+		SendSysmessage (character, "Unknown Location");
+		return;
+	endif
+	var tor := elem.realm;
+	if (!tor)
+		tor := _DEFAULT_REALM;
+	endif
+
+	MoveObjectToLocation( targetted, elem.x, elem.y, elem.z, tor, MOVEOBJECT_FORCELOCATION );
+endfunction
+
+
+
+
+
+
+
+
+

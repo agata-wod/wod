@@ -1,0 +1,61 @@
+use os;
+use uo;
+include "include/string";
+include "include/utility";
+
+program textcmd_rename (character, newname)
+	var targetted := TargetCoordinates (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (targetted.item)
+		targetted := targetted.item;
+	elseif (targetted.mobile)
+		targetted := targetted.mobile;
+	else
+		SendSysMessage (character, "You cannot rename that!");
+		return;
+	endif
+	
+	var splitted := SplitWords (newname);
+	if (splitted[1] == "recurse")
+		SendSysMessage (character, "Renaming all the items in a bag:");
+		newname := newname - "recurse ";
+		if (!targetted.isa (POLCLASS_CONTAINER))
+			SendSysmessage (character, "That's not a container!");
+			return;
+		endif
+		var total := 0;
+		foreach item in ListRootItemsInContainer (targetted)
+			item.name := newname;
+			total := total + 1;
+		endforeach
+		SendSysMessage (character, total + " items renamed.");
+		return;
+	endif
+	
+	if (newname == "noname")
+		targetted.name := "I have no name";
+		return;
+	endif
+
+	targetted.name := newname;
+
+/*
+	if ( (thetarg.strength) and (!newname) )
+		return;
+	endif
+
+	if (newname["bag"])
+		foreach item in ListRootItemsInContainer (thetarg)
+			item.name := newname - "bag";
+		endforeach
+	endif
+
+	if (thetarg)
+        	setname(thetarg, newname);
+    	endif
+*/
+endprogram

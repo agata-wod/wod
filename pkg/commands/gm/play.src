@@ -1,0 +1,15 @@
+use uo;
+
+include "include/client";
+
+program play ( me, noise )
+
+	if (CInt(noise))
+            noise := CInt(noise);
+        endif
+
+        // print( "objtype=" + Hex(objtype) + ", amount=" + amount );
+
+	PlaySoundEffect(me, noise);
+
+endprogram

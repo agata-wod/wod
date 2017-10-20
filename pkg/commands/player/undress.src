@@ -1,0 +1,139 @@
+use uo;
+use os;
+
+include "include/client";
+
+program Undress (character, textline)
+	if (lower (textline) == "help")
+		SendSysMessage (character, "UNDRESS:  Removes all items that are equipped");
+		SendSysMessage (character, "Options are:");
+		SendSysMessage (character, "jewelry - Only unequips jewelry items (rings, necklaces, etc)");
+		SendSysMessage (character, "nojewelry - Unequips everything except jewelry items");
+		return;
+	endif
+
+	set_critical(1);
+	if (character.dead)
+		SendSysMessage (character, "But you're dead!");
+		return;
+	endif
+
+	foreach thing in listequippeditems (character)
+		case (lower(textline))
+			"jewelry":
+				if (RemoveJewl (character, thing))
+					moveitemtocontainer (thing, character.backpack);
+				endif
+			"nojewelry":
+				var jewl := 0;
+				if (RemoveIt (character, thing, jewl))
+					moveitemtocontainer (thing, character.backpack);
+				endif
+
+			default:
+				var jewl := 1;
+				if (RemoveIt (character, thing,jewl))
+					moveitemtocontainer (thing, character.backpack);
+				endif
+		endcase
+	endforeach
+
+endprogram
+
+function RemoveIt(me, it, jewl)
+	var ring := GetEquipmentByLayer( me, LAYER_RING );
+	if (it.serial == ring.serial)
+		return jewl;
+	endif
+
+	var bracelet := GetEquipmentByLayer( me, LAYER_WRIST );
+	if (it.serial == bracelet.serial)
+		return jewl;
+	endif
+
+	var earrings := GetEquipmentByLayer( me, LAYER_EARS );
+	if (it.serial == earrings.serial)
+		return jewl;
+	endif
+
+	var neck := GetEquipmentByLayer( me, LAYER_NECK );
+	if (it.serial == neck.serial)
+		if (IsNecklace(it))
+			return jewl;
+		endif
+	endif
+
+	var beard := GetEquipmentByLayer( me, LAYER_BEARD );
+	if (it.serial == beard.serial)
+		return 0;
+	endif
+
+	var hair := GetEquipmentByLayer( me, LAYER_HAIR );
+	if (it.serial == hair.serial)
+		return 0;
+	endif
+
+	var mount :=  GetEquipmentByLayer( me, LAYER_MOUNT );
+	if (it.serial == mount.serial)
+		return 0;
+	endif
+
+	if (it.objtype == 0x204E)
+		return;
+	endif
+
+	var mypack := me.backpack;
+	if (it.serial == mypack.serial)
+		return 0;
+	endif
+
+	return 1;
+endfunction
+
+function RemoveJewl(me, it)
+	if (it.objtype == 0x204E)
+		return;
+	endif
+
+	var ring := GetEquipmentByLayer( me, LAYER_RING );
+	if (it.serial == ring.serial)
+		return 1;
+	endif
+
+	var bracelet := GetEquipmentByLayer( me, LAYER_WRIST );
+	if (it.serial == bracelet.serial)
+		return 1;
+	endif
+
+	var earrings := GetEquipmentByLayer( me, LAYER_EARS );
+	if (it.serial == earrings.serial)
+		return 1;
+	endif
+
+	var neck := GetEquipmentByLayer( me, LAYER_NECK );
+	if (it.serial == neck.serial)
+		if (IsNecklace(it))
+			return 1;
+		endif
+	endif
+endfunction
+
+function IsNecklace(item)
+	case (item.graphic)
+		0x1085:
+			return 1;
+		0x1088:
+			return 1;
+		0x1089:
+			return 1;
+		0x1F05:
+			return 1;
+		0x1F08:
+			return 1;
+		0x1F0A:
+			return 1;
+		default:
+			return 0;
+	endcase
+	return;
+endfunction

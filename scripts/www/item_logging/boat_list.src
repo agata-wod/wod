@@ -1,0 +1,65 @@
+use uo;
+use os;
+use http;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/string";
+include "include/www";
+
+program boat_checker ()
+	WriteHTML ("<html><head><title>Boat list</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+
+	var boat_prop := GetGlobalProperty ("#boat_registry");
+	if (!boat_prop)
+		WriteHTML ("<p>Unable to find any boats");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	
+	
+
+	WriteHTML ("<table border=1>");
+
+	var boat, boatdesc, boatowner, lastused;
+	var boatsfound := 0;
+	foreach boatserial in (boat_prop.keys())
+		boat := SystemFindObjectBySerial (boatserial);
+		if (boat)
+			if (boat.tillerman)
+				boatdesc := boat.tillerman.desc;
+			else
+				boatdesc := "No tillerman";
+			endif
+			
+			if (boat.hold)
+				lastused := GetObjProperty (boat.hold, "lastused");
+				lastused := ReadGameClock() - lastused;
+				lastused := CINT (lastused/86400);
+				lastused := lastused + " days ago";
+			else
+				lastused := "unknown";
+			endif
+			
+			boatowner := GetObjProperty (boat.hold, "owner");
+			if (boatowner)
+				boatowner := SystemFindObjectBySerial (boatowner, SYSFIND_SEARCH_OFFLINE_MOBILES);
+				if (boatowner)
+					boatowner := boatowner.name;
+				else
+					boatowner := "does not exist";
+				endif
+			else
+				boatowner := "unknown";
+			endif
+			
+			WriteHTML ("<tr><td>" + boatdesc + "</td><td>" + boatowner + "</td><td>" + lastused + "</td><td>" + boat.x + "</td><td>" + boat.y + "</td></tr>");
+			boatsfound := boatsfound + 1;
+		endif
+	endforeach
+	WriteHTML ("</table>");
+	WriteHTML ("<p>" + boatsfound + " boats found");
+
+endprogram

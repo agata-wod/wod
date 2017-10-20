@@ -1,0 +1,209 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/math";
+include "include/gumps";
+include "../pkg/npcs/townfolk/auctioneer/auctioneer";
+
+var gump_layout := array{};
+var gump_data := array{};
+var string_counter := 1;
+
+var itembox, current_item_num, current_item;
+var players_gold_held;
+var players_gold_available;
+
+program display_forsale_items (parms)
+	var auctioneer := parms[1];
+	var player := parms[2];
+	if (!auctioneer or !player)
+		return;
+	endif
+	
+	if (GetObjProperty (player, "#auctioneerwindow"))
+		if (GetProcess (GetObjProperty (player, "#auctioneerwindow")))
+			return;
+		endif
+	endif
+	SetObjProperty (player, "#auctioneerwindow", GetPid());
+	
+	var menu_options := array{
+		"Check auctions you're winning",
+		"Check auctions you've bid on",
+		"Check items you're selling",
+		"View completed transactions"
+	};
+	
+	var opt_select := DisplayMenuSelectionGump (player, "Select what status you wish to see:", menu_options);
+	if (!opt_select)
+		return 0;
+	endif
+	
+	case (opt_select)
+		1:
+			DisplayWinningItems (auctioneer, player);
+		2:
+			DisplayBidOnItems (auctioneer, player);
+		3:
+			DisplayItemsImSelling (auctioneer, player);
+		4:
+			DisplayTransactionLog (auctioneer, player);
+		default:
+			SendSysMessage (player, "This isn't supposed to happen.");
+	endcase
+	EraseObjProperty (player, "#auctioneerwindow");
+endprogram
+
+
+
+
+///////////////////
+//  Shows all the items that I've bid on
+///////////////////
+
+function DisplayWinningItems (auctioneer, player)
+	var items := array{};
+	foreach category in ListCategoryNames ()
+		itembox := find_or_create_item (storage, category, UOBJ_BANKBOX);
+		if (!itembox)
+			SendSysMessage (player, "Ack!  Bad!");
+			return;
+		endif
+		
+		foreach item in EnumerateItemsInContainer (itembox)
+			if (item.container == itembox)
+				if (GetObjProperty (item, "current_high_bidder") == player.acctname)
+					items.append (item);
+				endif
+			endif
+		endforeach
+	endforeach
+
+	if (!items.size())
+		PrintTextAbovePrivate (auctioneer, "You have no winning auctions right now.", player);
+		EraseObjProperty (player, "#auctioneerwindow");
+		return;
+	endif
+
+	current_item_num := GetObjProperty (player, "#auction_item_num");
+	if (!current_item_num or current_item_num > len (items))
+		current_item_num := 1;
+	endif
+	DisplayAuctionItems (player, auctioneer, items, current_item_num);
+	EraseObjProperty (player, "#auctioneerwindow");
+endfunction
+
+
+
+
+///////////////////
+//  Shows all the items that I've bid on
+///////////////////
+
+function DisplayBidOnItems (auctioneer, player)
+	var items := array{};
+	var bidder_list;
+	foreach category in ListCategoryNames ()
+		itembox := find_or_create_item (storage, category, UOBJ_BANKBOX);
+		if (!itembox)
+			SendSysMessage (player, "Ack!  Bad!");
+			return;
+		endif
+		
+		foreach item in EnumerateItemsInContainer (itembox)
+			if (item.container == itembox)
+				bidder_list := GetObjProperty (item, "bidder_list");
+				if (bidder_list)
+					if (player.acctname in bidder_list)
+						items.append (item);
+					endif
+				endif
+			endif
+		endforeach
+	endforeach
+
+	if (!items.size())
+		PrintTextAbovePrivate (auctioneer, "There are no items that you have bid on.", player);
+		EraseObjProperty (player, "#auctioneerwindow");
+		return;
+	endif
+
+	current_item_num := GetObjProperty (player, "#auction_item_num");
+	if (!current_item_num or current_item_num > len (items))
+		current_item_num := 1;
+	endif
+
+	DisplayAuctionItems (player, auctioneer, items, current_item_num);
+	EraseObjProperty (player, "#auctioneerwindow");
+endfunction
+
+
+
+
+///////////////////
+//  Shows all the items that I'm selling
+///////////////////
+
+function DisplayItemsImSelling (auctioneer, player)
+	var items := array{};
+	foreach category in ListCategoryNames ()
+		itembox := find_or_create_item (storage, category, UOBJ_BANKBOX);
+		if (!itembox)
+			SendSysMessage (player, "Ack!  Bad!");
+			return;
+		endif
+		
+		foreach item in EnumerateItemsInContainer (itembox)
+			if (item.container == itembox)
+				if (GetObjProperty (item, "selleracctname") == player.acctname)
+					items.append (item);
+				endif
+			endif
+		endforeach
+	endforeach
+	
+	if (!items.size())
+		PrintTextAbovePrivate (auctioneer, "You have no items for sale right now.", player);
+		EraseObjProperty (player, "#auctioneerwindow");
+		return;
+	endif
+
+	current_item_num := GetObjProperty (player, "#auction_item_num");
+	if (!current_item_num or current_item_num > len (items))
+		current_item_num := 1;
+	endif
+	DisplayAuctionItems (player, auctioneer, items, current_item_num);
+	EraseObjProperty (player, "#auctioneerwindow");
+endfunction
+
+
+
+
+///////////////////
+//  Shows the history of completed transactions
+///////////////////
+
+function DisplayTransactionLog (auctioneer, player)
+	var messages := GetTransactionMessages (player.acctname);
+	if (!messages or !len (messages))
+		PrintTextAbovePrivate (auctioneer, "You have no waiting messages.", player);
+		return;
+	endif
+	
+	var themessage := "";
+	foreach message in messages
+		themessage := themessage + "<p><p>" + message;
+	endforeach
+	SendStringAsHtmlWindow (player, themessage, "Auction Messages:");
+	EraseTransactionMessages (player.acctname);
+endfunction
+
+
+
+
+
+

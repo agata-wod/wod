@@ -1,0 +1,11 @@
+housefriends - property on house signs that define the friends of the house.  This
+property is a dictionary.  They keys are either the accountname of the friend of the
+house (if they whole house has been defined as a friend) or the serial number of the
+friend (if its only the single character that has been set as a friend.)
+
+The value of the entries are an array, which contains:
+[1] - friendtype.  Possible values are:
+	'account' - grants full friend privledges
+	'character' - grants full friend privledges
+	'merchant' - only allowed to place merchant in house (no lock/unlock)
+[2] - the name of the player that was set as a friend

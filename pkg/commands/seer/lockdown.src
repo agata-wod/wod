@@ -1,0 +1,19 @@
+use uo;
+
+program  z(who)
+	
+	var what := target(who,TGTOPT_NOCHECK_LOS);
+
+	if (!what)
+        	return;
+	endif
+
+	if (what.movable)
+		what.movable := 0;
+		SendSysMessage(who,"Locked down!");
+	else
+		what.movable := 1;
+		SendSysMessage(who,"Released!");
+	endif
+
+endprogram

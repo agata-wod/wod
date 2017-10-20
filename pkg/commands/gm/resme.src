@@ -1,0 +1,24 @@
+use os;
+use uo;
+use boat;
+
+
+program textcmd_resme( who )
+    if (who.dead)
+        Resurrect( who );
+
+	if (!GetObjProperty(who,"toadmode"))
+		who.graphic := who.trueobjtype;
+		who.color := who.truecolor;
+	else
+		who.graphic := 0x51;
+		who.color := 1425;
+	endif
+
+
+
+    else
+        SendSysMessage( who, "But I'm not dead yet!" );
+    endif
+endprogram
+

@@ -1,0 +1,96 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/mainloop_killpcs_normal";
+include "../pkg/npcs/main_ai/main/sleepmode_normal";
+include "../pkg/npcs/main_ai/combat/fightmode_normal_default";
+include "../pkg/npcs/main_ai/combat/closedistance_default";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/hostiles/vampires/vampires";
+include "include/magic";
+
+const HALT_THRESHOLD := 8; // how close before he attacks?
+drop_anchor();
+
+program KillPlayers()
+	if (!me.backpack)
+		DoOnCreationSetup ();
+	endif
+	DoStartupSetup ();
+	VampireSetup ();
+
+	if (getobjproperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	post_combat ();
+	main_AI_loop ();
+endprogram
+
+
+
+
+///////////////////
+//  steals some of the opponents HP and adds it to the vampire's own
+///////////////////
+
+function SuckBlood (byref opponent)
+	if (opponent)
+	endif
+
+	if (GetObjProperty (me, "#nextbreath") and GetObjProperty (me, "#nextbreath") > ReadGameClock())
+		return 0;
+	endif
+	SetObjProperty (me, "#nextbreath", ReadGameClock() + RandomInt(10) + 10);
+	PerformAction (me, 0xc3);
+	PlaySoundEffect (me, 0xfc);
+
+	foreach mobile in ListMobilesNearLocationEx (me.x, me.y, me.z, 4, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, me.realm)
+		if (!IsAnUndeadCreature (mobile.npctemplate) or !mobile.npctemplate)
+			var damage_done := RandomInt (vampire_drain) + vampire_drain;
+			var total_hp := GetVital (me, "Life") + damage_done * 100;
+			if (total_hp > GetVitalMaximumValue (me, "Life"))
+				total_hp := GetVitalMaximumValue (me, "Life");
+			endif
+	
+			SetVital (me, "life", total_hp);
+			DoDamageByType (me, mobile, damage_done, DAMAGETYPE_MAGIC);
+
+			PrintTextAbovePrivate (me, me.name + " drains your health!", mobile);
+			PlayObjectCenteredEffect (mobile, FX_GLOW_SPIKE, 0x0a, 0x1e);
+		endif
+	endforeach
+
+	return 1;
+
+endfunction
+
+
+function process_combat_event (byref ev)
+	SuckBlood (ev.source);
+endfunction
+
+
+function in_combat_event_loop (byref opponent)
+	SuckBlood (opponent);
+endfunction
+
+function post_combat()
+	DisableCombatEvents();
+	EnableMainEvents();
+
+	SetWarMode( 0 );
+	sleep(1);
+	look_around();
+endfunction
+
+function prepare_for_fight (byref opponent)
+	if (opponent)
+	endif
+	DisableMainEvents();
+	EnableCombatEvents();
+endfunction

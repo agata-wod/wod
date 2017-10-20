@@ -1,0 +1,40 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 3;
+
+program cast_fireball( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	var spell_damage := Resisted (caster, cast_on, CalcSpellDamageByCircle (spell_circle));
+	if (caster.acctname)
+		if (cast_on.npctemplate)
+			if (!GetObjProperty (cast_on, "master"))
+				spell_damage := CINT (spell_damage * 1.5 + 1);
+			endif
+		endif
+	endif
+
+	cast_on := CheckMagicReflection (caster, cast_on);
+	if (!cast_on)
+		return 1;
+	endif
+
+	PlayMovingEffect (caster, cast_on, FX_FIREBALL, 5, 1);
+	PlaySoundEffect (caster, SFX_SPELL_FIREBALL);
+	DoDamageByType (caster, cast_on, spell_damage, DAMAGETYPE_FIRE);
+	return 1;
+endprogram
+

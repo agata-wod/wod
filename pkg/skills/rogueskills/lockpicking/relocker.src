@@ -1,0 +1,112 @@
+///////////////////
+//  This script runs contantly in the background and occasionally relocks all the chests in
+//  the world that have been lockpicked.
+///////////////////
+
+use uo;
+use os;
+use util;
+
+program LockThemChests ()
+	var sleeptime;
+	while(1)
+		set_critical(1);
+		if (GetGlobalProperty ("unlockedchests"))
+			var chests := GetGlobalProperty ("unlockedchests");
+			var newchests := RelockEm (chests);
+			SetGlobalProperty ("unlockedchests", newchests);
+		endif
+		set_critical(0);
+
+		sleeptime := (RandomInt(30)+30)*60;
+		sleep (sleeptime);
+	endwhile
+endprogram
+
+
+
+
+///////////////////
+//  Does the actual work of relocking all the chests
+///////////////////
+
+function RelockEm (byref chests)
+	var chest;
+	var newchests := array {};
+	
+	foreach num in chests
+		chest := SystemFindObjectBySerial (CINT(num));
+		if (chest)
+			if (!playersaround (chest))
+				//this script also takes care of chests created by treasure maps by deleting them
+				if (GetObjProperty (chest, "deleteme"))
+					if (!len (EnumerateItemsInContainer (chest)))
+						DestroyItem (chest);
+					else
+						var waitcounter := GetObjProperty (chest, "waitcounter");
+						if (!waitcounter)
+							waitcounter := 0;
+						endif
+						if (waitcounter > 10)
+							DestroyItem (chest);
+						else
+							SetObjProperty (chest, "waitcounter", (waitcounter + 1));
+							newchests.append (chest.serial);
+						endif
+					endif
+				else
+					chest.locked := 1;
+					chest.name := "a locked chest";
+					if (chest.invisible)
+						//see if it is time to unhide
+						var unhidetime := GetObjProperty (chest, "unhidetime");
+						if (!unhidetime)
+							unhidetime := 0;
+						endif
+						if (unhidetime < ReadGameClock())
+							chest.invisible := 0;
+						endif
+					else
+						if (RandomInt (3) == 1)
+							case (RandomInt (3))
+								0:
+									SetObjProperty (chest, "trap", "explosion");
+								1:
+									SetObjProperty (chest, "trap", "poison");
+								2:
+									SetObjProperty (chest, "trap", "djinni");
+							endcase
+						endif					
+						if (RandomInt (2))
+							//hide it
+							chest.invisible := 1;
+							var hidetime := 86400 * (RandomInt (3) + 1);
+							SetObjProperty (chest, "unhidetime", hidetime);
+							newchests.append (chest.serial);
+						endif
+					endif
+				endif
+			else
+				newchests.append (chest.serial);
+			endif
+		endif
+	endforeach
+
+	return newchests;
+endfunction
+
+
+
+
+///////////////////
+//  Looks around the area for players
+///////////////////
+
+function playersaround (chest)
+	foreach mob in ListMobilesNearLocationEx (chest.x, chest.y, chest.z, 9, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, chest.realm)
+		if (!mob.npctemplate)
+			return 1;
+		endif
+	endforeach
+	return 0;
+endfunction

@@ -1,0 +1,42 @@
+use uo;
+use util;
+use os;
+
+include "include/client";
+include "include/magic";
+include "include/wodinc";
+
+program field_control (field)
+	var creator;
+	var creator_serial := getobjproperty (field, "creator");
+	if (creator_serial)
+		creator := SystemFindObjectBySerial (CInt(creator_serial));
+		if (creator)
+			SetScriptController (creator);
+		endif
+	endif
+
+	caster_evalint := GetObjProperty (field, "caster_evalint");
+	if (!caster_evalint)
+		caster_evalint := 100;
+	endif
+
+	var dmg := 0;
+	var loop_counter := 1;
+	PlaySoundEffect (field, 0xf7);
+	while (field)
+		foreach mobile in ListMobilesNearLocationEx (field.x, field.y, field.z, 0, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, field.realm)
+			dmg := RandomInt (4) + 3;
+			dmg := Resisted (creator, mobile, dmg);
+			DoDamageByType (creator, mobile, dmg, DAMAGETYPE_COLD);
+		endforeach
+
+		loop_counter := loop_counter + 1;
+		if (loop_counter == 7)
+			PlaySoundEffect (field, 0xf7);
+			loop_counter := 1;
+		endif
+		sleep(2);
+	endwhile
+
+endprogram

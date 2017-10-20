@@ -1,0 +1,102 @@
+use uo;
+use os;
+use cfgfile;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "../pkg/items/housing/house";
+
+program onremove_chest (character, container, item, movetype)
+	container.name := container.desc;
+	if (container.item_count == 1)
+		case (container.graphic)
+			0x4141:
+			0x4143:
+				container.graphic := container.graphic + 1;
+			0x1949:
+			0x194a:
+				container.graphic := container.graphic - 2;
+		endcase
+	endif
+
+	item.decayat := ReadGameClock () + 900;
+	if (GetObjProperty (container, "secured"))
+		CheckSecuredItemRemoval (character, container, item);
+	endif
+	if (movetype != MOVETYPE_PLAYER)
+		return 1;
+	endif
+endprogram
+
+
+
+
+///////////////////
+//  Figures out if the given player is allowed to take the item, and if not, logs it
+///////////////////
+
+function CheckSecuredItemRemoval (character, chest, item);
+	var housesignserial := GetObjProperty (chest, "secured");
+	var housesign := SystemFindObjectBySerial (housesignserial);
+	if (!housesign)
+		return;
+	endif
+	
+	if (IsAFriend (housesign, character))
+		return;
+	endif
+	
+	// This is the old method, which will eventually be removed after the new system
+	//is fully tested
+	var themessage := array {
+		"Character: " + character.name,
+		"Item name: " + item.desc,
+		"Item serial: " + item.serial,
+		"House owner: " + GetObjProperty (housesign, "account"),
+		"Position: " + housesign.x + ", " + housesign.y
+	};
+	AppendLog (character, themessage);
+	
+	var infodf := OpenDataFile ("ContainerLog");
+	if (!infodf)
+		infodf := CreateDataFile ("ContainerLog");
+		if (!infodf)
+			return;
+		endif
+	endif
+
+	var entry := infodf.CreateElement ("" + ReadGameClock());
+	entry.SetProp ("HouseOwner", GetObjProperty (housesign, "account"));
+	entry.SetProp ("Character", character.name);
+	entry.SetProp ("AcctName", character.acctname);
+	entry.SetProp ("ItemName", item.desc);
+	entry.SetProp ("ItemSerial", item.serial);
+	entry.SetProp ("Position", housesign.x + ", " + housesign.y);
+
+	UnloadDataFile ("ContainerLog");
+
+endfunction
+
+
+
+
+///////////////////
+//  Logs the message to a file
+///////////////////
+
+function AppendLog (who, themessage)
+	var log := array{};
+	var prop := struct {};
+	prop.+name := "";
+	prop.+value := "";
+	foreach line in themessage
+		prop.value := line;
+		log.append (prop);
+	endforeach
+
+	var elemkey := who.name + "(" + who.acctname + ")";
+	AppendConfigFileElem ("chestlog", "ITEM REMOVAL:", elemkey, log );
+	UnloadConfigFile ("chestlog");
+endfunction

@@ -1,0 +1,49 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 5;
+
+program cast_mind_blast( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	cast_on := CheckMagicReflection (caster, cast_on);
+	if (!cast_on)
+		return 1;
+	endif
+
+	var my_int := GetAttribute (caster, "Intelligence");
+	var his_int := GetAttribute (cast_on, "Intelligence");
+	if (his_int > my_int)
+		cast_on := caster;
+		SendSysMessage (caster, "Their superior intellect reflects the spell!");
+	elseif (his_int == my_int)
+		SendSysMessage (caster, "You are of equal intellect!");
+		return 1;
+	endif
+
+	var spell_damage := CalcSpellDamageByCircle (spell_circle);
+	if (caster.acctname)
+		if (cast_on.npctemplate)
+			if (!GetObjProperty (cast_on, "master"))
+				spell_damage := CINT (spell_damage * 1.5 + 1);
+			endif
+		endif
+	endif
+
+	PlaySoundEffect (cast_on, SFX_SPELL_MIND_BLAST);
+	PlayObjectCenteredEffect (cast_on, FX_CURSE_EFFECT, 7, 0x10);
+	DoDamageByType (caster, cast_on, spell_damage, DAMAGETYPE_MAGIC);
+	return 1;
+endprogram

@@ -1,0 +1,692 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/string";
+include "include/accounts";
+
+program get_info (character, text)
+	if (!text)
+		var optionmenu := CreateMenu ("Select an option:");
+		AddMenuItem (optionmenu, 0, "Check bank status");
+		AddMenuItem (optionmenu, 0, "Check backpack status");
+		AddMenuItem (optionmenu, 0, "Count toplevel items");
+		AddMenuItem (optionmenu, 0, "Do full container itemcount (SLOW)");
+		AddMenuItem (optionmenu, 0, "Get info on account");
+		AddMenuItem (optionmenu, 0, "Search for character(s) by name");
+
+		AddMenuItem (optionmenu, 0, "Search for item by serial number");
+		AddMenuItem (optionmenu, 0, "Get haircolor of target");
+		AddMenuItem (optionmenu, 0, "Get beardcolor of target");
+		AddMenuItem (optionmenu, 0, "Search for items by name");
+		AddMenuItem (optionmenu, 0, "Search for items by objtype");
+		AddMenuItem (optionmenu, 0, "Search for NPCs by name");
+
+		var selection := SelectMenuItem2 (character, optionmenu);
+		if (!selection)
+			SendSysMessage (character, "Canceled");
+			return;
+		endif
+
+		case (selection.index)
+			1:
+				text := "bank";
+			2:
+				text := "backpacks";
+			3:
+				text := "toplevel";
+			4:
+				text := "itemcount";
+			5:
+				var acctname := SendTextEntryGump (character, "Enter the accountname:" ,
+					TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+				text := "account " + acctname;
+			6:
+				var chrname := SendTextEntryGump (character, "Enter the character name:" ,
+					TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+				text := "character " + chrname;
+			7:
+				var serial := SendTextEntryGump (character, "Enter the serial number:" ,
+					TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+				text := "serial " + serial;
+			8:
+				text := "haircolor";
+			9:
+				text := "beardcolor";
+			10:
+				var thestring := SendTextEntryGump (character, "Enter the string to search for:" ,
+					TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+				text := "item name " + thestring;
+			11:
+				var objtype := SendTextEntryGump (character, "Enter the objtype to search for:" ,
+					TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+				text := "item objtype " + objtype;
+			12:
+				var thestring := SendTextEntryGump (character, "Enter the string to search for:" ,
+					TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+				text := "npc name " + thestring;
+			default:
+				SendSysMessage (character, "Canceled.");
+				return;
+		endcase
+	endif
+	
+	if (text == "bank")
+		CheckBankStatus (character);
+		return;
+	elseif (text == "backpacks")
+		CheckBackpackStatus (character);
+		return;
+	elseif (text == "toplevel")
+		SendSysMessage (character, "Itemcount it: " + PolCore().itemcount);
+		return;
+	elseif (text == "itemcount")
+		DoFullItemcount (character);
+		return;
+	elseif (text["playtime"])
+		SendSysMessage (character, "That function is now located on the POL webpage");
+		return;
+	elseif (text["account"])
+		var new_text := SplitWords (text);
+		FindAccountInfo (character, new_text[2]);
+		return;
+	elseif (text["serial"])
+		var new_text := SplitWords (text);
+		FindSerialInfo (character, CINT (new_text[2]));
+		return;
+	elseif (text["character"])
+		var new_text := SplitWords (text);
+		FindCharacter (character, new_text[2]);
+		return;
+	elseif (text["haircolor"])
+		var thetarget := Target (character);
+		if (!thetarget)
+			SendSysMessage (character, "Canceled.");
+			return;
+		endif
+		var hair := GetEquipmentByLayer (thetarget, LAYER_HAIR);
+		if (!hair)
+			SendSysMessage (character, "Looks like they're bald!");
+			return;
+		endif
+		SendSysMessage (character, "The haircolor is " + hair.color);
+		return;
+	elseif (text["beardcolor"])
+		var thetarget := Target (character);
+		if (!thetarget)
+			SendSysMessage (character, "Canceled.");
+			return;
+		endif
+		var beard := GetEquipmentByLayer (thetarget, LAYER_BEARD);
+		if (!beard)
+			SendSysMessage (character, "Looks like they're clean shaven.");
+			return;
+		endif
+		SendSysMessage (character, "The beardcolor is " + beard.color);
+		return;
+	elseif (text["item name"])
+		text := text - "item name ";
+		SearchForItemByName (character, text);
+		return;
+	elseif (text["item objtype"])
+		text := text - "item objtype ";
+		SearchForItemByObjtype (character, text);
+		return;
+	elseif (text["npc name"])
+		text := text - "npc name ";
+		SearchForNPCByName (character, text);
+		return;
+	endif
+
+	SendSysMessage (character, "Valid options are:  bank, backpacks, toplevel, itemcount, account [acctname]");
+
+endprogram
+
+function CheckBankStatus (character)
+	var bankbox;
+	var max_items := 0;
+	var total_items := 0;
+	var toomany := 0;
+
+	set_script_option( SCRIPTOPT_CAN_ACCESS_OFFLINE_MOBILES, 1 );
+
+	foreach acctname in ListAccounts ()
+		bankbox := FindBankBox (acctname, 1);
+		if (bankbox)
+			var items := EnumerateItemsInContainer (bankbox);
+			if (len (items) > max_items)
+				max_items := len(items);
+			endif
+
+			if (len(items) > 500)
+				toomany := toomany + 1;
+				SendSysMessage (character, len(items) + " items: " + acctname);
+			endif
+			total_items := total_items + len (items);
+		endif
+	endforeach
+
+	SendSysMessage (character, "total items: " + total_items );
+	SendSysMessage (character, "Max items in one bankbox " + max_items);
+	SendSysMessage (character, "characters with more than 250 items - " + toomany);
+endfunction
+
+function CheckBackpackStatus (character)
+
+	var player;
+	var account;
+	var max_items := 0;
+	var total_players := 0;
+	var total_items := 0;
+	var total_accounts := 0;
+	var toomany1 := 0;
+	var toomany2 := 0;
+
+	set_script_option( SCRIPTOPT_CAN_ACCESS_OFFLINE_MOBILES, 1 );
+
+	foreach accountname in ListAccounts ()
+		account := FindAccount (accountname);
+		if (account)
+			total_accounts := total_accounts + 1;
+			for counter := 1 to 7
+				player := account.GetCharacter (counter);
+				if (player)
+					total_players := total_players + 1;
+					var items := EnumerateItemsInContainer (player.backpack);
+					if (len (items) > max_items)
+						max_items := len(items);
+					endif
+
+					if (len(items) > 250)
+						toomany1 := toomany1 + 1;
+						var lastlogon := account.GetProp ("lastlogon");
+						if (!lastlogon)
+							SendSysMessage (character, "250+: "+accountname+ " " + player.name + " " + player.serial);
+						else
+							var passed_time := ReadGameClock () - lastlogon;
+							var days := CINT (passed_time/ (60*60*24) );
+							if (days > 30)
+								SendSysMessage (character, "250+: "+accountname+ " " + player.name + " " + player.serial);
+							endif
+						endif
+					endif
+
+					if (len(items) > 500)
+						toomany2 := toomany2 + 1;
+						SendSysMessage (character, "500+: "+accountname+ " " + player.name + " " + player.serial);
+					endif
+
+					total_items := total_items + len (items);
+				endif
+			endfor
+		else
+			SendSysMessage (character, "Unable to find account " + accountname);
+		endif
+	endforeach
+
+	SendSysMessage (character, "Total accounts: " + total_accounts);
+	SendSysMessage (character, "Total players: " + total_players);
+	SendSysMessage (character, "total items: " + total_items );
+	SendSysMessage (character, "Max items in one bankbox " + max_items);
+	SendSysMessage (character, "characters with more than 250 items - " + toomany1);
+	SendSysMessage (character, "characters with more than 500 items - " + toomany2);
+
+endfunction
+
+
+
+
+function DoFullItemcount (character)
+	var total_item_count := 0;
+	var xmid, ymid;
+
+	for (xmid := 31; xmid < 6144; xmid := xmid + 64)
+		SendSysMessage (character, "Searching near X=" + xmid );
+		for (ymid := 31; ymid < 4096; ymid := ymid + 64)
+			foreach item in ListObjectsInBox (xmid-31, ymid-31, -128, xmid+32, ymid+32, +127, REALM_BRITANNIA)
+				var more_items := EnumerateItemsInContainer (item);
+				if (len(more_items))
+					total_item_count := total_item_count + len(more_items);
+					if (len (more_items) > 500)
+						SendSysMessage (character, "lots of stuff at " + item.x + " " + item.y);
+					endif
+				endif
+			endforeach
+		endfor
+		sleep (1);
+	endfor
+	
+	SendSysMessage (character, "Total item found: " + total_item_count);
+endfunction
+
+
+
+function FindAccountInfo (character, acctname)
+	var acct := FindAccount (acctname);
+	if (!acct)
+		SendSysMessage (character, "Can't find account");
+		return;
+	endif
+
+	for counter := 1 to 7
+		var player := acct.GetCharacter (counter);
+		if (player)
+			SendSysMessage (character, "Character: " + player.name);
+			SendSysMessage (character, "Serial: " + player.serial);
+		endif
+	endfor
+
+	var playtime := GetAccountProperty (acctname, "online_time");
+	var hours := CINT (playtime/3600);
+	
+	SendSysMessage (character, "Total play time: " + hours + " hours");
+	
+	//see if they're currently online
+	var isonline := 0;
+	foreach onlineplayer in EnumerateOnlineCharacters ()
+		if (Lower (onlineplayer.acctname) == Lower (acctname))
+			isonline := 1;
+			break;
+		endif
+	endforeach
+	
+	if (isonline)
+		SendSysMessage (character, "Last logon: Currently online");
+	else
+		SendSysMessage (character, "Last logon: " + GetAccountLastLogon (acctname));
+	endif
+
+	var housevalue := GetGlobalProperty ("#housevalue of " + acctname);
+	if (!housevalue)
+		housevalue := 0;
+	endif
+	SendSysMessage (character, "House Value: " + housevalue);
+endfunction
+
+
+
+function FindSerialInfo (character, serialnumber);
+	var account, player;
+	foreach acctname in ListAccounts ()
+		account := FindAccount (acctname);
+		if (account)
+			for counter := 1 to 7
+				player := account.GetCharacter (counter);
+				if (player and player.serial == serialnumber)
+					SendSysMessage (character, "Found him!");
+					SendSysMessage (character, "Character Name: " + player.name);
+					SendSysMessage (character, "Account name: " + acctname);
+					return;
+				endif
+			endfor
+		endif
+	endforeach
+
+	SendSysMessage (character, "Not a player serial - Searching backpacks and bankboxes");
+	foreach acctname in ListAccounts ()
+		account := FindAccount (acctname);
+		if (account)
+			for counter := 1 to 7
+				player := account.GetCharacter (counter);
+				if (player)
+					foreach item in EnumerateItemsInContainer (player.backpack)
+						if (item.serial == serialnumber)
+							SendSysMessage (character, "Found " + item.desc + " in the backpack of " + player.name);
+							return;
+						endif
+					endforeach
+				endif
+			endfor
+		endif
+		var bankbox := FindBankBox (acctname, 1);
+		if (bankbox)
+			foreach item in EnumerateItemsInContainer (bankbox)
+				if (item.serial == serialnumber)
+					SendSysMessage (character, "Found " + item.desc + " in the bankbox of " + acctname);
+					return;
+				endif
+			endforeach
+		endif
+	endforeach
+
+	SendSysMessage (character, "Not in backpacks - searching world:");
+	var item := SystemFindObjectBySerial (serialnumber);
+	if (!item)
+		SendSysMessage (character, "Can't find item.  Quitting.");
+		return;
+	endif
+
+	if (!item.name)
+		SendSysMessage (character, "Found a " + item.desc);
+	else
+		SendSysMessage (character, "Found a " + item.name);
+	endif
+
+	if (!item.container)
+		SendSysMessage (character, "its at x="+item.x+" y="+item.y);
+	else
+		while (item.container)
+			item := item.container;
+		endwhile
+		SendSysMessage (character, "its at x="+item.x+" y="+item.y);
+	endif
+
+
+endfunction
+
+
+
+
+///////////////////
+//  try to find the account associated with a given character name
+///////////////////
+
+function FindCharacter (character, player_name)
+
+	var player;
+	var account;
+	var foundone := 0;
+
+	set_script_option( SCRIPTOPT_CAN_ACCESS_OFFLINE_MOBILES, 1 );
+
+	foreach accountname in ListAccounts ()
+		account := FindAccount (accountname);
+		if (account)
+			for counter := 1 to 7
+				player := account.GetCharacter (counter);
+				if (player)
+					var newplayername := lower (player.name);
+					if (newplayername[player_name])
+						SendSysMessage (character, "Accountname: " + accountname);
+						SendSysMessage (character, "serial: " + player.serial);
+						foundone := 1;
+					endif
+				endif
+			endfor
+		endif
+	endforeach
+	
+	if (foundone)
+		SendSysMessage (character, "Done!");
+	else
+		SendSysMessage (character, "No characters found!");
+	endif
+
+endfunction
+///////////////////
+//  Searches backpacks and bankboxes for an item by name
+///////////////////
+
+function SearchForItemByName (character, itemname)
+	itemname := Lower (itemname);
+	if (!itemname)
+		SendSysMessage (character, "No objtype provided!");
+		return;
+	endif
+
+	set_script_option ( SCRIPTOPT_CAN_ACCESS_OFFLINE_MOBILES, 1 );
+
+	var acct, player;
+	var matches := 0;
+	foreach acctname in ListAccounts ()
+		acct := FindAccount (acctname);
+		if (acct)
+			for counter := 1 to 7
+				player := acct.GetCharacter (counter);
+				if (player)
+					foreach item in ListEquippedItems (player)
+						if (Lower (item.desc)[itemname])
+							LogFoundItem (character, "Found a match worn on " + player.name + ", " + item.desc);
+							matches := matches + 1;
+						endif
+					endforeach
+					
+					foreach item in EnumerateItemsInContainer (player.backpack)
+						if (Lower (item.desc)[itemname])
+							LogFoundItem (character, "Found a match in the backpack of " + player.name + ", " + item.desc);
+							matches := matches + 1;
+						endif
+					endforeach
+				endif
+			endfor
+					
+			var bankbox := FindBankBox (acctname, 1);
+			if (bankbox)
+				foreach item in EnumerateItemsInContainer (bankbox)
+					if (Lower (item.desc)[itemname])
+						LogFoundItem (character, "Found a match in the bankbox of " + acctname + ", " + item.desc);
+						matches := matches + 1;
+					endif
+				endforeach
+			endif
+		endif
+		if (matches > 50)
+			SendSysMessage (character, "Too many matches: aborted");
+			return;
+		endif
+	endforeach	
+
+	var x, y;
+	for (x := 6144 ; x > 64 ; x := x  - 128)
+		for( y := 64; y < 4096; y := y + 128 )
+			foreach item in ListObjectsInBox (x-64, y-64, -128, x+63, y+63, +127, REALM_BRITANNIA)
+				if (Lower (item.desc)[itemname])
+					LogFoundItem (character, "Found a match at " + item.x + ", " + item.y + ", " + item.desc);
+					matches := matches + 1;
+				endif
+
+				if (item.isa (POLCLASS_CONTAINER))
+					foreach more_item in EnumerateItemsInContainer (item)
+						if (Lower (more_item.desc)[itemname])
+							LogFoundItem (character, "Found a match at " + item.x + ", " + item.y + ", " + more_item.desc);
+							matches := matches + 1;
+						endif
+					endforeach
+				endif
+					
+				if (item.isa (POLCLASS_MOBILE))
+					foreach more_item in EnumerateItemsInContainer (item.backpack)
+						if (Lower (more_item.desc)[itemname])
+							LogFoundItem (character, "Found a match at " + item.x + ", " + item.y + ", " + " in " + item.name + " backpack.");
+							matches := matches + 1;
+						endif
+					endforeach
+						
+					foreach more_item in ListEquippedItems (item)
+						if (Lower (more_item.desc)[itemname])
+							LogFoundItem (character, "Found a match at " + item.x + ", " + item.y + ", " + " worn by " + item.name);
+							matches := matches + 1;
+						endif
+					endforeach
+				endif
+			endforeach
+		endfor
+		sleep (1);
+	endfor
+
+	SendSysMessage (character, "Found " + matches + " matches");
+endfunction
+
+
+function LogFoundItem (character, message)
+	SendSysMessage (character, "Find item: " + message);
+	var log := array{ };
+	var prop:= struct {};
+
+    	prop.+name := "line:";
+    	prop.+value := message;
+	log[1] := prop;
+
+	AppendConfigFileElem (":drocket:inactive_accounts", "Item", "Stuff", log);
+	UnloadConfigFile (":drocket:inactive_accounts");
+
+endfunction
+
+
+
+
+
+
+///////////////////
+//  Searches backpacks and bankboxes for an item by name
+///////////////////
+
+function SearchForItemByObjtype (character, itemobjtype)
+	itemobjtype := CINT (itemobjtype);
+	if (!itemobjtype)
+		SendSysMessage (character, "No objtype provided!");
+		return;
+	endif
+
+	set_script_option ( SCRIPTOPT_CAN_ACCESS_OFFLINE_MOBILES, 1 );
+
+	var acct, player;
+	var matches := 0;
+	foreach acctname in ListAccounts ()
+		acct := FindAccount (acctname);
+		if (acct)
+			for counter := 1 to 7
+				player := acct.GetCharacter (counter);
+				if (player)
+					foreach item in ListEquippedItems (player)
+						if (item.objtype == itemobjtype)
+							SendSysMessage (character, "Found a match worn on " + player.name + ", " + item.desc);
+							matches := matches + 1;
+						endif
+					endforeach
+					
+					foreach item in EnumerateItemsInContainer (player.backpack)
+						if (item.objtype == itemobjtype)
+							SendSysMessage (character, "Found a match in the backpack of " + player.name + ", " + item.desc);
+							matches := matches + 1;
+						endif
+					endforeach
+				endif
+			endfor
+					
+			var bankbox := FindBankBox (acctname, 1);
+			if (bankbox)
+				foreach item in EnumerateItemsInContainer (bankbox)
+					if (item.objtype == itemobjtype)
+						SendSysMessage (character, "Found a match in the bankbox of " + acctname + ", " + item.desc);
+						matches := matches + 1;
+					endif
+				endforeach
+			endif
+		endif
+		if (matches > 50)
+			SendSysMessage (character, "Too many matches: aborted");
+			return;
+		endif
+	endforeach	
+
+	var xmid, ymid;
+	for (xmid := 31; xmid < 6144; xmid := xmid + 64)
+		SendSysMessage (character, "Searching near X=" + xmid );
+		for (ymid := 31; ymid < 4096; ymid := ymid + 64)
+			foreach item in ListObjectsInBox (xmid-31, ymid-31, -128, xmid+32, ymid+32, +127, REALM_BRITANNIA)
+				if (item.objtype == itemobjtype)
+					SendSysMessage (character, "Found a match at " + item.x + ", " + item.y + ", " + item.desc);
+					matches := matches + 1;
+				endif
+
+				if (item.isa (POLCLASS_CONTAINER))
+					foreach more_item in EnumerateItemsInContainer (item)
+						if (item.objtype == itemobjtype)
+							SendSysMessage (character, "Found a match at " + item.x + ", " + item.y + ", " + more_item.desc);
+							matches := matches + 1;
+						endif
+					endforeach
+				endif
+			endforeach
+		endfor
+		sleep (1);
+	endfor
+
+	SendSysMessage (character, "Found " + matches + " matches");
+endfunction
+
+
+
+
+///////////////////
+//  Searches the world for an NPC with the given name
+///////////////////
+
+function SearchForNPCByName (character, itemname)
+	itemname := Lower (itemname);
+	if (!itemname)
+		SendSysMessage (character, "No name provided!");
+		return;
+	endif
+
+	var matches := 0;
+	var x, y, z;
+	for( x := 6144 ; x > 16 ; x := x  - 128)
+		for( y := 16; y < 4096; y := y + 128 )
+			for( z := -60; z <= 60; z := z + 30 )
+				foreach mob in ListMobilesNearLocationEx ( x, y, z, 64, LISTEX_FLAG_NORMAL+LISTEX_FLAG_HIDDEN, REALM_BRITANNIA )
+					if (Lower (mob.name)[itemname])
+						SendSysMessage (character, "Found a match at " + mob.x + ", " + mob.y + ", " + mob.name);
+						matches := matches + 1;
+					endif
+				endforeach
+			endfor
+		endfor
+		sleep (1);
+		SendSysmessage (character, "searching near " + x);
+	endfor
+
+	SendSysMessage (character, "Found " + matches + " matches");
+endfunction
+
+
+
+
+///////////////////
+//  Figured out how long its been since an account has logged on, in days
+///////////////////
+
+function GetAccountLastLogon (acctname)
+	var acct := FindAccount (acctname);
+	if (!acct)
+		Syslog ("Error finding accountname " + acctname);
+		return 9999;
+	endif
+	
+	var logontime := 0;
+	for counter := 1 to 7
+		var player := acct.GetCharacter (counter);
+		if (player)
+			var templogontime := GetObjProperty (player, "logontime");
+			if (templogontime and templogontime > logontime)
+				logontime := templogontime;
+			endif
+		endif
+	endfor
+	
+	var seconds := ReadGameClock () - logontime;
+	var days := CINT (seconds/86400);
+	if (!days)
+		var hours := CINT (seconds/3600);
+		return (hours + " hours ago");
+	endif
+	
+	return (days + " days ago");
+endfunction
+
+
+
+
+
+
+
+
+
+
+
+

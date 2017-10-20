@@ -1,0 +1,138 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/attributes";
+include "include/newperformaction";
+
+Const SFX_SHOT := 0x235;
+Const SFX_ARROWHIT1 := 0x224;
+Const SFX_ARROWHIT2 := 0x225;
+Const GFX_ARROW_FLIGHT := 0x0f42;
+Const GFX_BOLT_FLIGHT := 0x1bfe;
+
+
+include "include/client";
+
+program training_archery (character, butte)
+	if (!CheckLoSBetween (character.x, character.y, character.z, butte.x, butte.y, butte.z, character.realm))
+		SendSysMessage( character, "You don't have line of sight to that." );
+		return;
+	endif
+	
+	if (Distance (character, butte) == 1)
+		GrabAmmo (character, butte);
+		return;
+	endif
+
+	var ammunitiontype;
+	var panim;
+	var effect;
+	var skillid := character.weapon.attribute;
+
+	if (skillid != ATTRIBUTEID_ARCHERY )
+		SendSysmessage (character, "You must equip a bow or a crossbow.");
+		return;
+	endif
+	
+	
+	var itemtype := character.weapon.objtype;
+	case (itemtype)
+		UOBJ_BOW:
+		UOBJ_COMPOSITE_BOW:
+		UOBJ_YUMI:
+		UOBJ_LONGBOW:
+		UOBJ_SHORTBOW:
+			ammunitiontype := UOBJ_ARROW;
+			panim := NPA_ATTACK_BOW;
+			effect := GFX_ARROW_FLIGHT;
+		UOBJ_CROSSBOW:
+		UOBJ_HEAVY_CROSSBOW:
+		UOBJ_REPEATING_CROSSBOW:
+			ammunitiontype := UOBJ_BOLT;
+			panim := NPA_ATTACK_CROSSBOW;
+			effect := GFX_BOLT_FLIGHT;
+		UOBJ_FIRE_BOW:
+			SendSysMessage (character, "That probably wouldn't be too good for the archery butte...");
+			return;
+		default:
+			SendSysmessage (character, "You must equip a bow or a crossbow.");
+			return;
+	endcase
+			
+	var projectile := CheckForAmmunition (character, ammunitiontype);
+	if (!projectile)
+		SendSysMessage( character, "You don't have any ammunition!" );
+		return;
+	endif
+	
+	if (CheckSkill (character, SKILLID_ARCHERY, 10, 0))
+		NewPerformAction (character, NPA_ANIM_ATTACK, panim);
+		sleepms (500);
+		PlaySoundEffect (character, SFX_SHOT);
+		PlayMovingEffectXYZ (character.x, character.y, character.z+9,
+				butte.x, butte.y, butte.z+5,
+				effect, 10, 0, 0, butte.realm );
+		SendSysmessage (character, "A good shot.");
+	
+	else
+		NewPerformAction (character, NPA_ANIM_ATTACK, panim);
+		sleepms (500);
+		PlaySoundEffect (character, SFX_ARROWHIT1 );
+		PlayMovingEffectXYZ (character.x, character.y, character.z+9,
+				butte.x, butte.y, butte.z+5,
+				effect, 10, 0, 0, butte.realm );
+		SendSysmessage (character, "You miss." );
+	endif
+
+	SubtractAmount (projectile, 1);
+	if( projectile.objtype == UOBJ_ARROW )
+		var used_arrows := CINT (GetObjProperty (butte, "arrows"));
+		SetObjProperty (butte , "arrows" , used_arrows + 1 );
+	elseif( projectile.objtype == UOBJ_BOLT )
+		var used_bolts := CINT (GetObjProperty (butte, "bolts"));
+		SetObjProperty (butte , "bolts" , used_bolts + 1 );
+	endif
+
+endprogram
+
+
+function CheckForAmmunition (character, ammunitiontype )
+	foreach item in EnumerateItemsInContainer (character.backpack)
+		if (item.objtype == ammunitiontype)
+			return item;
+		endif
+	endforeach
+	return 0;
+endfunction
+	
+
+
+function GrabAmmo (character, butte);
+	var used_arrows := GetObjProperty (butte, "arrows");
+	if (used_arrows)
+		CreateItemInBackpack (character, UOBJ_ARROW, CINT (used_arrows/2));
+		SendSysMessage (character, "You grab " + CINT (used_arrows/2) + " arrows from the butte.");
+		EraseObjProperty (butte, "arrows");
+	endif
+
+	var used_bolts := GetObjProperty (butte, "bolts");
+	if (used_bolts)
+		CreateItemInBackpack (character, UOBJ_BOLT, CINT (used_bolts/2));
+		SendSysMessage (character, "You grab " + CINT (used_bolts/2) + " bolts from the butte.");
+		EraseObjProperty (butte, "bolts");
+	endif
+	
+	if (butte.movable)
+		if (butte.graphic == 0x100a)
+			butte.graphic := 0x100b;
+		elseif (butte.graphic == 0x100b)
+			butte.graphic := 0x100a;
+		endif
+	endif
+endfunction
+
+
+
+

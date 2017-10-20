@@ -1,0 +1,55 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/itemtypes";
+include "../pkg/items/doors/doors";
+include "../pkg/items/housing/house";
+
+program textcmd_door (character, textline)
+	if (textline ["help"])
+		SendSysMessage (character, "DOOR: Tries to open all doors and gates in your immediate area.  If the door");
+		SendSysMessage (character, "or gate in question is locked, it will check to see if you have a key");
+		SendSysMessage (character, "in your possession.");
+		return;
+	elseif (textline)
+		SendSysMessage (character, "Unknown .door option.  Use '.door help' for instructions on using this dot command.");
+		return;
+	endif
+
+	//refresh the character's house, if its in the area
+	var sign := FindHouseSign (character);
+	if (sign)
+		RefreshHouse (sign);
+	endif
+
+	var whenopened := ReadGameClock ();
+	var OpenDoors := array;
+	foreach item in ListItemsNearLocation (character.x, character.y, character.z, 2, character.realm)
+		if (item.isa (POLCLASS_DOOR))
+			if (IsLocked (character, item))
+				PrintTextAbovePrivate (item, "*Locked!*", character);
+			else
+				if (item.graphic != item.objtype)
+					CloseDoor (item);
+					EraseObjProperty (item, "#WhenOpened");
+				else
+					SetObjProperty (item, "#WhenOpened", whenopened );
+					OpenDoor (item);
+					OpenDoors.append (item);
+				endif
+			endif
+		endif
+	endforeach
+
+	sleep (10);
+	foreach door in OpenDoors
+		if (GetObjProperty (door, "#WhenOpened") == whenopened)
+			CloseDoor (door);
+			EraseObjProperty (door, "#WhenOpened");
+		endif
+	endforeach
+endprogram

@@ -1,0 +1,183 @@
+/////////////////////////////////////////////////////////////////////////////
+//
+//  merchant_dbsaver - Saves merchant database periodically
+//
+//          complains, via syslog and broadcast, if it can't.
+//          If this script dies, mdbsaverchk should notice and complain.
+//
+/////////////////////////////////////////////////////////////////////////////
+
+use os;
+use uo;
+use file;
+
+include "include/utility";
+include "include/client";
+
+function savemdb();
+	var output_text := array{};
+	var weapon_cfg := ":merchant_search:weapon";
+	var armor_cfg := ":merchant_search:armor";
+	WriteFile ("weapon.cfg", array {""});
+	WriteFile ("armor.cfg", array {""});
+	
+	var playermerchantlist := GetGlobalProperty ("#playermerchantlist");
+	if (!playermerchantlist)
+		output_text[1] := "Unable to find any merchants.";
+	else
+		var storage := FindStorageArea( "Merchant Storage" );
+		if (!storage)
+			output_text[1] := "Error opening merchant storage!";
+		else
+			var scriptcounter :=0;
+			var counter := 1;
+			var myvar, myvar2;
+			
+			var weapondesc := struct;
+			weapondesc.+ MerchantSerial := 0;
+			weapondesc.+ Name := "";
+			weapondesc.+ ObjType := 0;
+			weapondesc.+ SellPrice := 0;
+			weapondesc.+ DamageIncrease := 0;
+			weapondesc.+ DamageBonus := 0;
+			weapondesc.+ Durability := 0;
+			weapondesc.+ Skill := "";
+			weapondesc.+ SkillBonus := 0;
+			weapondesc.+ SlayerType := "";
+			weapondesc.+ HitSpell := "";
+			weapondesc.+ SpellCharges := 0;
+			
+			var armordesc := struct;
+			armordesc.+ MerchantSerial := 0;
+			armordesc.+ Name := "";
+			armordesc.+ ObjType := 0;
+			armordesc.+ SellPrice := 0;
+			armordesc.+ ArmorIncrease := 0;
+			armordesc.+ ArmorBonus := 0;
+			armordesc.+ Durability := 0;
+			armordesc.+ Skill := "";
+			armordesc.+ SkillBonus := 0;
+			armordesc.+ ArmorSpell := "";
+			armordesc.+ SpellCharges := 0;
+			armordesc.+ ResistFire := 0;
+			armordesc.+ ResistFrost := 0;
+			armordesc.+ ResistPoison := 0;
+			armordesc.+ ResistElectrical := 0;
+			
+			var generaldesc := struct;
+			generaldesc.+ MerchantSerial := 0;
+			generaldesc.+ Name := "";
+			generaldesc.+ SellPrice := 0;
+			
+			foreach merchantserial in playermerchantlist
+				scriptcounter := scriptcounter+1;
+				if (!(scriptcounter%200))
+					sleepms(1);
+				endif
+				var merchant := SystemFindObjectBySerial (merchantserial);
+				if (merchant)
+					var inv_fs := FindRootItemInStorageArea (storage, merchantserial + " FS");
+					if (inv_fs)
+						foreach item in ListRootItemsInContainer (inv_fs)
+							if (item.IsA (POLCLASS_WEAPON)
+								weapondesc.MerchantSerial := merchantserial;
+								weapondesc.Name := item.desc;
+								weapondesc.ObjType := item.objtype;
+								weapondesc.SellPrice := item.sellprice;
+								weapondesc.DamageIncrease := CINT ((item.quality * 100) - 100);
+								weapondesc.DamageBonus := item.dmg_mod;
+								weapondesc.Durability := item.hp + " / " + item.maxhp;
+								myvar := GetObjProperty(item, "skilladv");
+								myvar2 := GetObjProperty (item, "skill"+myvar);
+								if (myvar2)
+									weapondesc.SkillBonus := myvar2;
+									myvar2 := GetSkillName(myvar);
+									weapondesc.Skill := myvar2;
+								else
+									weapondesc.Skill := "";
+									weapondesc.SkillBonus := 0;
+								endif
+								myvar := GetObjProperty (item, "silver");
+								if (silver)
+									weapondesc.SlayerType := "Undead";
+								else
+									weapondesc.SlayerType := "";
+								endif
+								weapondesc.HitSpell := GetObjProperty(item, "itemspellname");
+								weapondesc.SpellCharges := CINT(GetObjProperty(item, "charges"));
+								AppendConfigFileElem (weapon_cfg, "Weapon", item.serial, weapondesc);
+							elseif (item.IsA (POLCLASS_ARMOR)
+								armordesc.MerchantSerial := merchantserial;
+								armordesc.Name := item.desc;
+								armordesc.ObjType := item.objtype;
+								armordesc.SellPrice := item.sellprice;
+								armordesc.ArmorIncrease := CINT ((item.quality * 100) - 100);
+								armordesc.ArmorBonus := item.ar_mod;
+								armordesc.Durability := item.hp + " / " + item.maxhp;
+								myvar := GetObjProperty(item, "skilladv");
+								myvar2 := GetObjProperty (item, "skill"+myvar);
+								if (myvar2)
+									armordesc.SkillBonus := myvar2;
+									armordesc.Skill := GetSkillName(myvar);
+								else
+									armordesc.Skill := "";
+									armordesc.SkillBonus := 0;
+								endif
+								armordesc.ResistFire := item.resist_fire_mod;
+								armordesc.ResistFrost := item.resist_cold_mod;
+								armordesc.ResistPoison := item.resist_poison_mod;
+								armordesc.ResistElectrical := item.resist_energy_mod;
+								armordesc.ArmorSpell := GetObjProperty(item, "itemspellname");
+								armordesc.SpellCharges := CINT(GetObjProperty(item, "charges"));
+								AppendConfigFileElem (armor_cfg, "Armor", item.serial, armordesc);
+							endif
+							generaldesc.MerchantSerial := merchantserial;
+							generaldesc.Name := item.desc;
+							generaldesc.SellPrice := item.sellprice;
+							AppendConfigFileElem (general_cfg, "Item", item.serial, generaldesc);
+							
+							if ( item.amount > 1 )
+								output_text[counter] := merchant.name + " at " + merchant.x + ", " + merchant.y + ", " + item.desc + " at " + item.sellprice + " each";
+							else
+								output_text[counter] := merchant.name + " at " + merchant.x + ", " + merchant.y + ", " + item.desc + " at " + item.sellprice;
+							endif
+							counter := counter+1;
+							scriptcounter := scriptcounter+1;
+							if (!(scriptcounter%200))
+								sleepms(1);
+							endif
+						endforeach
+					endif
+				endif
+			endforeach
+		endif
+	endif
+	var res := WriteFile("vendors1.txt", output_text);
+	return res;
+endfunction
+
+const MINUTES_BETWEEN_SAVES := 15;
+
+print ("Saving merchant database every " + MINUTES_BETWEEN_SAVES + " minutes");
+
+while (1)
+	sleep (MINUTES_BETWEEN_SAVES * 60);
+	
+	syslog ("Saving Merchant Database");
+	var duration := ReadGameClock() - 1;
+
+	var res := savemdb();
+
+	duration := ReadGameClock() - duration;
+
+
+	if (res)
+		SetGlobalProperty( "#:merchants_database:lastsave", ReadGameClock() );
+		syslog( "Merchant Database saved (" + duration + " seconds)" );
+	else
+		syslog( "Error saving merchant database: " + res );
+	endif
+
+endwhile
+
+

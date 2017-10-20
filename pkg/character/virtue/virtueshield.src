@@ -1,0 +1,55 @@
+use uo;
+use os;
+
+include "../pkg/character/virtue/virtue";
+include "include/client";
+
+program virtueshield(me, shield)
+
+	if (shield != GetEquipmentByLayer(me, LAYER_HAND2) )
+		PrintTextAbovePrivate(shield,"You must equip that to use it!",me);
+		return;
+	endif
+
+	if ( shield.objtype == ORDERSHIELDTYPE or shield.objtype == GARGORDERSHIELDTYPE)
+		DoOrderMenu(me);
+	else
+		DoChaosMenu(me);
+	endif
+
+endprogram
+
+function DoChaosMenu(me)
+
+	var menu := CreateMenu("Do What?");
+	AddMenuItem( menu, 0x151A, "Recruit" );
+	var option := SelectMenuItem2(me, menu);
+	case(option.index)
+		1:	SendSysMessage(me,"Whom do you wish to recruit?");
+			CanJoin(me, Target(me, TGTOPT_NOCHECK_LOS), CHAOSGUARDTYPE, CHAOSSHIELDTYPE);
+	endcase
+
+endfunction
+
+function DoOrderMenu(me)
+
+	var menu := CreateMenu("Do What?");
+	AddMenuItem( menu, 0x1508, "Recruit" );
+	AddMenuItem( menu, 0xB1C, "Respect" );
+	AddMenuItem( menu, 0xB1D, "Honor" );
+	AddMenuItem( menu, 0xA26, "Censure" );
+	var option := SelectMenuItem2(me, menu);
+	case(option.index)
+		1:	SendSysMessage(me,"Whom do you wish to recruit?");
+			CanJoin(me, Target(me, TGTOPT_NOCHECK_LOS), ORDERGUARDTYPE, ORDERSHIELDTYPE);
+		2:
+			SendSysMessage(me,"Whom do you wish to Respect?");
+			BestowHonor(me, Target(me, TGTOPT_NOCHECK_LOS), 1 );
+		3:
+			SendSysMessage(me,"Whom do you wish to Honor?");
+			BestowHonor(me, Target(me, TGTOPT_NOCHECK_LOS) );
+		4:	SendSysMessage(me,"Whom do you wish to Censure?");
+			Censure(me, Target(me, TGTOPT_NOCHECK_LOS) );
+	endcase
+
+endfunction

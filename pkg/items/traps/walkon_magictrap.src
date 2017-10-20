@@ -1,0 +1,76 @@
+use uo;
+use os;
+
+include "include/magic";
+include "include/wodinc";
+
+program activate_magic_trap (character, trap)
+	if (character.cmdlevel or character.npctemplate)
+		if (!GetObjProperty (character, "attackable") or character.concealed)
+			return;
+		endif
+	endif
+	
+	if (character.dead)
+		return;
+	endif
+
+	if (!ReserveItem (trap) )
+		return;
+	endif
+
+	var traptype := GetObjProperty (trap, "traptype");
+	if (!traptype)
+		DestroyItem (trap);
+		return;
+	endif
+
+	case (traptype)
+		"flamestrike":
+			var parms := array{};
+			parms [1] := "#SPECIALNONE";
+			parms [2] := character;
+			run_script_to_completion (":damage_spells:fstrike", parms);
+		"darkness":
+			foreach mobile in ListMobilesNearLocation (trap.x, trap.y, trap.z, 10, trap.realm)
+				if (!mobile.npctemplate)
+					PlaySoundEffect (mobile, SFX_SPELL_NIGHT_SIGHT );
+					PlayObjectCenteredEffect (mobile, FX_BLESS_EFFECT, 10, 10);
+					PrintTextAbove (mobile, mobile.name + " is blinded!");
+					mobile.setlightlevel (30, 200);
+				endif
+			endforeach
+		"poisonfield_ns":
+			CreateField (0, trap.x, trap.y, trap.z, "poison", 80, "ns", trap.realm);
+		"poisonfield_ew":
+			CreateField (0, trap.x, trap.y, trap.z, "poison", 80, "ew", trap.realm);
+		"firefield_ns":
+			CreateField (0, trap.x, trap.y, trap.z, "fire", 80, "ns", trap.realm);
+		"firefield_ew":
+			CreateField (0, trap.x, trap.y, trap.z, "fire", 80, "ew", trap.realm);
+		"energyfield_ns":
+			CreateField (0, trap.x, trap.y, trap.z, "energy", 80, "ns", trap.realm);
+		"energyfield_ew":
+			CreateField (0, trap.x, trap.y, trap.z, "energy", 80, "ew", trap.realm);
+		"parafield_ns":
+			CreateField (0, trap.x, trap.y, trap.z, "para", 80, "ns", trap.realm);
+		"parafield_ew":
+			CreateField (0, trap.x, trap.y, trap.z, "para", 80, "ew", trap.realm);
+		"stonewall_ns":
+			CreateField (0, trap.x, trap.y, trap.z, "stone", 80, "ns", trap.realm);
+		"stonewall_ew":
+			CreateField (0, trap.x, trap.y, trap.z, "stone", 80, "ew", trap.realm);
+		"explosion":
+			foreach mobile in ListMobilesNearLocationEx (trap.x, trap.y, trap.z, 5, LISTEX_FLAG_NORMAL+LISTEX_FLAG_HIDDEN, trap.realm)
+				PlaySoundEffect (mobile, SFX_SPELL_EXPLOSION);
+				PlayObjectCenteredEffect (mobile, FX_EXPLODE_3, 7, 0x10);
+				var dmg := RandomInt (40) + 20;
+                    DoDamageByType (0, mobile, dmg, DAMAGETYPE_PHYSICAL);
+			endforeach
+
+
+	endcase
+
+	DestroyItem (trap);
+
+endprogram

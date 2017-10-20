@@ -1,0 +1,322 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/eventid";
+include "include/spawn";
+include "include/attributes";
+include "include/npcbackpacks";
+include "../pkg/npcs/speech";
+include "../pkg/npcs/npcinfo";
+include "../pkg/npcs/npc_util";
+include "../pkg/npcs/main_ai/setup/setup";
+include ":contextMenus:contextMenus";
+
+Const MAXFRIENDS	:= 3;
+
+var pet			:= 0;		// Pet to stable
+var player		:= 0;		// Whoever said "stable"
+
+program stabler_AI ()
+	if ( me.name ["<random>"] )
+		DoOnCreationSetup ();
+	endif
+	speech := 5;
+	
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_ENTEREDAREA, 4);
+	EnableEvents (SYSEVENT_ITEM_GIVEN + SYSEVENT_SPEECH, 3);
+	WalkHome ();
+
+	var event;
+	while (me)
+		if (me.hidden)
+			me.hidden := 0;
+		endif
+
+		event := os::wait_for_event ( 120 );
+		if (event)
+			case (event.type)
+				EVID_ENGAGED:
+				EVID_DAMAGED:
+					SetVital (me, "Life", GetVitalMaximumValue (me, "Life"));
+					me.hidden := 1;
+					var hidetime := ReadGameClock ();
+					repeat
+						event := os::wait_for_event (120);
+						if (!me.hidden)
+							me.hidden := 1;
+						endif
+					until (hidetime + 120 < ReadGameClock());
+					me.hidden := 0;
+				EVID_CONTEXT_MENU:
+					var newev := struct;
+					newev.+type := EVID_SPEECH;
+					newev.+source := event.source;
+					newev.+text := "";
+					case (event.result)
+						eCMR_StablePet:			newev.text := "stable";
+					endcase
+					sendevent (me, newev);
+
+				EVID_SPEECH:
+					var evtext := Lower (event.text);
+					player := event.source;
+					if (evtext ["buy"])
+						Say ("Sorry, I don't sell anything.");
+					elseif (evtext ["sell"])
+						Say ("Sorry, I don't buy anything.");
+					elseif (evtext ["stable"])
+						TurnToward (player);
+						Say ("Show me your pet.");
+						pet := Target (player);
+						if (pet)
+							if (pet.script["tamed"])
+								if (GetObjProperty (pet, "summoned") or GetObjProperty (pet, "totem"))
+									Say ("Any just what am i supposed to do with that?");
+								elseif (pet.graphic != pet.objtype)
+									Say ("Sorry, but I don't think I know how to take care of one of those...");
+								elseif (GetObjProperty (pet, "master") == player.serial)
+									var stableprice := GetStablePriceOfPet (pet);
+									Say ("I charge " + stableprice + " to take care of " + pet.name + ".");
+									if (player.spendgold (stableprice) )
+										Say ("Keep this ticket and give it to me when you want " + pet.name + " back.");
+										var ticket := CreateItemInBackpack (player, 0x14f0, 1);
+										ticket.usescript := "";
+										Save_Pet_Data (ticket, pet);
+									else
+										Say ("You don't have enough money!");
+									endif
+								else
+									say ("This is not a zoo!");
+								endif
+							elseif ( (pet.graphic == CID_HUMAN_MALE) or (pet.graphic == CID_HUMAN_FEMALE) )
+								Say ("Do I look like an Inn Keeper?!");
+							else
+								Say ("That is not your pet.");
+							endif
+						else
+							Say ("Never mind, then.");
+						endif
+					else
+						check_speech (evtext, player);
+					endif
+				EVID_ITEM_GIVEN:
+               		TurnToward (event.source);
+					Load_Ticket_Data (event.source, event.item);
+			endcase
+		endif
+	endwhile
+endprogram
+
+
+
+
+///////////////////
+//  Called to save the pet data to the claim ticket
+///////////////////
+
+function Save_Pet_Data (byref ticket, byref pet)
+	DropAllItems (pet);
+
+	ticket.name := "Pet claim ticket for : " + pet.name;
+	ticket.usescript := "";
+	SetObjProperty (ticket, "petname", pet.name);
+	SetObjProperty (ticket, "pethp", CINT (GetVital (pet, "Life")*100));
+	SetObjProperty (ticket, "petmana", CINT (GetVital (pet, "Mana")/100));
+	SetObjProperty (ticket, "petgraphic", pet.graphic);
+	SetObjProperty (ticket, "petcolor", pet.color);
+	SetObjProperty (ticket, "pettemplate", pet.npctemplate);
+	var basestr := CINT (GetAttributeBaseValue (pet, "Strength")/10);
+	var baseint := CINT (GetAttributeBaseValue (pet, "Intelligence")/10);
+	var basedex := CINT (GetAttributeBaseValue (pet, "Dexterity")/10);
+
+	var stats := array;
+	stats[1] := basestr;
+	stats[2] := baseint;
+	stats[3] := basedex;
+	SetObjProperty (ticket, "stats", stats);
+	var myskills := array {};
+	for i := 0 to 57
+		myskills[i] := GetAttributeBaseValue (pet, GetAttributeIDBySkillID (i));
+	endfor
+	SetObjProperty (ticket, "skills", myskills);
+	KillNPC (pet);
+endfunction
+
+
+
+
+///////////////////
+//  creates a new NPC based on the data stored in the claim ticket
+///////////////////
+
+function Load_Ticket_Data (byref player, byref ticket)
+
+	if (ticket.objtype == 0x14f0 and GetObjProperty (ticket, "pettemplate") )
+		if (!canclaim (player,GetObjProperty (ticket, "pettemplate")))
+			Say ("You have no chance of controlling that!");
+			MoveItemToContainer (ticket, player.backpack);
+			return;
+		endif
+
+		var newpet := 0;
+		Say ("Oh, let me find " + GetObjProperty (ticket, "petname") + " for you. One moment, please.");
+		Sleep (3);
+
+		set_critical(1);
+			newpet := SpawnNPCAtLocation (GetObjProperty (ticket, "pettemplate"), me.x+1, me.y+1, "guess", 0, me.realm);
+			if (!newpet)
+				Say ("Uh-oh...  Where'd he go?");
+				set_critical (1);
+				return;
+			endif
+
+			var skills := GetObjProperty (ticket, "skills");
+			if (skills)
+				for i := 0 to 57
+					var skill := skills[i];
+					if (!skill)
+						skill := 0;
+					elseif (skill < GetAttributeBaseValue (newpet, GetAttributeIDBySkillID(i)))
+						skill := GetAttributeBaseValue (newpet, GetAttributeIDBySkillID(i));
+					endif
+					SetAttributeBaseValue (newpet, GetAttributeIDBySkillID(i), skill);
+				endfor
+				SetObjProperty (newpet, "skills", skills);
+			endif
+
+			var stats := GetObjProperty (ticket, "stats");
+			if (stats)
+				SetAttributeBaseValue (newpet, "Strength", stats[1] * 10);
+				SetAttributeBaseValue (newpet, "Intelligence", stats[2] * 10);
+				SetAttributeBaseValue (newpet, "Dexterity", stats[3] * 10);
+				SetObjProperty (newpet, "stats", stats);
+				RecalcVitals (newpet);
+			endif
+
+			SetVital (newpet, "Life", GetObjProperty (ticket, "pethp") * 100);
+			SetVital (newpet, "Mana", GetObjProperty (ticket, "petmana") * 100);
+			if (GetObjProperty (ticket, "petgraphic"))
+				if (GetObjProperty (ticket, "petgraphic") != 0x51)
+					newpet.graphic := GetObjProperty (ticket, "petgraphic");
+				endif
+			endif
+			newpet.name := GetObjProperty (ticket, "petname");
+			newpet.color := GetObjProperty (ticket, "petcolor");
+			SetObjProperty (newpet, "color", GetObjProperty (ticket, "petcolor"));
+
+			SetObjProperty (newpet, "master", player.serial);
+			newpet.script := "::tamed";
+			RestartScript (newpet);
+		set_critical(0);
+
+		Say ("Take care of " + GetObjProperty (ticket, "petname") + " and be sure to feed it!");
+		DestroyItem (ticket);
+	else
+		TakeItem (player, ticket);
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  makes sure that the player can control the pet that they're trying to claim
+///////////////////
+
+function CanClaim (byref player, pettemplate)
+
+	case (pettemplate)
+		"horse":
+		"horse2":
+		"horse3":
+		"horse4":
+		"horse5":
+		"forestostard":
+		"desertostard":
+		"llama":
+			return 1;
+	endcase
+
+	var elem := GetNpcTemplateElem (pettemplate);
+	var difficulty := CINT (GetConfigInt (elem, "tameskill"));
+	if (!difficulty)
+		return 0;
+	endif
+
+	if (difficulty < 50)
+		return 1;
+	elseif ((difficulty - 20) > GetAttribute (player, ATTRIBUTEID_TAMING))
+		return 0;
+	else
+		return 1;
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Drops all the items that the pet is carrying
+///////////////////
+
+function DropAllItems (byref pet)
+
+	var mypack := FindMyPack(pet.serial);
+	foreach myitems in enumerateitemsincontainer(mypack)
+		if (myitems.container == mypack)
+			MoveObjectToLocation( myitems, pet.x, pet.y, pet.z, pet.realm, MOVEOBJECT_FORCELOCATION );
+			sleepms(100);
+		endif
+	endforeach
+
+	if (pet.backpack)
+		mypack := pet.backpack;
+		foreach item in enumerateitemsincontainer(mypack)
+			if (item.container == mypack)
+			MoveObjectToLocation( item, pet.x, pet.y, pet.z, pet.realm, MOVEOBJECT_FORCELOCATION );
+			endif
+		endforeach
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  The price to stable a pet is based on the difficulty of taming it
+///////////////////
+
+function GetStablePriceOfPet (pet)
+	var mobelem := GetNpcTemplateElem (pet.npctemplate);
+	var tameskill := CINT (mobelem.tameskill);
+	if (!tameskill)
+		return 250;
+	endif
+
+	if (tameskill <= 60)
+		return 30;
+	elseif (tameskill <= 70)
+		return 50;
+	elseif (tameskill <= 80)
+		return 100;
+	elseif (tameskill <= 90)
+		return 200;
+	elseif (tameskill <= 100)
+		return 300;
+	elseif (tameskill <= 110)
+		return 400;
+	else
+		return 500;
+	endif
+	return 1;
+
+
+endfunction

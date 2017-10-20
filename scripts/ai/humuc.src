@@ -1,0 +1,436 @@
+use npc;
+use os;
+use uo;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/combat/spellcasting";
+include "include/objtype";
+include "include/eventid";
+include "include/npcbackpacks";
+
+var masterserial := GetObjProperty (me, "master");
+var master := SystemFindObjectBySerial (masterserial);
+
+var chaseloop := 0;
+var following := 0;
+var nextwatch := ReadGameClock ();
+
+program humuc_ai ()
+	if (!me.backpack)
+		var newbackpack := CreateItemAtLocation (5288, 1176, 0,UOBJ_BACKPACK, 1, REALM_BRITANNIA);
+		if (!EquipItem (me, newbackpack))
+			DestroyItem (newbackpack);
+		endif
+	endif
+
+	if (GetObjProperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	CheckIfMasterExists ();
+	SetAnchor (me.x, me.y, 20, 0);
+	
+	EnableEvents (EVID_SPEECH, 12);
+	EnableEvents (EVID_ENGAGED + EVID_DAMAGED);
+	SetWarMode (0);
+	SetObjProperty (me, "serial", me.serial);
+	GrantPrivilege (me, "seehidden");
+	me.enable ("seehidden");
+
+	MainAILoop();
+endprogram
+
+
+
+
+///////////////////
+//  The function that does all the major AI work
+///////////////////
+
+function MainAILoop()
+    var ev;
+    nextwatch := ReadGameClock();
+
+	if (!master)
+		SetObjProperty (me, "#specialhidden_nodamage", 1);
+		if (CheckForNoLogoutArea (me))
+			TeleportFromNoLogoutArea (me);
+		endif
+
+		me.hidden := 1;
+		me.frozen := 1;
+		while (me)
+			ev := os::wait_for_event (120);
+			me.hidden := 1;
+			me.frozen := 1;
+		endwhile
+	else
+		following := master;
+		me.hidden := 0;
+		me.frozen := 0;
+		MoveObjectToLocation( me, following.x, following.y, following.z, following.realm, MOVEOBJECT_FORCELOCATION );
+		SetObjProperty (master, "humuc", me.serial);
+	endif
+
+	EraseObjProperty (me, "#specialhidden_nodamage");
+
+	var waittime := 0;
+	while (me)
+		ev := os::wait_for_event (waittime);
+		case (ev.type)
+			EVID_SPEECH:
+				ProcessSpeech (ev);
+			EVID_ENGAGED:
+			EVID_DAMAGED:
+				if (ev.source)
+					Fight (ev.source);
+				endif
+			EVID_ALL_FOLLOW_CMD:
+				following := master;
+		endcase
+		
+		if (following) 
+			waittime := 0;
+			Follow ();
+		else
+			waittime := 120;
+		endif
+
+		if (!master)
+			RestartScript (me);
+			return;
+		endif
+	endwhile
+
+endfunction
+
+function Guard()
+	if (ReadGameClock() > NextWatch)
+		if (!master.dead)
+			if (CheckLoSAt (me, master.x, master.y, master.z))
+				if (GetVital (master, "Life") < CINT (GetVitalMaximumValue (master, "Life")/2))
+					CastSpell (me, master, ":misc_spells:gheal");
+					sleep (3);
+				endif
+				if (master.poisoned)
+					CastSpell (me, master, ":poison_spells:cure");
+					sleep (3);
+				endif
+			else
+				if (RandomInt(20)==1)
+					TeletoMaster ();
+				endif
+			endif
+		endif
+		NextWatch := ReadGameClock() + 5;
+		if (RandomInt (20) == 1)
+			SayWhat ();
+		endif
+	endif
+endfunction
+
+function Follow()
+	if (me.frozen)
+		sleep (10);
+		return;
+	endif
+
+	var d := Distance (me, following);
+	if (d < 3)
+		sleep(1);
+		chaseloop := 0;
+	elseif (( d > 10 ) or ( chaseloop > 50 ))
+		MoveObjectToLocation( me, following.x, following.y, following.z, following.realm, MOVEOBJECT_FORCELOCATION );
+		chaseloop := 0;
+		sleep (1);
+	else
+		var olddexmod := GetAttributeTemporaryMod (me, "Dexterity");
+		SetAttributeTemporaryMod (me, "Dexterity", 5000);
+		RunToward (following);
+		SetAttributeTemporaryMod (me, "Dexterity", olddexmod);
+		chaseloop := chaseloop + 1;
+	endif
+
+	if (!following.acctname or following.dead)
+		following := 0;
+		return;
+	endif
+	if (master)
+		Guard();
+	endif
+endfunction
+
+function ProcessSpeech(ev)
+	if (ev.source.serial != masterserial)
+		return;
+	endif
+
+	if (!master)
+		RestartScript (me);
+	endif
+
+	if (me.name != master.name)
+		me.name := master.name;
+	endif
+
+	var evtext := lower(ev.text);
+	var mename := lower(me.name);
+
+	if( evtext[mename + " stop"] or evtext == "all stop")
+		sayOk ();
+		following := 0;
+	elseif (evtext[mename + " come"] or evtext == "all come")
+		sayOk ();
+		var done := 0;
+		chaseloop := 0;
+		while( done == 0 )
+			chaseloop := chaseloop + 1;
+			done := CloseDistance (ev.source);
+			if (chaseloop > 25)
+				done :=1;
+			endif
+		endwhile
+	elseif (evtext[mename + " follow"] or evtext["all follow"])
+		sayOk ();
+		following  := master;
+	elseif (evtext == "fetch" or evtext == "get")
+		sayOk ();
+		fetch();
+	elseif (evtext == "drop")
+		sayOk ();
+		drop();
+	elseif (evtext[mename + " speak"]  or evtext == "all speak")
+		SayOk ();
+	elseif (evtext == "cure")
+		sayOk ();
+		castspell(me,master,":poison_spells:cure");
+		sleep(3);
+	elseif (evtext == "heal")
+		sayOk ();
+		castspell(me,master,":misc_spells:gheal");
+		sleep(3);
+	elseif (evtext == "light")
+		sayOk ();
+		castspell(me,master,":misc_spells:nightsight");
+		sleep(3);
+	elseif (evtext == "loot")
+		sayOk ();
+		GrabLoot();
+		return 1;
+	elseif (evtext == "give")
+		sayOk ();
+		GiveLoot();
+		return 1;
+	endif
+
+endfunction
+
+function CloseDistance (opponent)
+	case (Distance (me, opponent))
+		1:
+		0:
+			return 1;
+		default:
+			if(!RunToward( opponent ))
+				return 1;
+			else
+				return 0;
+			endif
+	endcase
+endfunction
+
+function Fetch()
+
+	var tobj := Target(master);   //object I'm supposed to get
+	if (tobj.container)        
+		return;
+	endif
+
+	SayOk();
+
+	var times := 0;
+	while ( (distance(me, tobj) > 1) and times < 10 and CheckLoSAt(me,tobj.x,tobj.y,tobj.z) )
+		if( !runtoward(tobj))
+			sleepms(500);
+			times := times + 1;
+		else
+			times := 0;
+		endif
+	endwhile
+
+	if ( (tobj.movable) and (accessible(me,tobj)) )
+		MoveItemToContainer(tobj, me.backpack);
+	endif
+
+endfunction
+
+function drop()
+
+	SayWhat();
+	foreach myitems in EnumerateItemsInContainer (me.backpack)
+		if (myitems.container == me.backpack)
+			MoveObjectToLocation( myitems, me.x, me.y, me.z, me.realm, MOVEOBJECT_FORCELOCATION );
+			sleepms(100);
+		endif
+	endforeach
+
+endfunction
+
+
+function AllCommand(evtype,what)
+
+	var mobs := ListMobilesNearLocation( master.x, master.y, master.z, 9 );
+	var eve := struct;
+	eve.+type := evtype;
+	eve.+source := me;
+	eve.+target := what;
+	SendEvent( me , eve );
+	foreach mob in mobs 
+		if( GetObjProperty( mob , "master" ) == me.master.serial )
+			SendEvent( mob , eve );
+		endif
+	endforeach
+
+endfunction
+
+function fight (opponent)
+	if (opponent == me)
+		return;
+	endif
+	SayWhat ();
+
+	following := 0;
+	var runs := 0;
+	while ( (distance(me, opponent) < 20) and (runs < 50) )
+		runawayfrom(opponent);
+		runs := runs +1;
+		wait_for_event(0);
+	endwhile
+
+	me.hidden := 1;
+endfunction
+
+function SayWhat()
+
+	if (me.graphic == 0x3A)
+		PlaySoundEffect (me, 0x1D3);//wisp
+	else
+		PlaySoundEffect (me, 0x259);//humuc
+	endif
+
+endfunction
+
+function SayOK()
+
+	if (me.graphic == 0x3A)
+		PlaySoundEffect( me , 0x1D4 );//wisp
+	else
+		PlaySoundEffect( me , 0x254 );//humuc
+	endif
+
+endfunction
+
+function giveloot();
+	SayWhat ();
+	var who := master;
+	var bag := Target (who);
+	if (!bag)
+		return;
+	endif
+
+	if (bag.npctemplate)
+		return;
+	elseif (bag.acctname)
+		who := bag;
+	endif
+
+	var done := 0;
+	chaseloop := 0;
+	while( done == 0 and chaseloop < 50 )
+		chaseloop := chaseloop +1;
+		done := CloseDistance (who);
+	endwhile
+
+	if (!done)
+		return;
+	endif
+
+	if (bag.container != who.backpack)
+		bag := who.backpack;
+	endif
+
+	var stackeditems := array {};
+
+	foreach item in enumerateitemsincontainer(bag)
+		if (item.amount > 1)
+			stackeditems[len(stackeditems)+1]:=item.objtype;
+		endif
+	endforeach
+	foreach item in enumerateitemsincontainer (me.backpack)
+		if (item.amount > 1)
+			stackeditems[len(stackeditems)+1]:=item.objtype;
+		endif
+	endforeach
+
+	foreach myitems in enumerateitemsincontainer(me.backpack)
+		if (myitems.container == me.backpack)
+			if ( ( myitems.objtype in stackeditems ) )
+				if (CreateItemInContainer( bag, myitems.objtype, myitems.amount ))
+					DestroyItem(myitems);
+					sleepms(100);
+				else
+					return;
+				endif
+			else
+				if ( moveitemtocontainer(myitems, bag) )
+					sleepms(100);
+				else
+					return;
+				endif
+			endif
+		endif
+	endforeach
+
+
+endfunction
+
+function TeleToMaster ();
+	if (me.frozen)
+		sleep (3);
+		return;
+	endif
+	
+	master := SystemFindObjectBySerial (masterserial);
+	if (master)
+		me.hidden := 0;
+		say ("Kal Ort Por");
+		PlaySoundEffect ( me, SFX_210 );
+		sleepms (250);
+		MoveObjectToLocation( me, master.x, master.y, master.z, master.realm, MOVEOBJECT_FORCELOCATION );
+		following := master;
+		PlaySoundEffect (me, SFX_SPELL_RECALL);
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Kills the humuc if their owner no longer exists (deleted the character, for example)
+///////////////////
+
+function CheckIfMasterExists ()
+	set_critical (1);
+	var mymaster := SystemFindObjectBySerial (masterserial);
+	if (!mymaster)
+		var mymaster := SystemFindObjectBySerial (masterserial, SYSFIND_SEARCH_OFFLINE_MOBILES);
+		if (!mymaster)
+			set_critical (0);
+			KillMe ();
+			return;
+		endif
+	endif
+	me.setmaster (mymaster);
+	me.name := mymaster.name;
+	set_critical (0);
+endfunction

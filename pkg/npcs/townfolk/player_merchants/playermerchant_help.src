@@ -1,0 +1,51 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/eventid";
+include "include/utility";
+include "include/gumps";
+include "include/sysevent";
+include "../pkg/npcs/npc_util";
+include "../pkg/items/housing/house";
+
+var gump_layout, gump_data;
+
+program player_merchant_sort (player)
+	if (GetObjProperty (player, "#merchant_help_pid"))
+		if (GetProcess (GetObjProperty (player, "#merchant_help_pid")))
+			return;
+		endif
+	endif
+	SetObjProperty (player, "#merchant_help_pid", GetPid());
+
+	var themessage := "Merchant Help:  ";
+	themessage := themessage + "Player merchants can only sell items when placed in a house owned by their ";
+	themessage := themessage + "master, or a house that their master is friended to.  ";
+	themessage := themessage + "Merchants know and obey the following commands:";
+	themessage := themessage + "<p><b>Buy</b> - The merchant will show you what they have to sell.";
+	themessage := themessage + "<br><b>Sell</b> - The merchant will tell you what they buy, and what they ";
+	themessage := themessage + "will pay for that item.  Drop the item on the merchant to sell it to them. ";
+	themessage := themessage + "<br><b>Contact</b> - The merchant will tell you how to contact their owner ";
+	themessage := themessage + "(email address, for example) if their owner has told them.";
+	themessage := themessage + "<p><b>Owner-only commands</b>";
+	themessage := themessage + "<br><b>Release</b> - Fire the merchant";
+	themessage := themessage + "<br><b>Collect</b> - Take all of the money and items that the merchant has made";
+	themessage := themessage + "<br><b>Status</b> - Find out how much gold the merchant has, and if they have bought any items for you";
+	themessage := themessage + "<br><b>Log</b> - View the log of items sold";
+	themessage := themessage + "<br><b>Wear</b> - Equip the merchant with clothing";
+	themessage := themessage + "<br><b>Undress</b> - Take back any clothing that you've given the merchant";
+	themessage := themessage + "<br><b>Strip</b> - Removed all clothing, money and items from the merchant";
+	themessage := themessage + "<br><b>Follow</b> - The merchant will follow you to a new location";
+	themessage := themessage + "<br><b>Stop</b> - The merchant will stop following you";
+	themessage := themessage + "<br><b>Purchase</b> - Tell the merchant to purchase an item from other players on your behalf.  ";
+	themessage := themessage + "You'll need to make sure the merchant has money to buy it.";
+	themessage := themessage + "<br><b>Sort</b> - Allows you to rearrange the items for sale on the merchant";
+
+	SendStringAsHtmlWindow (player, themessage, "Merchant Help");
+	EraseObjProperty (player, "#merchant_help_pid");
+endprogram
+

@@ -1,0 +1,34 @@
+use uo;
+use os;
+
+include "include/gumps";
+include "include/wodinc";
+include "../pkg/npcs/npc_util";
+
+program npcwipe ( character )
+
+	SendSysMessage (character, "This will kill all the NPCs!");
+	var goahead := YesNo (character, "Are you sure?");
+	if (!goahead)
+		SendSysMessage (character, "Whew.  Canceled.");
+		return;
+	endif
+
+	var number := 0;
+
+	var x, y, z;
+	for ( x := 6144; x > 16; x := x  - 32)
+		broadcast ( "Wiping NPCs, X=" + x );
+		for( y := 16; y < 4096; y := y + 32 )
+			for( z := -60; z <= 60; z := z + 30 )
+				foreach npc in ListMobilesNearLocationEx (x, y, z, 32, LISTEX_FLAG_NORMAL+LISTEX_FLAG_HIDDEN, REALM_BRITANNIA )
+					if (npc.npctemplate and !GetObjProperty (npc, "master") and !GetObjProperty (npc, "myhome"))
+						KillNPC (npc);
+						number := number + 1;
+					endif
+				endforeach
+			endfor
+		endfor
+		broadcast ("Total NPCs killed: " + number);
+	endfor
+endprogram

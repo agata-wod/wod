@@ -1,0 +1,16 @@
+use uo;
+use vitals;
+
+/////////////////////////////////////////////////////////////////////////////
+//
+//  ".refreshme" - Restore Hits, Mana, Stamina
+//
+//  Thanks to The Writer, from our Dev Board, for this one.
+//
+/////////////////////////////////////////////////////////////////////////////
+
+program textcmd_refreshme( who )
+	SetVital (who, "Life", GetVitalMaximumValue (who, "Life"));
+	SetVital (who, "Mana", GetVitalMaximumValue (who, "Mana"));
+	SetVital (who, "Stamina", GetVitalMaximumValue (who, "Stamina"));
+endprogram

@@ -1,0 +1,39 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "../pkg/combat/loot/loot";
+
+
+program maketestloot (character, text)
+
+	if (!text)
+		SendSysMessage (character, "Format is: .testloot [lootgroup] [number of tests]");
+		return;
+	endif
+
+	var bag := Target (character);
+	if (!bag)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	var options := SplitWords (text);
+	var lootgroup := options[1];
+	var number := CINT (options [2]);
+	if (!number)
+		number := 1;
+	endif
+
+	for i := 1 to number
+		if (!MakeLootInChest (bag, lootgroup))
+			if (!MakeLootOnCorpse (bag, lootgroup))
+				SendSysMessage (character, "Invalid lootgroup!");
+				return;
+			endif
+		endif
+		sleep (1);
+	endfor
+
+endprogram

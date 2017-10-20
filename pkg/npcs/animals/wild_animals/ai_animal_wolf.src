@@ -1,0 +1,69 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/mainloop_wolf";
+include "../pkg/npcs/main_ai/main/sleepmode_normal";
+include "../pkg/npcs/main_ai/combat/fightmode_dumb";
+include "../pkg/npcs/main_ai/combat/closedistance_default";
+include "../pkg/npcs/main_ai/combat/changeopponent_dumb";
+include "../pkg/npcs/animals/animals";
+
+const HALT_THRESHOLD := 5; // how close before he attacks?
+drop_anchor();
+
+program wolf_ai()
+	if (!me.backpack)
+		DoOnCreationSetup ();
+	endif
+	DoStartupSetup ();
+
+	if (getobjproperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	post_combat ();
+	main_AI_loop ();
+endprogram
+
+
+function process_combat_event(ev)
+	if (ev.type == EVID_DAMAGED)
+		if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/10))
+			EraseObjProperty (me, "#flees");
+			Flee (ev.source);
+		endif
+	endif
+endfunction
+
+
+function in_combat_event_loop (byref opponent)
+	if (opponent)
+	endif
+	return;
+endfunction
+
+function post_combat()
+	DisableCombatEvents();
+	EnableMainEvents();
+
+	SetWarMode ( 0 );
+	sleep (1);
+	look_around();
+endfunction
+
+function prepare_for_fight (byref opponent)
+	if (opponent)
+	endif
+	DisableMainEvents();
+	EnableCombatEvents();
+endfunction
+
+
+
+
+
+

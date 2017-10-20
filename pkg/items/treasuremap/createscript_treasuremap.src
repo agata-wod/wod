@@ -1,0 +1,6 @@
+use uo;
+use os;
+
+program createscript_treasuremap (map)
+	map.usescript := ":treasuremap:decode_treasuremap";
+endprogram

@@ -1,0 +1,9 @@
+use uo;
+use os;
+
+program control_spider_web (web)
+
+	sleep (120);
+	destroyitem (web);
+
+endprogram

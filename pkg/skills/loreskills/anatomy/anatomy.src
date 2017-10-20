@@ -1,0 +1,111 @@
+use uo;
+use os;
+use vitals;
+
+include "include/client";
+include "include/attributes";
+
+program anatomy (character)
+	if (GetObjProperty (character, "#useskill"))
+		if (GetProcess (GetObjProperty (character, "#useskill")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#useskill", GetPid());
+
+	SendSysMessage (character, "Select a target.");
+	var subject := Target (character);
+	if (!subject)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (!GetVital (subject, "Life"))
+		SendSysmessage (character, "Invalid selection.");
+		return;
+	endif
+
+	if (subject.dead)
+		SendSysMessage (character, "It looks rather dead...");
+		return;
+	endif
+
+	if (!CheckSkill (character, SKILLID_ANATOMY, -1, 0))
+		SendSysmessage (character, "You're not sure . . .");
+		return;
+	endif
+
+	var dexdesc := "";
+	var subject_dex := GetAttribute (subject, "Dexterity");
+	if (subject_dex < 20)
+		dexdesc := "very clumsy";
+	elseif (subject_dex < 40)
+		dexdesc := "rather clumsy";
+	elseif (subject_dex < 60)
+		dexdesc := "rather uncoordinated";
+	elseif (subject_dex < 80)
+		dexdesc := "moderately agile";
+	elseif (subject_dex < 100)
+		dexdesc := "rather agile";
+	elseif (subject_dex < 120)
+		dexdesc := "quite agile";
+	elseif (subject_dex < 140)
+		dexdesc := "extremely agile";
+	elseif (subject_dex < 160)
+		dexdesc := "amazingly agile";
+	else
+		dexdesc := "superhumanly agile";
+	endif
+
+	var strdesc := "";
+	var subject_str := GetAttribute (subject, "Strength");
+	if (subject_str < 20)
+		strdesc := "pathetically weak";
+	elseif (subject_str < 40)
+		strdesc := "rather weak";
+	elseif (subject_str < 60)
+		strdesc := "not very strong";
+	elseif (subject_str < 80)
+		strdesc := "moderately strong";
+	elseif (subject_str < 100)
+		strdesc := "rather strong";
+	elseif (subject_str < 120)
+		strdesc := "quite strong";
+	elseif (subject_str < 140)
+		strdesc := "extremely strong";
+	elseif (subject_str < 160)
+		strdesc := "amazingly strong";
+	else
+		strdesc := "superhumanly strong";
+	endif
+
+	var healthdesc := "";
+	var percenthealth := CINT (100 * (GetVital (subject, "Life")/GetVitalMaximumValue (subject, "Life")));
+	if (percenthealth <= 10)
+		healthdesc := "near death";
+	elseif (percenthealth <= 20) 
+		healthdesc := "in bad shape";
+	elseif (percenthealth <= 40 )
+		healthdesc := "in poor health";
+	elseif (percenthealth <= 60 )
+		healthdesc := "in fair health";
+	elseif (percenthealth <= 80 )
+		healthdesc := "in good health";
+	else  
+		healthdesc := "in excellent shape";
+	endif
+     
+	SendSysmessage (character, "The subject appears to be " + dexdesc + ", " + strdesc + " and is " + 
+			healthdesc + ".");
+
+	if (subject.poisoned) 
+		SendSysMessage (character, "The subject also appears to be poisoned.");
+	endif  
+
+endprogram
+
+
+
+
+

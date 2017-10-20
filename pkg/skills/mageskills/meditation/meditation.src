@@ -1,0 +1,127 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/attributes";
+
+program meditate (character)
+	if (character.warmode)
+		SendSysMessage (character, "You cannot meditate in warmode!");
+		return;
+	endif
+
+	if (GetObjProperty (character, "#useskill"))
+		if (GetProcess (GetObjProperty (character, "#useskill")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#useskill", GetPid());
+
+	var circle := 6;
+	var cfg := ReadConfigFile (":*:itemdesc");
+	foreach item in ListEquippedItems(character)
+		if ((cfg[item.objtype].blockcircle) && (cfg[item.objtype].blockcircle < circle)) 
+			SendSysmessage (character, "Your equipment prevents you from meditating!");
+			EraseObjProperty (character, "#useskill");
+			return;
+		endif
+	endforeach
+
+	if (GetVital (character, "mana") >= GetVitalMaximumValue (character, "mana"))
+		SendSysMessage (character, "You are at peace.");
+		EraseObjProperty (character, "#useskill");
+		return;
+	endif
+
+	var hp := GetVital (character, "Life");
+	var x := character.x;
+	var y := character.y;
+	var mana := GetVital (character, "mana");
+	var diff := CINT ((GetVitalMaximumValue (character, "mana") - GetVital (character, "mana"))/100);
+
+	var scaled_diff := 110 - CINT ((GetVital (character, "Mana") * 100)/GetVitalMaximumValue (character, "Mana"));
+	if (scaled_diff < diff)
+		diff := scaled_diff;
+	endif
+
+	if ( diff > 100 )
+		diff := 100;
+	elseif (diff < 1)
+		diff := 0;
+	endif
+
+	SendSysMessage (character, "You begin to meditate...");
+	PlaySoundEffect (character, 0xf8);
+	sleep (3);
+
+	if (character.x != x or character.y !=y or GetVital (character, "Life") < hp
+				or GetVital (character, "mana") >= GetVitalMaximumValue (character, "mana")
+				or (GetVital (character, "mana") < mana) )
+		SendSysMessage (character, "You are unable to concentrate.");
+		PlaySoundEffect (character, 0xf6);
+		EraseObjProperty (character, "#useskill");
+		return;
+	endif
+
+	//take their max skill of evalint, necromancy, and druidic magic
+	var evalint_skill := GetAttribute (character, ATTRIBUTEID_INVOCATION);
+	if (GetAttribute (character, ATTRIBUTEID_ANIMALLORE) > evalint_skill)
+		evalint_skill := GetAttribute (character, ATTRIBUTEID_ANIMALLORE);
+	endif
+
+	if (GetAttribute (character, ATTRIBUTEID_NECROMANCY) > evalint_skill)
+		evalint_skill := GetAttribute (character, ATTRIBUTEID_NECROMANCY);
+	endif
+	var avgskill := CINT((GetAttribute (character, ATTRIBUTEID_MEDITATION) + GetAttribute (character, ATTRIBUTEID_MAGERY) + evalint_skill)/3);
+
+	var rate := 2;
+	If ( avgskill > 95)
+		rate := 6;
+	elseif ( avgskill > 80)
+		rate := 4;
+	endif
+
+	if (CheckSkill (character, SKILLID_MEDITATION, diff, 0) )
+		SetVital (character, "Mana", GetVital (character, "Mana") + 300*rate);
+		if (GetVital (character, "Mana") > GetVitalMaximumValue (character, "Mana"))
+			SetVital (character, "Mana", GetVital (character, "Mana"));
+			SendSysMessage (character, "You stop meditating");
+			PlaySoundEffect (character, 0xf6);
+			EraseObjProperty (character, "#useskill");
+			return;
+		endif
+		PlaySoundEffect (character, 0xfa);
+		
+		repeat
+			SetVital (character, "Mana", GetVital (character, "Mana") + 100*rate);
+			if (GetVital (character, "Mana") >= GetVitalMaximumValue (character, "Mana"))
+				SetVital (character, "Mana", GetVital (character, "Mana"));
+				SendSysMessage (character, "You stop meditating");
+				PlaySoundEffect (character, 0xf6);
+				EraseObjProperty (character, "#useskill");
+				return;
+			endif
+
+			sleep (1);
+
+			//check to see if we were hit
+			if (GetVital (character, "Life") < hp or character.warmode)
+				SendSysMessage (character, "Your meditation is interrupted!");
+				EraseObjProperty (character, "#useskill");
+				return;
+			endif
+		until (character.x != x or character.y !=y);
+
+		if (GetVital (character, "Mana") > GetVitalMaximumValue (character, "Mana"))
+			SetVital (character, "Mana", GetVital (character, "Mana"));
+		endif
+		
+		SendSysMessage (character, "You stop meditating");
+		PlaySoundEffect (character, 0xf6);
+	else
+		SendSysMessage (character, "You are unable to concentrate.");
+	endif
+	EraseObjProperty (character, "#useskill");
+endprogram

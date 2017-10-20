@@ -1,0 +1,33 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/gumps";
+include "include/client";
+include "include/objtype";
+include "../pkg/items/housing/house";
+
+program add_house (character, text)
+	var acct := FindAccount (text);
+	if (!acct)
+		SendSysMessage (character, "That's not an existing account name.");
+		return;
+	endif
+	var sign := Target (character);
+	if (!sign)
+		SendSysMessage (character, "Cancelled.");
+		return;
+	endif
+	var acctname := Lower (text);
+	var global_prop_name := "#housing_of_" + acctname;
+	var existing_houses := GetGlobalProperty (global_prop_name);
+	if (!existing_houses)
+		existing_houses := Array {};
+	endif
+	if (! (sign.serial in existing_houses))
+		existing_houses.append (sign.serial);
+		SetGlobalProperty (global_prop_name, existing_houses);
+	endif
+
+endprogram

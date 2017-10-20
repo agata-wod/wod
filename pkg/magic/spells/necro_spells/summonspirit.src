@@ -1,0 +1,58 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 7;
+
+program cast_summonspirit (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		return 0;
+	endif
+	var cast_loc := GetSpellCastOn (caster, parms);
+	if (!cast_loc)
+		return 0;
+	endif
+
+	var lastcast := GetObjProperty (caster, "#lastcastsummonspirit");
+	if (lastcast and (lastcast + 120 > ReadGameClock()))
+		SendSysMessage (caster, "You're still drained from your last casting!");
+		return 0;
+	endif
+	SetObjProperty (caster, "#lastcastsummonspirit", ReadGameClock() );
+
+	if (!CheckSkill (caster, SKILLID_NECROMANCY, -1, 0))
+		SendSysMessage (caster,"You fail to contact the nether realm");
+		return 0;
+	endif
+
+	var npctemplate := "";
+	var amount := RandomInt (2) + RandomInt (2) + 1;
+	var duration := 60 + (GetAttribute (caster, ATTRIBUTEID_NECROMANCY) * 2);
+
+	for i := 1 to amount
+		Case (RandomInt (4))
+			0:
+				npctemplate := "bonemage";
+			1:
+				npctemplate := "spectre";
+			2:
+				npctemplate := "lich";
+			3:
+				npctemplate := "vampiremage";
+			4:
+				npctemplate := "flamingskeleton";
+		endcase
+
+		SummonCreature (caster, npctemplate, cast_loc, duration);
+	endfor
+
+	detach ();
+	sleep (120);
+	EraseObjProperty (caster, "#lastcastsummonspirit");
+	return 1;
+endprogram

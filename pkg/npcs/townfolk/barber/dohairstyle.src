@@ -1,0 +1,1695 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/objtype";
+
+program do_hair_style (parms)
+
+	var merchant := parms[1];
+	var paying_customer := parms[2];	//the player
+	var customer := parms[3];		//maybe the player, or maybe a follower
+
+	if (customer.graphic == 400 or customer.graphic == 744)
+		if (customer == paying_customer)
+			PrintTextAbovePrivate (merchant, "Welcome sir!  What can I do for you?", paying_customer);
+		endif
+		DisplayMaleHairOptions (merchant, paying_customer, customer);
+	elseif (customer.graphic == 401 or customer.graphic == 745)
+		if (customer == paying_customer)
+			PrintTextAbovePrivate (merchant, "Welcome madame!  What can I do for you?", paying_customer);
+		endif
+		DisplayFemaleHairOptions (merchant, paying_customer, customer);
+	elseif (customer.graphic == 605)
+		if (customer == paying_customer)
+			PrintTextAbovePrivate (merchant, "Welcome sir!  What can I do for you?", paying_customer);
+		endif
+		DisplayMaleElfHairOptions (merchant, paying_customer, customer);
+	elseif (customer.graphic == 606)
+		if (customer == paying_customer)
+			PrintTextAbovePrivate (merchant, "Welcome madame!  What can I do for you?", paying_customer);
+		endif
+		DisplayFemaleElfHairOptions (merchant, paying_customer, customer);
+	elseif (customer.graphic == 666)
+		if (customer == paying_customer)
+			PrintTextAbovePrivate (merchant, "Welcome sir!  What can I do for you?", paying_customer);
+		endif
+		DisplayMaleHornOptions (merchant, paying_customer, customer);
+	elseif (customer.graphic == 667)
+		if (customer == paying_customer)
+			PrintTextAbovePrivate (merchant, "Welcome madame!  What can I do for you?", paying_customer);
+		endif
+		DisplayFemaleHornOptions (merchant, paying_customer, customer);
+	else
+		PrintTextAbovePrivate (merchant, "Ack!  Get out of my shop you... you... THING!", paying_customer);
+		return;
+	endif
+
+endprogram
+
+
+
+
+///////////////////
+//  displays hair styling options for men
+///////////////////
+
+function DisplayMaleHairOptions (merchant, paying_customer, customer)
+
+	var gump_layout := array{
+		"page 0",
+		"nodispose",
+		"resizepic 20 20 3000 400 400"
+	};
+
+	var gump_data := array{};
+
+	gump_layout.append ("text 50 50 1345 0");
+	gump_data.append ("Hairstyles");
+
+	gump_layout.append ("button 55 74 2103 2104 1 0 101");
+	gump_layout.append ("text 70 70 0 1");
+	gump_data.append ("Short hair");
+
+	gump_layout.append ("button 55 94 2103 2104 1 0 102");
+	gump_layout.append ("text 70 90 0 2");
+	gump_data.append ("Long hair");
+
+	gump_layout.append ("button 55 114 2103 2104 1 0 103");
+	gump_layout.append ("text 70 110 0 3");
+	gump_data.append ("Pony tail");
+
+	gump_layout.append ("button 55 134 2103 2104 1 0 104");
+	gump_layout.append ("text 70 130 0 4");
+	gump_data.append ("Mohawk");
+
+	gump_layout.append ("button 55 154 2103 2104 1 0 105");
+	gump_layout.append ("text 70 150 0 5");
+	gump_data.append ("Pageboy");
+
+	gump_layout.append ("button 55 174 2103 2104 1 0 106");
+	gump_layout.append ("text 70 170 0 6");
+	gump_data.append ("Buns");
+
+	gump_layout.append ("button 55 194 2103 2104 1 0 107");
+	gump_layout.append ("text 70 190 0 7");
+	gump_data.append ("Afro");
+
+	gump_layout.append ("button 55 214 2103 2104 1 0 108");
+	gump_layout.append ("text 70 210 0 8");
+	gump_data.append ("Receding");
+
+	gump_layout.append ("button 55 234 2103 2104 1 0 109");
+	gump_layout.append ("text 70 230 0 9");
+	gump_data.append ("Pigtails");
+
+	gump_layout.append ("button 55 254 2103 2104 1 0 110");
+	gump_layout.append ("text 70 250 0 10");
+	gump_data.append ("Krisna");
+
+	gump_layout.append ("button 55 274 2103 2104 1 0 111");
+	gump_layout.append ("text 70 270 0 11");
+	gump_data.append ("Bald");
+
+	gump_layout.append ("button 55 314 2103 2104 1 0 120");
+	gump_layout.append ("text 70 310 0 12");
+	gump_data.append ("Dye hair");
+
+
+	gump_layout.append ("text 200 50 1345 13");
+	gump_data.append ("Facial hair");
+
+	gump_layout.append ("button 205 74 2103 2104 1 0 201");
+	gump_layout.append ("text 220 70 0 14");
+	gump_data.append ("Long beard");
+
+	gump_layout.append ("button 205 94 2103 2104 1 0 202");
+	gump_layout.append ("text 220 90 0 15");
+	gump_data.append ("Short beard");
+
+	gump_layout.append ("button 205 114 2103 2104 1 0 203");
+	gump_layout.append ("text 220 110 0 16");
+	gump_data.append ("Goatee");
+
+	gump_layout.append ("button 205 134 2103 2104 1 0 204");
+	gump_layout.append ("text 220 130 0 17");
+	gump_data.append ("Mustache");
+
+	gump_layout.append ("button 205 154 2103 2104 1 0 205");
+	gump_layout.append ("text 220 150 0 18");
+	gump_data.append ("Short beard w/mustache");
+
+	gump_layout.append ("button 205 174 2103 2104 1 0 206");
+	gump_layout.append ("text 220 170 0 19");
+	gump_data.append ("Long beard w/mustache");
+
+	gump_layout.append ("button 205 194 2103 2104 1 0 207");
+	gump_layout.append ("text 220 190 0 20");
+	gump_data.append ("Vandyke");
+
+	gump_layout.append ("button 205 214 2103 2104 1 0 208");
+	gump_layout.append ("text 220 210 0 21");
+	gump_data.append ("Clean shave");
+
+	gump_layout.append ("button 205 314 2103 2104 1 0 220");
+	gump_layout.append ("text 220 310 0 22");
+	gump_data.append ("Dye beard");
+
+	if (!paying_customer.cmdlevel)
+		gump_layout.append ("text 130 370 32 23");
+		gump_data.append ("All services, only 25 gold.");
+
+		gump_layout.append ("button 130 395 2103 2104 1 0 500");
+		gump_layout.append ("text 150 390 0 24");
+		gump_data.append ("Select Follower");
+	endif
+
+	var gump_return := SendDialogGump (paying_customer, gump_layout, gump_data );
+	if (!gump_return and gump_return[0] != 0)
+		PrintTextAbovePrivate (merchant, "Please close your spec book, skill window, and any other gumps.", paying_customer);
+		return;
+	elseif (gump_return[0] == 0)
+		PrintTextAbovePrivate (merchant, "OK, never mind then.", paying_customer);
+		return;
+	elseif (gump_return[0] == 500)
+		PrintTextAbove (merchant, "Who's hair do you want me to do?");
+		var npc := Target (paying_customer);
+		if (!npc)
+			PrintTextAbovePrivate (merchant, "OK, never mind then.", paying_customer);
+			return;
+		endif
+
+		if (!npc.npctemplate)
+			PrintTextAbovePrivate (merchant, "I don't think so, bub.", paying_customer);
+			return;
+		endif
+
+		var master := GetObjProperty (npc, "master");
+		if (!master or master != paying_customer.serial)
+			PrintTextAbovePrivate (merchant, "I don't think he wants me to be doing his hair.", paying_customer);
+			return;
+		endif
+
+		var parms := array;
+		parms[1] := merchant;
+		parms[2] := paying_customer;
+		parms[3] := npc;
+		start_script (":barber:dohairstyle", parms);
+		return;
+	elseif (gump_return[0] == 120)
+		RecolorHair (merchant, paying_customer, customer);
+		return;
+	elseif (gump_return[0] == 220)
+		RecolorBeard (merchant, paying_customer, customer);
+		return;
+	endif
+
+	if (!paying_customer.cmdlevel)
+		if (!paying_customer.spendgold (25) )
+			PrintTextAbovePrivate (merchant,  "You don't have enough gold!", paying_customer);
+			return;
+		endif
+	endif
+
+	//var new_hairstyle := 0;
+	case (gump_return[0])
+		101:
+			ChangeHairToStyle (merchant, customer, 0x203b);
+		102:
+			ChangeHairToStyle (merchant, customer, 0x203c);
+		103:
+			ChangeHairToStyle (merchant, customer, 0x203d);
+		104:
+			ChangeHairToStyle (merchant, customer, 0x2044);
+		105:
+			ChangeHairToStyle (merchant, customer, 0x2045);
+		106:
+			ChangeHairToStyle (merchant, customer, 0x2046);
+		107:
+			ChangeHairToStyle (merchant, customer, 0x2047);
+		108:
+			ChangeHairToStyle (merchant, customer, 0x2048);
+		109:
+			ChangeHairToStyle (merchant, customer, 0x2049);
+		110:
+			ChangeHairToStyle (merchant, customer, 0x204a);
+		111:
+			var old_hair := GetEquipmentByLayer ( customer, LAYER_HAIR );
+			DestroyItem (old_hair);
+		201:
+			ChangeBeardToStyle (merchant, customer, 0x203e);
+		202:
+			ChangeBeardToStyle (merchant, customer, 0x203f);
+		203:
+			ChangeBeardToStyle (merchant, customer, 0x2040);
+		204:
+			ChangeBeardToStyle (merchant, customer, 0x2041);
+		205:
+			ChangeBeardToStyle (merchant, customer, 0x204b);
+		206:
+			ChangeBeardToStyle (merchant, customer, 0x204c);
+		207:
+			ChangeBeardToStyle (merchant, customer, 0x204d);
+		208:
+			var old_beard := GetEquipmentByLayer ( customer, LAYER_BEARD );
+			DestroyItem (old_beard);
+
+		default:
+			PrintTextAbove (merchant, "I can't do that.", paying_customer);
+	endcase
+
+endfunction
+
+
+
+
+///////////////////
+//  displays hair styling options for women
+///////////////////
+
+function DisplayFemaleHairOptions (merchant, paying_customer, customer)
+
+	var gump_layout := array{
+		"page 0",
+		"nodispose",
+		"resizepic 20 20 3000 400 400"
+	};
+
+	var gump_data := array{};
+
+	gump_layout.append ("text 50 50 1345 0");
+	gump_data.append ("Hairstyles");
+
+	gump_layout.append ("button 55 74 2103 2104 1 0 101");
+	gump_layout.append ("text 70 70 0 1");
+	gump_data.append ("Short hair");
+
+	gump_layout.append ("button 55 94 2103 2104 1 0 102");
+	gump_layout.append ("text 70 90 0 2");
+	gump_data.append ("Long hair");
+
+	gump_layout.append ("button 55 114 2103 2104 1 0 103");
+	gump_layout.append ("text 70 110 0 3");
+	gump_data.append ("Pony tail");
+
+	gump_layout.append ("button 55 134 2103 2104 1 0 104");
+	gump_layout.append ("text 70 130 0 4");
+	gump_data.append ("Mohawk");
+
+	gump_layout.append ("button 55 154 2103 2104 1 0 105");
+	gump_layout.append ("text 70 150 0 5");
+	gump_data.append ("Pageboy");
+
+	gump_layout.append ("button 55 174 2103 2104 1 0 106");
+	gump_layout.append ("text 70 170 0 6");
+	gump_data.append ("Buns");
+
+	gump_layout.append ("button 55 194 2103 2104 1 0 107");
+	gump_layout.append ("text 70 190 0 7");
+	gump_data.append ("Afro");
+
+	gump_layout.append ("button 55 214 2103 2104 1 0 108");
+	gump_layout.append ("text 70 210 0 8");
+	gump_data.append ("Receding");
+
+	gump_layout.append ("button 55 234 2103 2104 1 0 109");
+	gump_layout.append ("text 70 230 0 9");
+	gump_data.append ("Pigtails");
+
+	gump_layout.append ("button 55 254 2103 2104 1 0 110");
+	gump_layout.append ("text 70 250 0 10");
+	gump_data.append ("Krisna");
+
+	gump_layout.append ("button 55 274 2103 2104 1 0 111");
+	gump_layout.append ("text 70 270 0 11");
+	gump_data.append ("Bald");
+
+	gump_layout.append ("button 55 314 2103 2104 1 0 120");
+	gump_layout.append ("text 70 310 0 12");
+	gump_data.append ("Dye hair");
+
+	if (!paying_customer.cmdlevel)
+		gump_layout.append ("text 130 370 32 13");
+		gump_data.append ("All services, only 25 gold.");
+
+		gump_layout.append ("button 130 395 2103 2104 1 0 500");
+		gump_layout.append ("text 150 390 0 14");
+		gump_data.append ("Select Follower");
+	endif
+
+	var gump_return := SendDialogGump (paying_customer, gump_layout, gump_data );
+	if (!gump_return and gump_return[0] != 0)
+		PrintTextAbovePrivate (merchant, "Please close your spec book, skill window, and any other gumps.", paying_customer);
+		return;
+	elseif (gump_return[0] == 0)
+		PrintTextAbovePrivate (merchant, "OK, never mind then.", paying_customer);
+		return;
+	elseif (gump_return[0] == 500)
+		PrintTextAbove (merchant, "Who's hair do you want me to do?");
+		var npc := Target (paying_customer);
+		if (!npc)
+			PrintTextAbovePrivate (merchant, "OK, never mind then.", paying_customer);
+			return;
+		endif
+
+		if (!npc.npctemplate)
+			PrintTextAbovePrivate (merchant, "I don't think so, bub.", paying_customer);
+			return;
+		endif
+
+		var master := GetObjProperty (npc, "master");
+		if (!master or master != paying_customer.serial)
+			PrintTextAbovePrivate (merchant, "I don't think he wants me to be doing his hair.", paying_customer);
+			return;
+		endif
+
+		var parms := array;
+		parms[1] := merchant;
+		parms[2] := paying_customer;
+		parms[3] := npc;
+		start_script (":barber:dohairstyle", parms);
+		return;
+	elseif (gump_return[0] == 120)
+		RecolorHair (merchant, paying_customer, customer);
+		return;
+	elseif (gump_return[0] == 220)
+		RecolorBeard (merchant, paying_customer, customer);
+		return;
+	endif
+
+	if (!paying_customer.cmdlevel)
+		if (!paying_customer.spendgold (25) )
+			PrintTextAbovePrivate (merchant,  "You don't have enough gold!", paying_customer);
+			return;
+		endif
+	endif
+
+	//var new_hairstyle := 0;
+	case (gump_return[0])
+		101:
+			ChangeHairToStyle (merchant, customer, 0x203b);
+		102:
+			ChangeHairToStyle (merchant, customer, 0x203c);
+		103:
+			ChangeHairToStyle (merchant, customer, 0x203d);
+		104:
+			ChangeHairToStyle (merchant, customer, 0x2044);
+		105:
+			ChangeHairToStyle (merchant, customer, 0x2045);
+		106:
+			ChangeHairToStyle (merchant, customer, 0x2046);
+		107:
+			ChangeHairToStyle (merchant, customer, 0x2047);
+		108:
+			ChangeHairToStyle (merchant, customer, 0x2048);
+		109:
+			ChangeHairToStyle (merchant, customer, 0x2049);
+		110:
+			ChangeHairToStyle (merchant, customer, 0x204a);
+		111:
+			var old_hair := GetEquipmentByLayer ( customer, LAYER_HAIR );
+			DestroyItem (old_hair);
+
+		default:
+			PrintTextAbove (merchant, "I can't do that.", customer);
+	endcase
+
+endfunction
+
+function DisplayMaleElfHairOptions (merchant, paying_customer, customer)
+
+	var gump_layout := array{
+		"page 0",
+		"nodispose",
+		"resizepic 20 20 3000 400 400"
+	};
+
+	var gump_data := array{};
+
+	gump_layout.append ("text 50 50 1345 0");
+	gump_data.append ("Hairstyles");
+
+	gump_layout.append ("button 55 74 2103 2104 1 0 101");
+	gump_layout.append ("text 70 70 0 1");
+	gump_data.append ("Mid long hair");
+
+	gump_layout.append ("button 55 94 2103 2104 1 0 102");
+	gump_layout.append ("text 70 90 0 2");
+	gump_data.append ("Long feather hair");
+
+	gump_layout.append ("button 55 114 2103 2104 1 0 103");
+	gump_layout.append ("text 70 110 0 3");
+	gump_data.append ("Short hair");
+
+	gump_layout.append ("button 55 134 2103 2104 1 0 104");
+	gump_layout.append ("text 70 130 0 4");
+	gump_data.append ("Mullet");
+
+	gump_layout.append ("button 55 154 2103 2104 1 0 105");
+	gump_layout.append ("text 70 150 0 5");
+	gump_data.append ("Long hair");
+
+	gump_layout.append ("button 55 174 2103 2104 1 0 106");
+	gump_layout.append ("text 70 170 0 6");
+	gump_data.append ("Topknot");
+
+	gump_layout.append ("button 55 194 2103 2104 1 0 107");
+	gump_layout.append ("text 70 190 0 7");
+	gump_data.append ("Long braid");
+
+	gump_layout.append ("button 55 214 2103 2104 1 0 108");
+	gump_layout.append ("text 70 210 0 8");
+	gump_data.append ("Spiked hair");
+
+	gump_layout.append ("button 55 234 2103 2104 1 0 109");
+	gump_layout.append ("text 70 230 0 9");
+	gump_data.append ("Bald");
+
+	gump_layout.append ("button 55 314 2103 2104 1 0 120");
+	gump_layout.append ("text 70 310 0 10");
+	gump_data.append ("Dye hair");
+
+	if (!paying_customer.cmdlevel)
+		gump_layout.append ("text 130 370 32 11");
+		gump_data.append ("All services, only 25 gold.");
+
+		gump_layout.append ("button 130 395 2103 2104 1 0 500");
+		gump_layout.append ("text 150 390 0 12");
+		gump_data.append ("Select Follower");
+	endif
+
+	var gump_return := SendDialogGump (paying_customer, gump_layout, gump_data );
+	if (!gump_return and gump_return[0] != 0)
+		PrintTextAbovePrivate (merchant, "Please close your spec book, skill window, and any other gumps.", paying_customer);
+		return;
+	elseif (gump_return[0] == 0)
+		PrintTextAbovePrivate (merchant, "OK, never mind then.", paying_customer);
+		return;
+	elseif (gump_return[0] == 500)
+		PrintTextAbove (merchant, "Who's hair do you want me to do?");
+		var npc := Target (paying_customer);
+		if (!npc)
+			PrintTextAbovePrivate (merchant, "OK, never mind then.", paying_customer);
+			return;
+		endif
+
+		if (!npc.npctemplate)
+			PrintTextAbovePrivate (merchant, "I don't think so, bub.", paying_customer);
+			return;
+		endif
+
+		var master := GetObjProperty (npc, "master");
+		if (!master or master != paying_customer.serial)
+			PrintTextAbovePrivate (merchant, "I don't think he wants me to be doing his hair.", paying_customer);
+			return;
+		endif
+
+		var parms := array;
+		parms[1] := merchant;
+		parms[2] := paying_customer;
+		parms[3] := npc;
+		start_script (":barber:dohairstyle", parms);
+		return;
+	elseif (gump_return[0] == 120)
+		RecolorElfHair (merchant, paying_customer, customer);
+		return;
+	endif
+
+	if (!paying_customer.cmdlevel)
+		if (!paying_customer.spendgold (25) )
+			PrintTextAbovePrivate (merchant,  "You don't have enough gold!", paying_customer);
+			return;
+		endif
+	endif
+
+	//var new_hairstyle := 0;
+	case (gump_return[0])
+		101:
+			ChangeHairToStyle (merchant, customer, 0x2fbf);
+		102:
+			ChangeHairToStyle (merchant, customer, 0x2fc0);
+		103:
+			ChangeHairToStyle (merchant, customer, 0x2fc1);
+		104:
+			ChangeHairToStyle (merchant, customer, 0x2fc2);
+		105:
+			ChangeHairToStyle (merchant, customer, 0x2fcd);
+		106:
+			ChangeHairToStyle (merchant, customer, 0x2fce);
+		107:
+			ChangeHairToStyle (merchant, customer, 0x2fcf);
+		108:
+			ChangeHairToStyle (merchant, customer, 0x2fd1);
+		109:
+			var old_hair := GetEquipmentByLayer ( customer, LAYER_HAIR );
+			DestroyItem (old_hair);
+
+		default:
+			PrintTextAbove (merchant, "I can't do that.", customer);
+	endcase
+
+endfunction
+
+
+function DisplayFemaleElfHairOptions (merchant, paying_customer, customer)
+
+	var gump_layout := array{
+		"page 0",
+		"nodispose",
+		"resizepic 20 20 3000 400 400"
+	};
+
+	var gump_data := array{};
+
+	gump_layout.append ("text 50 50 1345 0");
+	gump_data.append ("Hairstyles");
+
+	gump_layout.append ("button 55 74 2103 2104 1 0 101");
+	gump_layout.append ("text 70 70 0 1");
+	gump_data.append ("Long feather hair");
+
+	gump_layout.append ("button 55 94 2103 2104 1 0 102");
+	gump_layout.append ("text 70 90 0 2");
+	gump_data.append ("Short hair");
+
+	gump_layout.append ("button 55 114 2103 2104 1 0 103");
+	gump_layout.append ("text 70 110 0 3");
+	gump_data.append ("Mullet");
+
+	gump_layout.append ("button 55 134 2103 2104 1 0 104");
+	gump_layout.append ("text 70 130 0 4");
+	gump_data.append ("Flower");
+
+	gump_layout.append ("button 55 154 2103 2104 1 0 105");
+	gump_layout.append ("text 70 150 0 5");
+	gump_data.append ("Topknot");
+
+	gump_layout.append ("button 55 174 2103 2104 1 0 106");
+	gump_layout.append ("text 70 170 0 6");
+	gump_data.append ("Long braid");
+
+	gump_layout.append ("button 55 194 2103 2104 1 0 107");
+	gump_layout.append ("text 70 190 0 7");
+	gump_data.append ("Buns");
+
+	gump_layout.append ("button 55 214 2103 2104 1 0 108");
+	gump_layout.append ("text 70 210 0 8");
+	gump_data.append ("Spiked hair");
+
+	gump_layout.append ("button 55 234 2103 2104 1 0 109");
+	gump_layout.append ("text 70 230 0 9");
+	gump_data.append ("Bald");
+
+	gump_layout.append ("button 55 314 2103 2104 1 0 120");
+	gump_layout.append ("text 70 310 0 10");
+	gump_data.append ("Dye hair");
+
+	if (!paying_customer.cmdlevel)
+		gump_layout.append ("text 130 370 32 11");
+		gump_data.append ("All services, only 25 gold.");
+
+		gump_layout.append ("button 130 395 2103 2104 1 0 500");
+		gump_layout.append ("text 150 390 0 12");
+		gump_data.append ("Select Follower");
+	endif
+
+	var gump_return := SendDialogGump (paying_customer, gump_layout, gump_data );
+	if (!gump_return and gump_return[0] != 0)
+		PrintTextAbovePrivate (merchant, "Please close your spec book, skill window, and any other gumps.", paying_customer);
+		return;
+	elseif (gump_return[0] == 0)
+		PrintTextAbovePrivate (merchant, "OK, never mind then.", paying_customer);
+		return;
+	elseif (gump_return[0] == 500)
+		PrintTextAbove (merchant, "Who's hair do you want me to do?");
+		var npc := Target (paying_customer);
+		if (!npc)
+			PrintTextAbovePrivate (merchant, "OK, never mind then.", paying_customer);
+			return;
+		endif
+
+		if (!npc.npctemplate)
+			PrintTextAbovePrivate (merchant, "I don't think so, bub.", paying_customer);
+			return;
+		endif
+
+		var master := GetObjProperty (npc, "master");
+		if (!master or master != paying_customer.serial)
+			PrintTextAbovePrivate (merchant, "I don't think he wants me to be doing his hair.", paying_customer);
+			return;
+		endif
+
+		var parms := array;
+		parms[1] := merchant;
+		parms[2] := paying_customer;
+		parms[3] := npc;
+		start_script (":barber:dohairstyle", parms);
+		return;
+	elseif (gump_return[0] == 120)
+		RecolorElfHair (merchant, paying_customer, customer);
+		return;
+	endif
+
+	if (!paying_customer.cmdlevel)
+		if (!paying_customer.spendgold (25) )
+			PrintTextAbovePrivate (merchant,  "You don't have enough gold!", paying_customer);
+			return;
+		endif
+	endif
+
+//	var new_hairstyle := 0;
+	case (gump_return[0])
+		101:
+			ChangeHairToStyle (merchant, customer, 0x2fc0);
+		102:
+			ChangeHairToStyle (merchant, customer, 0x2fc1);
+		103:
+			ChangeHairToStyle (merchant, customer, 0x2fc2);
+		104:
+			ChangeHairToStyle (merchant, customer, 0x2fcc);
+		105:
+			ChangeHairToStyle (merchant, customer, 0x2fce);
+		106:
+			ChangeHairToStyle (merchant, customer, 0x2fcf);
+		107:
+			ChangeHairToStyle (merchant, customer, 0x2fd0);
+		108:
+			ChangeHairToStyle (merchant, customer, 0x2fd1);
+		109:
+			var old_hair := GetEquipmentByLayer ( customer, LAYER_HAIR );
+			DestroyItem (old_hair);
+
+		default:
+			PrintTextAbove (merchant, "I can't do that.", customer);
+	endcase
+
+endfunction
+
+
+function DisplayMaleHornOptions (merchant, paying_customer, customer)
+
+	var gump_layout := array{
+		"page 0",
+		"nodispose",
+		"resizepic 20 20 3000 400 400"
+	};
+
+	var gump_data := array{};
+
+	gump_layout.append ("text 50 50 1345 0");
+	gump_data.append ("Hairstyles");
+
+	gump_layout.append ("button 55 74 2103 2104 1 0 101");
+	gump_layout.append ("text 70 70 0 1");
+	gump_data.append ("One and half");
+
+	gump_layout.append ("button 55 94 2103 2104 1 0 102");
+	gump_layout.append ("text 70 90 0 2");
+	gump_data.append ("L-shaped");
+
+	gump_layout.append ("button 55 114 2103 2104 1 0 103");
+	gump_layout.append ("text 70 110 0 3");
+	gump_data.append ("Rhino");
+
+	gump_layout.append ("button 55 134 2103 2104 1 0 104");
+	gump_layout.append ("text 70 130 0 4");
+	gump_data.append ("Ram");
+
+	gump_layout.append ("button 55 154 2103 2104 1 0 105");
+	gump_layout.append ("text 70 150 0 5");
+	gump_data.append ("Short");
+
+	gump_layout.append ("button 55 174 2103 2104 1 0 106");
+	gump_layout.append ("text 70 170 0 6");
+	gump_data.append ("Long");
+
+	gump_layout.append ("button 55 194 2103 2104 1 0 107");
+	gump_layout.append ("text 70 190 0 7");
+	gump_data.append ("Curved upwards");
+
+	gump_layout.append ("button 55 214 2103 2104 1 0 108");
+	gump_layout.append ("text 70 210 0 8");
+	gump_data.append ("Bull");
+
+	gump_layout.append ("button 55 234 2103 2104 1 0 109");
+	gump_layout.append ("text 70 230 0 9");
+	gump_data.append ("Bald");
+
+	gump_layout.append ("button 55 314 2103 2104 1 0 120");
+	gump_layout.append ("text 70 310 0 10");
+	gump_data.append ("Dye horns");
+
+
+	gump_layout.append ("text 200 50 1345 11");
+	gump_data.append ("Facial horns");
+
+	gump_layout.append ("button 205 74 2103 2104 1 0 201");
+	gump_layout.append ("text 220 70 0 12");
+	gump_data.append ("beard");
+
+	gump_layout.append ("button 205 94 2103 2104 1 0 202");
+	gump_layout.append ("text 220 90 0 13");
+	gump_data.append ("eyehorns");
+
+	gump_layout.append ("button 205 114 2103 2104 1 0 203");
+	gump_layout.append ("text 220 110 0 14");
+	gump_data.append ("split pointy chin");
+
+	gump_layout.append ("button 205 134 2103 2104 1 0 204");
+	gump_layout.append ("text 220 130 0 15");
+	gump_data.append ("pointy chin");
+
+	gump_layout.append ("button 205 154 2103 2104 1 0 205");
+	gump_layout.append ("text 220 150 0 16");
+	gump_data.append ("Clean shave");
+
+	gump_layout.append ("button 205 314 2103 2104 1 0 220");
+	gump_layout.append ("text 220 310 0 17");
+	gump_data.append ("Dye facial horns");
+
+	if (!paying_customer.cmdlevel)
+		gump_layout.append ("text 130 370 32 18");
+		gump_data.append ("All services, only 25 gold.");
+
+		gump_layout.append ("button 130 395 2103 2104 1 0 500");
+		gump_layout.append ("text 150 390 0 19");
+		gump_data.append ("Select Follower");
+	endif
+
+	var gump_return := SendDialogGump (paying_customer, gump_layout, gump_data );
+	if (!gump_return and gump_return[0] != 0)
+		PrintTextAbovePrivate (merchant, "Please close your spec book, skill window, and any other gumps.", paying_customer);
+		return;
+	elseif (gump_return[0] == 0)
+		PrintTextAbovePrivate (merchant, "OK, never mind then.", paying_customer);
+		return;
+	elseif (gump_return[0] == 500)
+		PrintTextAbove (merchant, "Who's hair do you want me to do?");
+		var npc := Target (paying_customer);
+		if (!npc)
+			PrintTextAbovePrivate (merchant, "OK, never mind then.", paying_customer);
+			return;
+		endif
+
+		if (!npc.npctemplate)
+			PrintTextAbovePrivate (merchant, "I don't think so, bub.", paying_customer);
+			return;
+		endif
+
+		var master := GetObjProperty (npc, "master");
+		if (!master or master != paying_customer.serial)
+			PrintTextAbovePrivate (merchant, "I don't think he wants me to be doing his hair.", paying_customer);
+			return;
+		endif
+
+		var parms := array;
+		parms[1] := merchant;
+		parms[2] := paying_customer;
+		parms[3] := npc;
+		start_script (":barber:dohairstyle", parms);
+		return;
+	elseif (gump_return[0] == 120)
+		RecolorHorns (merchant, paying_customer, customer);
+		return;
+	elseif (gump_return[0] == 220)
+		RecolorFacialHorns (merchant, paying_customer, customer);
+		return;
+	endif
+
+	if (!paying_customer.cmdlevel)
+		if (!paying_customer.spendgold (25) )
+			PrintTextAbovePrivate (merchant,  "You don't have enough gold!", paying_customer);
+			return;
+		endif
+	endif
+
+	//var new_hairstyle := 0;
+	case (gump_return[0])
+		101:
+			ChangeHairToStyle (merchant, customer, 0x4258);
+		102:
+			ChangeHairToStyle (merchant, customer, 0x4259);
+		103:
+			ChangeHairToStyle (merchant, customer, 0x425a);
+		104:
+			ChangeHairToStyle (merchant, customer, 0x425b);
+		105:
+			ChangeHairToStyle (merchant, customer, 0x425c);
+		106:
+			ChangeHairToStyle (merchant, customer, 0x425d);
+		107:
+			ChangeHairToStyle (merchant, customer, 0x425e);
+		108:
+			ChangeHairToStyle (merchant, customer, 0x425f);
+		109:
+			var old_hair := GetEquipmentByLayer ( customer, LAYER_HAIR );
+			DestroyItem (old_hair);
+		201:
+			ChangeBeardToStyle (merchant, customer, 0x42ad);
+		202:
+			ChangeBeardToStyle (merchant, customer, 0x42ae);
+		203:
+			ChangeBeardToStyle (merchant, customer, 0x42af);
+		204:
+			ChangeBeardToStyle (merchant, customer, 0x42b0);
+		205:
+			var old_beard := GetEquipmentByLayer ( customer, LAYER_BEARD );
+			DestroyItem (old_beard);
+
+		default:
+			PrintTextAbove (merchant, "I can't do that.", paying_customer);
+	endcase
+
+endfunction
+
+function DisplayFemaleHornOptions (merchant, paying_customer, customer)
+
+	var gump_layout := array{
+		"page 0",
+		"nodispose",
+		"resizepic 20 20 3000 400 400"
+	};
+
+	var gump_data := array{};
+
+	gump_layout.append ("text 50 50 1345 0");
+	gump_data.append ("Horn styles");
+
+	gump_layout.append ("button 55 74 2103 2104 1 0 101");
+	gump_layout.append ("text 70 70 0 1");
+	gump_data.append ("Short sideways");
+
+	gump_layout.append ("button 55 94 2103 2104 1 0 102");
+	gump_layout.append ("text 70 90 0 2");
+	gump_data.append ("Long downwards");
+
+	gump_layout.append ("button 55 114 2103 2104 1 0 103");
+	gump_layout.append ("text 70 110 0 3");
+	gump_data.append ("Short twisted");
+
+	gump_layout.append ("button 55 134 2103 2104 1 0 104");
+	gump_layout.append ("text 70 130 0 4");
+	gump_data.append ("Long twisted");
+
+	gump_layout.append ("button 55 154 2103 2104 1 0 105");
+	gump_layout.append ("text 70 150 0 5");
+	gump_data.append ("Short upwards");
+
+	gump_layout.append ("button 55 174 2103 2104 1 0 106");
+	gump_layout.append ("text 70 170 0 6");
+	gump_data.append ("Long upwards");
+
+	gump_layout.append ("button 55 194 2103 2104 1 0 107");
+	gump_layout.append ("text 70 190 0 7");
+	gump_data.append ("Crown");
+
+	gump_layout.append ("button 55 214 2103 2104 1 0 108");
+	gump_layout.append ("text 70 210 0 8");
+	gump_data.append ("Short curved");
+
+	gump_layout.append ("button 55 234 2103 2104 1 0 109");
+	gump_layout.append ("text 70 230 0 9");
+	gump_data.append ("Bald");
+
+	gump_layout.append ("button 55 314 2103 2104 1 0 120");
+	gump_layout.append ("text 70 310 0 10");
+	gump_data.append ("Dye horns");
+
+	if (!paying_customer.cmdlevel)
+		gump_layout.append ("text 130 370 32 11");
+		gump_data.append ("All services, only 25 gold.");
+
+		gump_layout.append ("button 130 395 2103 2104 1 0 500");
+		gump_layout.append ("text 150 390 0 12");
+		gump_data.append ("Select Follower");
+	endif
+
+	var gump_return := SendDialogGump (paying_customer, gump_layout, gump_data );
+	if (!gump_return and gump_return[0] != 0)
+		PrintTextAbovePrivate (merchant, "Please close your spec book, skill window, and any other gumps.", paying_customer);
+		return;
+	elseif (gump_return[0] == 0)
+		PrintTextAbovePrivate (merchant, "OK, never mind then.", paying_customer);
+		return;
+	elseif (gump_return[0] == 500)
+		PrintTextAbove (merchant, "Who's hair do you want me to do?");
+		var npc := Target (paying_customer);
+		if (!npc)
+			PrintTextAbovePrivate (merchant, "OK, never mind then.", paying_customer);
+			return;
+		endif
+
+		if (!npc.npctemplate)
+			PrintTextAbovePrivate (merchant, "I don't think so, bub.", paying_customer);
+			return;
+		endif
+
+		var master := GetObjProperty (npc, "master");
+		if (!master or master != paying_customer.serial)
+			PrintTextAbovePrivate (merchant, "I don't think he wants me to be doing his hair.", paying_customer);
+			return;
+		endif
+
+		var parms := array;
+		parms[1] := merchant;
+		parms[2] := paying_customer;
+		parms[3] := npc;
+		start_script (":barber:dohairstyle", parms);
+		return;
+	elseif (gump_return[0] == 120)
+		RecolorHorns (merchant, paying_customer, customer);
+		return;
+	endif
+
+	if (!paying_customer.cmdlevel)
+		if (!paying_customer.spendgold (25) )
+			PrintTextAbovePrivate (merchant,  "You don't have enough gold!", paying_customer);
+			return;
+		endif
+	endif
+
+	//var new_hairstyle := 0;
+	case (gump_return[0])
+		101:
+			ChangeHairToStyle (merchant, customer, 0x4261);
+		102:
+			ChangeHairToStyle (merchant, customer, 0x4262);
+		103:
+			ChangeHairToStyle (merchant, customer, 0x4273);
+		104:
+			ChangeHairToStyle (merchant, customer, 0x4274);
+		105:
+			ChangeHairToStyle (merchant, customer, 0x4275);
+		106:
+			ChangeHairToStyle (merchant, customer, 0x42aa);
+		107:
+			ChangeHairToStyle (merchant, customer, 0x42ab);
+		108:
+			ChangeHairToStyle (merchant, customer, 0x42b1);
+		109:
+			var old_hair := GetEquipmentByLayer ( customer, LAYER_HAIR );
+			DestroyItem (old_hair);
+
+		default:
+			PrintTextAbove (merchant, "I can't do that.", customer);
+	endcase
+
+endfunction
+
+
+///////////////////
+//  allows the customer to select a new hair color
+///////////////////
+
+function RecolorHair (merchant, paying_customer, customer)
+
+	var old_hair := GetEquipmentByLayer ( customer, LAYER_HAIR );
+	if (!old_hair)
+		PrintTextAbovePrivate (merchant, "But you don't have any hair!", paying_customer);
+		return;
+	endif
+
+	var gump_layout := array {
+		"page 0",
+		"nodispose",
+		"resizepic 20 20 2620 650 250",
+		"text 40 40 1153 0",
+
+		"button 40 64 2103 2104 1 0 1102",
+		"text 60 60 1101 1",
+		"button 40 84 2103 2104 1 0 1103",
+		"text 60 80 1102 2",
+		"button 40 104 2103 2104 1 0 1104",
+		"text 60 100 1103 3",
+		"button 40 124 2103 2104 1 0 1105",
+		"text 60 120 1104 4",
+		"button 40 144 2103 2104 1 0 1106",
+		"text 60 140 1105 5",
+		"button 40 164 2103 2104 1 0 1107",
+		"text 60 160 1106 6",
+		"button 40 184 2103 2104 1 0 1108",
+		"text 60 180 1107 7",
+		"button 40 204 2103 2104 1 0 1109",
+		"text 60 200 1108 8",
+
+		"button 140 64 2103 2104 1 0 1110",
+		"text 160 60 1109 9",
+		"button 140 84 2103 2104 1 0 1111",
+		"text 160 80 1110 10",
+		"button 140 104 2103 2104 1 0 1112",
+		"text 160 100 1111 11",
+		"button 140 124 2103 2104 1 0 1113",
+		"text 160 120 1112 12",
+		"button 140 144 2103 2104 1 0 1114",
+		"text 160 140 1113 13",
+		"button 140 164 2103 2104 1 0 1115",
+		"text 160 160 1114 14",
+		"button 140 184 2103 2104 1 0 1116",
+		"text 160 180 1115 15",
+		"button 140 204 2103 2104 1 0 1117",
+		"text 160 200 1116 16",
+
+		"button 240 64 2103 2104 1 0 1118",
+		"text 260 60 1117 17",
+		"button 240 84 2103 2104 1 0 1119",
+		"text 260 80 1118 18",
+		"button 240 104 2103 2104 1 0 1120",
+		"text 260 100 1119 19",
+		"button 240 124 2103 2104 1 0 1121",
+		"text 260 120 1120 20",
+		"button 240 144 2103 2104 1 0 1122",
+		"text 260 140 1121 21",
+		"button 240 164 2103 2104 1 0 1123",
+		"text 260 160 1122 22",
+		"button 240 184 2103 2104 1 0 1124",
+		"text 260 180 1123 23",
+		"button 240 204 2103 2104 1 0 1125",
+		"text 260 200 1124 24",
+
+		"button 340 64 2103 2104 1 0 1126",
+		"text 360 60 1125 25",
+		"button 340 84 2103 2104 1 0 1127",
+		"text 360 80 1126 26",
+		"button 340 104 2103 2104 1 0 1128",
+		"text 360 100 1127 27",
+		"button 340 124 2103 2104 1 0 1129",
+		"text 360 120 1128 28",
+		"button 340 144 2103 2104 1 0 1130",
+		"text 360 140 1129 29",
+		"button 340 164 2103 2104 1 0 1131",
+		"text 360 160 1130 30",
+		"button 340 184 2103 2104 1 0 1132",
+		"text 360 180 1131 31",
+		"button 340 204 2103 2104 1 0 1133",
+		"text 360 200 1132 32",
+
+		"button 440 64 2103 2104 1 0 1134",
+		"text 460 60 1133 33",
+		"button 440 84 2103 2104 1 0 1135",
+		"text 460 80 1134 34",
+		"button 440 104 2103 2104 1 0 1136",
+		"text 460 100 1135 35",
+		"button 440 124 2103 2104 1 0 1137",
+		"text 460 120 1136 36",
+		"button 440 144 2103 2104 1 0 1138",
+		"text 460 140 1137 37",
+		"button 440 164 2103 2104 1 0 1139",
+		"text 460 160 1138 38",
+		"button 440 184 2103 2104 1 0 1140",
+		"text 460 180 1139 39",
+		"button 440 204 2103 2104 1 0 1141",
+		"text 460 200 1140 40",
+
+		"button 540 64 2103 2104 1 0 1142",
+		"text 560 60 1141 41",
+		"button 540 84 2103 2104 1 0 1143",
+		"text 560 80 1142 42",
+		"button 540 104 2103 2104 1 0 1144",
+		"text 560 100 1143 43",
+		"button 540 124 2103 2104 1 0 1145",
+		"text 560 120 1144 44",
+		"button 540 144 2103 2104 1 0 1146",
+		"text 560 140 1145 45",
+		"button 540 164 2103 2104 1 0 1147",
+		"text 560 160 1146 46",
+		"button 540 184 2103 2104 1 0 1148",
+		"text 560 180 1147 47",
+		"button 540 204 2103 2104 1 0 1149",
+		"text 560 200 1148 48",
+
+		"button 290 224 2103 2104 1 0 1",
+		"text 310 220 1153 49"
+	};
+
+	var gump_data := array {
+		"Select a hair color:"
+	};
+
+	for i := 1 to 49
+		gump_data.append (CSTR ("color " + i) );
+	endfor
+
+	var gump_return := SendDialogGump (paying_customer, gump_layout, gump_data );
+	if (!gump_return or !gump_return[0])
+		PrintTextAbovePrivate (merchant, "Never mind then.", paying_customer);
+		return;
+	endif
+
+	if (!paying_customer.cmdlevel)
+		if (!paying_customer.spendgold (25) )
+			PrintTextAbovePrivate (merchant,  "You don't have enough gold!", paying_customer);
+			return;
+		endif
+	endif
+
+	if (gump_return[0] == 1)
+		old_hair.color := 0;
+	else
+		old_hair.color := gump_return[0];
+	endif
+	SetObjProperty (customer, "haircolor", old_hair.color);
+
+endfunction
+
+// Elven hair colors:
+// 0x0034 0x0035 0x0036 0x0037 0x0038 0x0039
+// 0x???? 0x06b8 0x0207 0x0211 0x026c 0x02c3
+// 0x02c9 0x01e4 0x???? 0x???? 0x???? 0x????
+// 0x008e 0x008f 0x0090 0x0091 0x0092 0x0159
+// 0x015a 0x015b 0x015c 0x015d 0x015e 0x????
+// 0x???? 0x???? 0x???? 0x???? 0x???? 0x????
+// 0x???? 0x???? 0x???? 0x???? 0x???? 0x????
+// 0x???? 0x???? 0x???? 0x???? 0x???? 0x????
+// 0x???? 0x???? 0x???? 0x???? 0x???? 0x0388
+
+function RecolorElfHair (merchant, paying_customer, customer)
+
+	var old_hair := GetEquipmentByLayer ( customer, LAYER_HAIR );
+	if (!old_hair)
+		PrintTextAbovePrivate (merchant, "But you don't have any hair!", paying_customer);
+		return;
+	endif
+
+	var gump_layout := array {
+		"page 0",
+		"nodispose",
+		"resizepic 20 20 2620 650 250",
+		"text 40 40 1153 0",
+
+		"button 40 64 2103 2104 1 0 1",
+		"text 60 60 1153 1",
+		"button 40 84 2103 2104 1 0 52",
+		"text 60 80 51 2",
+		"button 40 104 2103 2104 1 0 53",
+		"text 60 100 52 3",
+		"button 40 124 2103 2104 1 0 54",
+		"text 60 120 53 4",
+		"button 40 144 2103 2104 1 0 55",
+		"text 60 140 54 5",
+		"button 40 164 2103 2104 1 0 56",
+		"text 60 160 55 6",
+		"button 40 184 2103 2104 1 0 57",
+		"text 60 180 56 7",
+		"button 40 204 2103 2104 1 0 88",
+		"text 60 200 87 8",
+		"button 40 224 2103 2104 1 0 142",
+		"text 60 220 141 9",
+
+		"button 140 64 2103 2104 1 0 143",
+		"text 160 60 142 10",
+		"button 140 84 2103 2104 1 0 144",
+		"text 160 80 143 11",
+		"button 140 104 2103 2104 1 0 145",
+		"text 160 100 144 12",
+		"button 140 124 2103 2104 1 0 146",
+		"text 160 120 145 13",
+		"button 140 144 2103 2104 1 0 257",
+		"text 160 140 256 14",
+		"button 140 164 2103 2104 1 0 345",
+		"text 160 160 344 15",
+		"button 140 184 2103 2104 1 0 346",
+		"text 160 180 345 16",
+		"button 140 204 2103 2104 1 0 347",
+		"text 160 200 346 17",
+		"button 140 224 2103 2104 1 0 1720",
+		"text 160 220 1719 18",
+
+		"button 240 64 2103 2104 1 0 348",
+		"text 260 60 347 19",
+		"button 240 84 2103 2104 1 0 349",
+		"text 260 80 348 20",
+		"button 240 104 2103 2104 1 0 350",
+		"text 260 100 349 21",
+		"button 240 124 2103 2104 1 0 296",
+		"text 260 120 295 22",
+		"button 240 144 2103 2104 1 0 303",
+		"text 260 140 302 23",
+		"button 240 164 2103 2104 1 0 445",
+		"text 260 160 444 24",
+		"button 240 184 2103 2104 1 0 484",
+		"text 260 180 483 25",
+		"button 240 204 2103 2104 1 0 499",
+		"text 260 200 498 26",
+		"button 240 224 2103 2104 1 0 1829",
+		"text 260 220 1828 27",
+
+		"button 340 64 2103 2104 1 0 519",
+		"text 360 60 518 28",
+		"button 340 84 2103 2104 1 0 529",
+		"text 360 80 528 29",
+		"button 340 104 2103 2104 1 0 569",
+		"text 360 100 568 30",
+		"button 340 124 2103 2104 1 0 593",
+		"text 360 120 592 31",
+		"button 340 144 2103 2104 1 0 620",
+		"text 360 140 619 32",
+		"button 340 164 2103 2104 1 0 707",
+		"text 360 160 706 33",
+		"button 340 184 2103 2104 1 0 713",
+		"text 360 180 712 34",
+		"button 340 204 2103 2104 1 0 797",
+		"text 360 200 796 35",
+		"button 340 224 2103 2104 1 0 2131",
+		"text 360 220 2130 36",
+
+		"button 440 64 2103 2104 1 0 798",
+		"text 460 60 797 37",
+		"button 440 84 2103 2104 1 0 799",
+		"text 460 80 798 38",
+		"button 440 104 2103 2104 1 0 800",
+		"text 460 100 799 39",
+		"button 440 124 2103 2104 1 0 801",
+		"text 460 120 800 40",
+		"button 440 144 2103 2104 1 0 802",
+		"text 460 140 801 41",
+		"button 440 164 2103 2104 1 0 803",
+		"text 460 160 802 42",
+		"button 440 184 2103 2104 1 0 804",
+		"text 460 180 803 43",
+		"button 440 204 2103 2104 1 0 805",
+		"text 460 200 804 44",
+
+		"button 540 64 2103 2104 1 0 806",
+		"text 560 60 805 45",
+		"button 540 84 2103 2104 1 0 873",
+		"text 560 80 872 46",
+		"button 540 104 2103 2104 1 0 902",
+		"text 560 100 901 47",
+		"button 540 124 2103 2104 1 0 903",
+		"text 560 120 902 48",
+		"button 540 144 2103 2104 1 0 904",
+		"text 560 140 903 49",
+		"button 540 164 2103 2104 1 0 905",
+		"text 560 160 904 50",
+		"button 540 184 2103 2104 1 0 906",
+		"text 560 180 905 51",
+		"button 540 204 2103 2104 1 0 1437",
+		"text 560 200 1436 52"
+	};
+
+	var gump_data := array {
+		"Select a hair color:"
+	};
+
+	for i := 1 to 52
+		gump_data.append (CSTR ("color " + i) );
+	endfor
+
+	var gump_return := SendDialogGump (paying_customer, gump_layout, gump_data );
+	if (!gump_return or !gump_return[0])
+		PrintTextAbovePrivate (merchant, "Never mind then.", paying_customer);
+		return;
+	endif
+
+	if (!paying_customer.cmdlevel)
+		if (!paying_customer.spendgold (25) )
+			PrintTextAbovePrivate (merchant,  "You don't have enough gold!", paying_customer);
+			return;
+		endif
+	endif
+
+	if (gump_return[0] == 1)
+		old_hair.color := 0;
+	else
+		old_hair.color := gump_return[0];
+	endif
+	SetObjProperty (customer, "haircolor", old_hair.color);
+
+endfunction
+
+function RecolorHorns (merchant, paying_customer, customer)
+
+	var old_hair := GetEquipmentByLayer ( customer, LAYER_HAIR );
+	if (!old_hair)
+		PrintTextAbovePrivate (merchant, "But you don't have any hair!", paying_customer);
+		return;
+	endif
+
+	var gump_layout := array {
+		"page 0",
+		"nodispose",
+		"resizepic 20 20 2620 320 190",
+		"text 40 40 1153 0",
+
+		"button 40 64 2103 2104 1 0 1801",
+		"text 60 60 1800 1",
+		"button 40 84 2103 2104 1 0 1803",
+		"text 60 80 1802 2",
+		"button 40 104 2103 2104 1 0 1805",
+		"text 60 100 1804 3",
+		"button 40 124 2103 2104 1 0 1807",
+		"text 60 120 1806 4",
+		"button 40 144 2103 2104 1 0 1809",
+		"text 60 140 1808 5",
+		"button 40 164 2103 2104 1 0 1891",
+		"text 60 160 1890 6",
+
+		"button 140 64 2103 2104 1 0 1893",
+		"text 160 60 1892 7",
+		"button 140 84 2103 2104 1 0 1896",
+		"text 160 80 1895 8",
+		"button 140 104 2103 2104 1 0 1899",
+		"text 160 100 1898 9",
+		"button 140 124 2103 2104 1 0 1779",
+		"text 160 120 1778 10",
+		"button 140 144 2103 2104 1 0 1777",
+		"text 160 140 1776 11",
+		"button 140 164 2103 2104 1 0 1775",
+		"text 160 160 1774 12",
+
+		"button 240 64 2103 2104 1 0 1764",
+		"text 260 60 1763 13",
+		"button 240 84 2103 2104 1 0 1762",
+		"text 260 80 1761 14",
+		"button 240 104 2103 2104 1 0 1760",
+		"text 260 100 1759 15",
+		"button 240 124 2103 2104 1 0 1801",
+		"text 260 120 1800 16",
+		"button 240 144 2103 2104 1 0 1803",
+		"text 260 140 1802 17",
+		"button 240 164 2103 2104 1 0 1805",
+		"text 260 160 1804 18"
+	};
+
+	var gump_data := array {
+		"Select a horn color:"
+	};
+
+	for i := 1 to 18
+		gump_data.append (CSTR ("color " + i) );
+	endfor
+
+	var gump_return := SendDialogGump (paying_customer, gump_layout, gump_data );
+	if (!gump_return or !gump_return[0])
+		PrintTextAbovePrivate (merchant, "Never mind then.", paying_customer);
+		return;
+	endif
+
+	if (!paying_customer.cmdlevel)
+		if (!paying_customer.spendgold (25) )
+			PrintTextAbovePrivate (merchant,  "You don't have enough gold!", paying_customer);
+			return;
+		endif
+	endif
+
+	old_hair.color := gump_return[0];
+	SetObjProperty (customer, "haircolor", old_hair.color);
+
+endfunction
+
+
+///////////////////
+//  allows the customer to select a new beard color
+///////////////////
+
+function RecolorBeard (merchant, paying_customer, customer)
+
+	var old_beard := GetEquipmentByLayer ( customer, LAYER_BEARD );
+	if (!old_beard)
+		PrintTextAbovePrivate (merchant, "But you don't have a beard!", paying_customer);
+		return;
+	endif
+
+	var gump_layout := array {
+		"page 0",
+		"nodispose",
+		"resizepic 20 20 2620 650 250",
+		"text 40 40 1153 0",
+
+		"button 40 64 2103 2104 1 0 1102",
+		"text 60 60 1101 1",
+		"button 40 84 2103 2104 1 0 1103",
+		"text 60 80 1102 2",
+		"button 40 104 2103 2104 1 0 1104",
+		"text 60 100 1103 3",
+		"button 40 124 2103 2104 1 0 1105",
+		"text 60 120 1104 4",
+		"button 40 144 2103 2104 1 0 1106",
+		"text 60 140 1105 5",
+		"button 40 164 2103 2104 1 0 1107",
+		"text 60 160 1106 6",
+		"button 40 184 2103 2104 1 0 1108",
+		"text 60 180 1107 7",
+		"button 40 204 2103 2104 1 0 1109",
+		"text 60 200 1108 8",
+
+		"button 140 64 2103 2104 1 0 1110",
+		"text 160 60 1109 9",
+		"button 140 84 2103 2104 1 0 1111",
+		"text 160 80 1110 10",
+		"button 140 104 2103 2104 1 0 1112",
+		"text 160 100 1111 11",
+		"button 140 124 2103 2104 1 0 1113",
+		"text 160 120 1112 12",
+		"button 140 144 2103 2104 1 0 1114",
+		"text 160 140 1113 13",
+		"button 140 164 2103 2104 1 0 1115",
+		"text 160 160 1114 14",
+		"button 140 184 2103 2104 1 0 1116",
+		"text 160 180 1115 15",
+		"button 140 204 2103 2104 1 0 1117",
+		"text 160 200 1116 16",
+
+		"button 240 64 2103 2104 1 0 1118",
+		"text 260 60 1117 17",
+		"button 240 84 2103 2104 1 0 1119",
+		"text 260 80 1118 18",
+		"button 240 104 2103 2104 1 0 1120",
+		"text 260 100 1119 19",
+		"button 240 124 2103 2104 1 0 1121",
+		"text 260 120 1120 20",
+		"button 240 144 2103 2104 1 0 1122",
+		"text 260 140 1121 21",
+		"button 240 164 2103 2104 1 0 1123",
+		"text 260 160 1122 22",
+		"button 240 184 2103 2104 1 0 1124",
+		"text 260 180 1123 23",
+		"button 240 204 2103 2104 1 0 1125",
+		"text 260 200 1124 24",
+
+		"button 340 64 2103 2104 1 0 1126",
+		"text 360 60 1125 25",
+		"button 340 84 2103 2104 1 0 1127",
+		"text 360 80 1126 26",
+		"button 340 104 2103 2104 1 0 1128",
+		"text 360 100 1127 27",
+		"button 340 124 2103 2104 1 0 1129",
+		"text 360 120 1128 28",
+		"button 340 144 2103 2104 1 0 1130",
+		"text 360 140 1129 29",
+		"button 340 164 2103 2104 1 0 1131",
+		"text 360 160 1130 30",
+		"button 340 184 2103 2104 1 0 1132",
+		"text 360 180 1131 31",
+		"button 340 204 2103 2104 1 0 1133",
+		"text 360 200 1132 32",
+
+		"button 440 64 2103 2104 1 0 1134",
+		"text 460 60 1133 33",
+		"button 440 84 2103 2104 1 0 1135",
+		"text 460 80 1134 34",
+		"button 440 104 2103 2104 1 0 1136",
+		"text 460 100 1135 35",
+		"button 440 124 2103 2104 1 0 1137",
+		"text 460 120 1136 36",
+		"button 440 144 2103 2104 1 0 1138",
+		"text 460 140 1137 37",
+		"button 440 164 2103 2104 1 0 1139",
+		"text 460 160 1138 38",
+		"button 440 184 2103 2104 1 0 1140",
+		"text 460 180 1139 39",
+		"button 440 204 2103 2104 1 0 1141",
+		"text 460 200 1140 40",
+
+		"button 540 64 2103 2104 1 0 1142",
+		"text 560 60 1141 41",
+		"button 540 84 2103 2104 1 0 1143",
+		"text 560 80 1142 42",
+		"button 540 104 2103 2104 1 0 1144",
+		"text 560 100 1143 43",
+		"button 540 124 2103 2104 1 0 1145",
+		"text 560 120 1144 44",
+		"button 540 144 2103 2104 1 0 1146",
+		"text 560 140 1145 45",
+		"button 540 164 2103 2104 1 0 1147",
+		"text 560 160 1146 46",
+		"button 540 184 2103 2104 1 0 1148",
+		"text 560 180 1147 47",
+		"button 540 204 2103 2104 1 0 1149",
+		"text 560 200 1148 48",
+		
+		"button 290 224 2103 2104 1 0 1",
+		"text 310 220 1153 49"
+
+	};
+
+	var gump_data := array {
+		"Select a beard color:"
+	};
+
+	for i := 1 to 49
+		gump_data.append (CSTR ("color " + i) );
+	endfor
+
+	var gump_return := SendDialogGump (paying_customer, gump_layout, gump_data );
+	if (!gump_return or !gump_return[0])
+		PrintTextAbovePrivate (merchant, "Never mind then.", paying_customer);
+		return;
+	endif
+
+	if (!paying_customer.cmdlevel)
+		if (!paying_customer.spendgold (25) )
+			PrintTextAbovePrivate (merchant,  "You don't have enough gold!", paying_customer);
+			return;
+		endif
+	endif
+
+	if (gump_return[0] == 1)
+		old_beard.color := 0;
+	else
+		old_beard.color := gump_return[0];
+	endif
+	SetObjProperty (customer, "beardcolor", old_beard.color);
+
+endfunction
+
+function RecolorFacialHorns (merchant, paying_customer, customer)
+
+	var old_beard := GetEquipmentByLayer ( customer, LAYER_BEARD );
+	if (!old_beard)
+		PrintTextAbovePrivate (merchant, "But you don't have a beard!", paying_customer);
+		return;
+	endif
+
+	var gump_layout := array {
+		"page 0",
+		"nodispose",
+		"resizepic 20 20 2620 320 190",
+		"text 40 40 1153 0",
+
+		"button 40 64 2103 2104 1 0 1801",
+		"text 60 60 1800 1",
+		"button 40 84 2103 2104 1 0 1803",
+		"text 60 80 1802 2",
+		"button 40 104 2103 2104 1 0 1805",
+		"text 60 100 1804 3",
+		"button 40 124 2103 2104 1 0 1807",
+		"text 60 120 1806 4",
+		"button 40 144 2103 2104 1 0 1809",
+		"text 60 140 1808 5",
+		"button 40 164 2103 2104 1 0 1891",
+		"text 60 160 1890 6",
+
+		"button 140 64 2103 2104 1 0 1893",
+		"text 160 60 1892 7",
+		"button 140 84 2103 2104 1 0 1896",
+		"text 160 80 1895 8",
+		"button 140 104 2103 2104 1 0 1899",
+		"text 160 100 1898 9",
+		"button 140 124 2103 2104 1 0 1779",
+		"text 160 120 1778 10",
+		"button 140 144 2103 2104 1 0 1777",
+		"text 160 140 1776 11",
+		"button 140 164 2103 2104 1 0 1775",
+		"text 160 160 1774 12",
+
+		"button 240 64 2103 2104 1 0 1764",
+		"text 260 60 1763 13",
+		"button 240 84 2103 2104 1 0 1762",
+		"text 260 80 1761 14",
+		"button 240 104 2103 2104 1 0 1760",
+		"text 260 100 1759 15",
+		"button 240 124 2103 2104 1 0 1801",
+		"text 260 120 1800 16",
+		"button 240 144 2103 2104 1 0 1803",
+		"text 260 140 1802 17",
+		"button 240 164 2103 2104 1 0 1805",
+		"text 260 160 1804 18"
+	};
+
+	var gump_data := array {
+		"Select a horn color:"
+	};
+
+	for i := 1 to 18
+		gump_data.append (CSTR ("color " + i) );
+	endfor
+
+	var gump_return := SendDialogGump (paying_customer, gump_layout, gump_data );
+	if (!gump_return or !gump_return[0])
+		PrintTextAbovePrivate (merchant, "Never mind then.", paying_customer);
+		return;
+	endif
+
+	if (!paying_customer.cmdlevel)
+		if (!paying_customer.spendgold (25) )
+			PrintTextAbovePrivate (merchant,  "You don't have enough gold!", paying_customer);
+			return;
+		endif
+	endif
+
+	old_beard.color := gump_return[0];
+	SetObjProperty (customer, "beardcolor", old_beard.color);
+
+endfunction
+
+
+
+///////////////////
+//  changes the character's hairstyle to the one selected
+///////////////////
+
+function ChangeHairToStyle (merchant, customer, hairstyle)
+
+	var old_hair := GetEquipmentByLayer ( customer, LAYER_HAIR );
+	var old_hair_color := old_hair.color;
+	if (!old_hair)
+		var old_beard := GetEquipmentByLayer ( customer, LAYER_BEARD );
+		if (old_beard)
+			old_hair_color := old_beard.color;
+		else
+			old_hair_color := RandomInt(46) + 1102;
+		endif
+	endif
+
+	var new_hair := CreateItemAtLocation (0, 0, 0, hairstyle, 1, REALM_BRITANNIA);
+	new_hair.color := old_hair_color;
+
+	DestroyItem (old_hair);
+	EquipItem (customer, new_hair);
+	if (merchant)
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  changes the character's hairstyle to the one selected
+///////////////////
+
+function ChangeBeardToStyle (merchant, customer, beardtype)
+
+	var old_beard := GetEquipmentByLayer ( customer, LAYER_BEARD );
+	var old_beard_color := old_beard.color;
+	if (!old_beard)
+		var old_hair := GetEquipmentByLayer ( customer, LAYER_HAIR );
+		if (old_hair)
+			old_beard_color := old_hair.color;
+		else
+			old_beard_color := RandomInt(46) + 1102;
+		endif
+	endif
+
+	var new_beard := CreateItemAtLocation (0, 0, 0, beardtype, 1, REALM_BRITANNIA);
+	new_beard.color := old_beard_color;
+
+	DestroyItem (old_beard);
+	EquipItem (customer, new_beard);
+	if (merchant)
+	endif
+
+endfunction
+
+

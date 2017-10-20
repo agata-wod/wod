@@ -1,0 +1,290 @@
+use os;
+use uo;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/string";
+
+Const SOUND_EFFECT_INSCRIPTION := 0x50;
+
+program textcmd_own (me, parms)
+	if (parms)
+		if (parms == "bag")
+			MarkBag (me);
+			return;
+		elseif (parms == "log lost" and me.cmdlevel)
+			LogLostItems (me);
+			return;
+		endif
+		SendSysMessage (me, "Valid parameters are: bag");
+		return;
+	endif
+
+	SendSysMessage (me, "Mark what as owned?");
+	var it := Target (me);
+	if (!it)
+		return;
+	endif
+	if (!it.movable)
+		PrintTextAbovePrivate (it, "You can't move that.", me);
+		return;
+	endif
+	if (!Accessible (me, it) or distance (me, it) > 0) 
+		PrintTextAbovePrivate (it, "You can't reach that.", me );
+		return;
+	endif
+
+	var ownerserial := GetObjProperty (it, "ownerserial");
+	var ownername := GetObjProperty (it, "ownername");
+	if (ownerserial)
+		if  (ownerserial == me.serial)
+			RemoveOwnersMarkFromItem (me, it);
+		else
+			PrintTextAbovePrivate (it,"That is already owned by "+ownername, me );
+		endif
+	else
+		PutOwnersMarkOnItem (me, it);
+	endif
+endprogram
+
+
+
+
+///////////////////
+//Puts the owner's mark on an item
+///////////////////
+
+function PutOwnersMarkOnItem (me, it)
+	if (GetObjProperty (it, "tname") or GetObjProperty (it, "prefix") or GetObjProperty (it, "suffix"))
+		SendSysMessage (me, "You can't mark unidentified items!");
+		return;
+	endif
+
+	if (it.amount > 1 )
+		PrintTextAbovePrivate (it, "You can't mark those.", me );
+		return;
+	endif
+
+	if (GetObjProperty (it, "etherial") )
+		SendSysMessage (me, "You could never hope to truly own this item...");
+		return;
+	endif
+
+	var ownerserial := GetObjProperty (it, "ownerserial");
+	if (ownerserial and ownerserial != me.serial)
+		var ownername := GetObjProperty (it, "ownername");
+		PrintTextAbovePrivate (it, "That is already owned by "+ownername, me );
+		return;
+	endif
+
+	PrintTextAbovePrivate (it, "You place your owner's mark upon the item" , me );
+	PlaySoundEffect (me, SOUND_EFFECT_INSCRIPTION);
+	ownerserial := me.serial;
+	var ownername := me.name;
+	var TheName := it.desc;
+	SetObjProperty (it, "oldname", thename);
+	var longname := splitwords(TheName);
+	if (longname[1]=="a" or longname[1]=="an")
+		TheName:="";
+		foreach word in longname;
+			if (word != longname[1])
+				TheName := TheName + " "+ word;
+			endif
+		endforeach
+		it.name := me.name+"'s" + TheName;
+	else
+		it.name := me.name+"'s " + TheName;
+	endif
+//	it.name := TheName;
+	it.sellprice := 0;
+	it.buyprice := 0;
+	SetObjProperty (it, "ownerserial", ownerserial);
+	SetObjProperty (it, "ownername", ownername);
+endfunction
+
+
+
+
+///////////////////
+//Puts the owner's mark on an item
+///////////////////
+
+function RemoveOwnersMarkFromItem (me, it)
+	var ownerserial := GetObjProperty (it, "ownerserial");
+	if (ownerserial and ownerserial != me.serial)
+		var ownername := GetObjProperty (it, "ownername");
+		PrintTextAbovePrivate (it, "That is already owned by "+ownername, me );
+		return;
+	endif
+
+	PrintTextAbovePrivate (it, "You remove the owner's mark from the item", me);
+	PlaySoundEffect (me, SOUND_EFFECT_INSCRIPTION);
+	EraseObjProperty (it, "ownerserial");
+	EraseObjProperty (it, "ownername");
+
+	if ( GetObjProperty(it,"oldname") )
+		it.name:=GetObjProperty (it, "oldname");
+		EraseObjProperty (it, "oldname");
+	else
+		If (!GetObjProperty (it, "noname"))
+			var tname := "";
+			foreach word in splitwords(it.name);
+				if ((word != "(*)") and (word != me.name+"'s"))
+					tname := tname + " " + word;
+				endif
+			endforeach
+			it.name := tname;
+		else
+			it.name := "";
+		endif
+	endif
+	return;
+endfunction
+
+
+
+
+///////////////////
+//  allows players to mark a bag, and all the item within the bag
+///////////////////
+
+function MarkBag (me)
+	SendSysMessage (me, "Mark what bag of items as owned?");
+	var it := Target (me);
+	if (!it)
+		return;
+	endif
+	if (!it.movable)
+		PrintTextAbovePrivate (it, "You can't move that.", me);
+		return;
+	endif
+	if (!Accessible (me, it) or distance (me, it) > 0) 
+		PrintTextAbovePrivate (it, "You can't reach that.", me );
+		return;
+	endif
+	if (!it.isa (POLCLASS_CONTAINER) or it.objtype == UOBJ_SPELLBOOK)
+		SendSysMessage (me, "That's not a container!");
+		return;
+	endif
+
+	var items := EnumerateItemsInContainer (it);
+	if (!len (items) )
+		SendSysMessage (me, "But there's nothing in there!");
+		return;
+	endif
+
+	var x := me.x;
+	var y := me.y;
+	var ownerserial := GetObjProperty (it, "ownerserial");
+	if (ownerserial and ownerserial != me.serial)
+		var ownername := GetObjProperty (it, "ownername");
+		PrintTextAbovePrivate (it,"That is already owned by "+ownername, me );
+		return;
+	elseif (!ownerserial)
+		PutOwnersMarkOnItem (me, it);
+		sleep (1);
+		foreach item in items
+			ownerserial := GetObjProperty (item, "ownerserial");
+			if (ownerserial)
+				if (ownerserial != me.serial)
+					var ownername := GetObjProperty (item, "ownername");
+					PrintTextAbovePrivate (item, "That is already owned by "+ownername, me );
+					return;
+				else
+					PrintTextAbovePrivate (item, "This item is already marked.", me);
+				endif
+			else
+				PutOwnersMarkOnItem (me, item);
+			endif
+			sleep (1);
+			if (x != me.x or y != me.y)
+				return;
+			endif
+		endforeach
+	else
+		RemoveOwnersMarkFromItem (me, it);
+		sleep (1);
+		foreach item in items
+			ownerserial := GetObjProperty (item, "ownerserial");
+			if (ownerserial)
+				if (ownerserial != me.serial)
+					var ownername := GetObjProperty (item, "ownername");
+					PrintTextAbovePrivate (item, "That is already owned by "+ownername, me );
+					return;
+				else
+					RemoveOwnersMarkFromItem (me, item);
+				endif
+			endif
+			sleep (1);
+			if (x != me.x or y != me.y)
+				return;
+			endif
+		endforeach
+	endif
+endfunction
+
+function LogLostItems (character)
+	SendSysMessage (character, "Working, please wait...");
+	var acct, player;
+	foreach acctname in ListAccounts ()
+		acct := FindAccount (acctname);
+		var charserials := array{};
+		for counter := 1 to 7
+			player := acct.GetCharacter (counter);
+			if (player)
+				charserials.append (player.serial);
+				foreach item in EnumerateItemsInContainer (player.backpack)
+					var ownerserial := GetObjProperty (item, "ownerserial");
+					if (ownerserial and ownerserial != player.serial)
+						LogThisItem (item, acctname, (player.name), ownerserial);
+					endif
+				endforeach
+			endif
+		endfor
+
+		var bankbox := FindBankBox (acctname, 1);
+		if (bankbox)
+			foreach item in EnumerateItemsInContainer (bankbox)
+				var ownerserial := GetObjProperty (item, "ownerserial");
+				if (ownerserial and !(ownerserial in charserials))
+					LogThisItem (item, acctname, "Bankbox", ownerserial);
+				endif
+			endforeach
+		endif
+	endforeach
+	SendSysMessage (character, "Done!");
+endfunction
+
+
+
+
+function LogThisItem (item, acctname, charactername, ownerserial)
+	var log := array{ };
+	var prop:= struct {};
+
+    	prop.+name := "Account name:";
+ 	prop.+value := acctname;
+	log[1] := prop;
+
+    	prop.name := "Character name:";
+ 	prop.value := charactername;
+	log[2] := prop;
+
+    	prop.name := "Item";
+ 	prop.value := item.desc;
+	log[3] := prop;
+
+ 	prop.name := "Ownername";
+	var owner := SystemFindObjectBySerial (ownerserial, SYSFIND_SEARCH_OFFLINE_MOBILES);
+	if (owner)
+ 		prop.value := owner.name;
+	else
+ 		prop.value := "Unknown";
+	endif
+	log[4] := prop;
+	
+	AppendConfigFileElem (":drocket:lostitems", "ACCOUNT", acctname, log);
+	UnloadConfigFile (":drocket:lostitems");
+endfunction

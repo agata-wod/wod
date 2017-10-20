@@ -1,0 +1,43 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 6;
+
+program cast_curse (parms, spellid)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_loc := GetSpellCastOn (caster, parms);
+	if (!cast_loc)
+		return 0;
+	endif
+
+	var duration := CalcCurseModDuration ();
+	var mod_amount := CalcModAmount() * 2;
+
+	PlaySoundEffect(caster, SFX_SPELL_MASS_CURSE);
+	foreach mobile in ListMobilesNearLocation (cast_loc.x, cast_loc.y, cast_loc.z, 4, cast_loc.realm);
+		if (CheckLoSAt (caster, mobile.x, mobile.y, mobile.z) )
+			mobile := CheckMagicReflection (caster, mobile);
+			PlaySoundEffect (mobile, SFX_SPELL_MASS_CURSE);
+			PlayObjectCenteredEffect (mobile, FX_CURSE_EFFECT, 10, 10);
+			var resisted_mod_amount := Resisted (caster, mobile, mod_amount);
+			if (mobile.npctemplate)
+				//more effective against NPCs, but only for good mages
+				if (caster_magery > 90)
+					resisted_mod_amount := Resisted (caster, mobile, CINT (2 *mod_amount));
+				elseif (caster_magery > 70)
+					resisted_mod_amount := Resisted (caster, mobile, CINT (1.5 *mod_amount));
+				endif
+			endif
+			DoMagicStatMod (mobile, STATMOD_ALL, 0-resisted_mod_amount, duration, "Curse Spell");
+		endif
+	endforeach
+	return 1;
+endprogram

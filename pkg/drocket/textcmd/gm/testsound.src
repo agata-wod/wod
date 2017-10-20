@@ -1,0 +1,9 @@
+use uo;
+use os;
+
+program testsound (character)
+	PlaySoundEffectPrivate (character, 0x319, character);
+	sleep (1);
+	PlaySoundEffectPrivate (character, 0x31b, character);
+
+endprogram

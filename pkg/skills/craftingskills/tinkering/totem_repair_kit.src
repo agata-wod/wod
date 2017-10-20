@@ -1,0 +1,75 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+
+CONST REPAIR_KIT_USES := 10;
+
+program MakeTinkerItems (character, repairkit)
+	if (!ReserveItem (repairkit) or !repairkit.movable)
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+	
+	var totem := Target (character, TGTOPT_CHECK_LOS);
+	if (!totem)
+		SendSysMessage (character, "Canceled.");
+		return;
+	elseif (!GetObjProperty (totem, "critter") or totem.usescript != ":dundee:totem")
+		SendSysMessage (character, "You can't use the repair kit on that.");
+		return;
+	elseif (!ReserveItem (totem) or !totem.movable)
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	elseif (!GetObjProperty (totem, "broken"))
+		SendSysMessage (character, "But its not broken!");
+		return;
+	endif
+
+	var type := GetObjProperty (repairkit, "materialtype");
+	var npctemplate := GetObjProperty (totem, "critter");
+	if (type and npctemplate)
+		if (type == "porcelain")
+			if (!npctemplate["porcelain"])
+				SendSysMessage (character, "This is not the right type of repair kit for that item.");
+				return;
+			endif
+		elseif (type == "obsidian")
+			if (npctemplate["porcelain"])
+				SendSysMessage (character, "This is not the right type of repair kit for that item.");
+				return;
+			endif
+		endif
+	endif
+
+	for i := 1 to 3
+		PlaySoundEffect (character, SFX_GLASSBREAK4);
+		sleep (2);
+	endfor
+	EraseObjProperty (totem, "broken");
+	SendSysMessage (character, "You repair " + totem.desc + " completely.");
+
+	var uses :=  GetObjProperty (repairkit, "uses");
+	if (!uses)
+		uses := 0;
+	endif
+	uses := uses + 1;
+	if (uses > REPAIR_KIT_USES)
+		SendSysMessage (character, "You completely use up the repair kit.");
+		DestroyItem (repairkit);
+		return;
+	endif
+	
+	SetObjProperty (repairkit, "uses", uses);
+	if (type == "porcelain")
+		repairkit.name := "a porcelain repair kit (" + (REPAIR_KIT_USES - uses) + " uses left)";
+	else
+		repairkit.name := "an obsidian repair kit (" + (REPAIR_KIT_USES - uses) + " uses left)";
+	endif
+endprogram
+
+
+
+

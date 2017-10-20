@@ -1,0 +1,2 @@
+Allows you to point at an object, person or spot on the ground.
+

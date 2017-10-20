@@ -1,0 +1,17 @@
+use os;
+use uo;
+use util;
+
+include "include/client";
+include "include/gumps";
+include "include/skills";
+include "include/attributes";
+
+program job_item_script (player, item)
+	SendSysMessage (player, "This item isn't yours to use.");
+	if (item)
+	endif
+	return;
+endprogram
+
+

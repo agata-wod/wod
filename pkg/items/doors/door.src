@@ -1,0 +1,44 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "../pkg/items/doors/doors";
+include "../pkg/items/housing/house";
+
+program use_door (character, door)
+
+	//automatically refresh houses if the character is the person who owns the house
+	var sign := FindHouseSign (character);
+	if (sign)
+		RefreshHouse (sign);
+	endif
+
+	Detach();
+	if (door.graphic != door.objtype)
+		CloseDoor(door);
+		EraseObjProperty (door, "#WhenOpened");
+		PlayDoorCloseSound (door);
+		return;
+	endif
+
+	if ( IsLocked (character, door) )
+		PrintTextAbovePrivate (door, "That is locked.", character);
+		return;
+	endif
+
+	var whenopened := ReadGameClock();
+	SetObjProperty (door, "#WhenOpened", whenopened );
+	OpenDoor (door);
+	PlayDoorOpenSound (door);
+
+	sleep (10);
+	if (GetObjProperty (door, "#WhenOpened") == whenopened)
+		CloseDoor(door);
+		EraseObjProperty (door, "#WhenOpened");
+		PlayDoorCloseSound (door);
+	endif
+
+endprogram

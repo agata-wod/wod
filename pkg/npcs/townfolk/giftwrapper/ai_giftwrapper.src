@@ -1,0 +1,225 @@
+use os;
+use uo;
+use npc;
+use basic;
+use cfgfile;
+
+include "include/utility";
+include "include/eventid";
+include "include/magicitems";
+include "include/npcbackpacks";
+include "../pkg/npcs/speech";
+include "../pkg/npcs/npcinfo";
+include "../pkg/npcs/npc_util";
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/sleepmode_townfolk";
+
+var next_possible_spam := ReadGameClock ();
+
+program merchantai()
+
+	if ( me.name ["<random>"] )
+		DoOnCreationSetup ();
+	endif
+
+	EnableMainEvents ();
+	SetUpSpeech ();
+	WalkHome ();
+
+	var ev;
+	var mydestx := 0;
+	var mydesty := 0;
+	var steps := 0;
+	var wanders := 60;
+	var next_wander := ReadGameClock();
+
+	while (me)
+		if (me.hidden)
+			me.hidden := 0;
+		endif
+		
+		if (readgameclock() > next_wander)
+			if (mydestx != 0)
+				WalkTowardLocation(mydestx, mydesty);
+				if ( (me.x == mydestx and me.y == mydesty) or ( steps > 10 ) )
+					mydestx := 0;
+					SetAnchor ( me.x, me.y, 3, 80 );
+				endif
+			else	
+				wander();
+				wanders := wanders +1;
+			endif
+			next_wander := readgameclock() + 2;
+		endif
+
+		if (wanders > 60)
+			wanders :=0;
+			WalkHome ();
+			ev := sleepmode();
+		else
+			ev := os::wait_for_event ( 2 );
+   		endif
+
+		if (ev)
+			if (ProcessEvent (ev, mydestx, mydesty, steps))
+				next_wander := ReadGameClock() + 30;
+			endif
+		endif
+	endwhile
+endprogram
+
+
+
+
+///////////////////
+//  pretty obvious - processes events picked up in the main AI loop
+///////////////////
+
+function ProcessEvent (byref ev, byref mydestx, byref mydesty, byref steps)
+	case (ev.type)
+		EVID_ENGAGED:
+		EVID_DAMAGED:
+			Fight (ev.source);
+		EVID_ENTEREDAREA:
+			if (ev.source.npctemplate)
+				return 0;
+			endif
+
+			if (ReadGameClock() > next_possible_spam)
+				GreetCustomer (ev.source);
+				next_possible_spam := ReadGameClock() + 60;
+			endif
+		EVID_SPEECH:
+			if (ev.source.npctemplate)
+				return 0;
+			endif
+
+			TurnToward (ev.source);
+			var evtext := lower(ev.text);
+			if (evtext["buy"])
+				Say ("Sorry, but I'm not interested.");
+			elseif (evtext["sell"])
+				Say ("Sorry, but I'm not interested.");
+			else
+				check_speech (ev.text, ev.source);
+			endif
+
+		EVID_MERCHANT_BOUGHT:
+			TurnToward (ev.source);
+			return 1;
+
+		EVID_ITEM_GIVEN:
+			MoveItemToContainer (ev.item, me.backpack);
+			TurnToward (ev.source);
+			if (ev.item.objtype == UOBJ_GOLD_COIN)
+				Say ("For me?  Thanks.");
+				sleep (3);
+				Say ("What, you wanted something?");
+				sleep (2);
+				Say ("Fine, take it back.");
+
+				MoveItemToContainer (ev.item, ((ev.source).backpack));
+				return 0;
+			endif
+			
+			var parms := array;
+			parms[1] := me;
+			parms[2] := ev.source;
+			parms[3] := ev.item;
+			start_script (":giftwrapper:take_item", parms);
+			return 1;
+
+		EVID_ALL_FOLLOW_CMD:
+			mydestx := ev.x;
+			mydesty := ev.y;
+			steps := 0;
+			SetAnchor ( mydestx, mydesty, 3, 80 );
+			WalkTowardLocation (mydestx, mydesty);
+		endcase
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  when a player enters the NPCs range, this function makes them
+//  yell a greeting
+///////////////////
+
+function GreetCustomer (byref customer)
+	if (customer.npctemplate or customer.concealed)
+		return;
+	endif
+
+	if (RandomInt (5))
+		return;
+	endif
+
+	TurnToward (customer);
+	case (RandomInt (10) )
+		0:
+			Say ("Ooohhh...  Sparkly!");
+		1:
+			Say ("Welcome to my shop!");
+		2:
+			Say ("Let me know if you need help.");
+		3:
+			Say ("No gift is complete without a bow!");
+		4:
+			case (randomInt (5))
+				0:	Say ("Oh dear, I'm almost out of red ribbon...");
+				1:	Say ("Oh dear, I'm almost out of green ribbon...");
+				2:	Say ("Oh dear, I'm almost out of pink ribbon...");
+				3:	Say ("Oh dear, I'm almost out of blue ribbon...");
+				4:	Say ("Oh dear, I'm almost out of white ribbon...");
+			endcase
+		5:
+			Say ("Can I help you with anything?");
+		6:
+			Say ("I carefully pack everything so nothing gets broken.");
+		7:
+			Say (customer.name + "!  Its good to see you again.");
+		8:
+			Say ("Gifts always make people happy!");
+		9:
+			Say ("Ah, " + customer.name + ", one of my best customers returns!");
+	endcase
+
+endfunction
+
+
+
+
+///////////////////
+//  causes the merchant to enter fight mode, which starts a seperate AI script
+///////////////////
+
+function Fight (byref opponent)
+
+	SetObjProperty (me, "opponent", opponent.serial);
+	SetObjProperty (me, "oldscript", me.script);
+
+	me.script := ":fight_ai:warrior_fight_ai";
+	RestartScript (me);
+
+endfunction
+
+
+
+
+///////////////////
+//  enables and disables events
+///////////////////
+
+function EnableMainEvents()
+	DisableEvents (SYSEVENT_LEFTAREA + SYSEVENT_DISENGAGED + SYSEVENT_OPPONENT_MOVED );
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_ENTEREDAREA, 4);
+	EnableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN, 3);
+endfunction
+
+function DisableMainEvents()
+	DisableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED + SYSEVENT_ENTEREDAREA);
+	DisableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN);
+endfunction

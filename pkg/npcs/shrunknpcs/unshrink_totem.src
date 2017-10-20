@@ -1,0 +1,167 @@
+use os;
+use uo;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/spawn";
+include "include/attributes";
+include "../pkg/npcs/npc_util";
+
+program unshrink_totem (parms)
+	var totem := parms[1];
+	if (!totem)
+		return CreateError ("Totem does not exist");
+	endif
+	
+	var x := parms[2];
+	var y := parms[3];
+	if (!x or !y)
+		return CreateError ("Invalid location");
+	endif
+
+	var realm := parms[5];
+	if (!realm)
+		realm := REALM_BRITANNIA;
+	endif
+
+	var z := parms[4];
+	if (!z)
+		z:= GetMapInfo(x,y, realm).z;
+	endif
+
+	var npctemplate := GetObjProperty (totem, "npctemplate");
+	if (!npctemplate)
+		return CreateError ("Totem appears to be broken");
+	endif
+
+	var mobile := SpawnNPCAtLocation (npctemplate, x, y, z, 0, realm);
+	if (!mobile)
+		return CreateError ("Unable to create NPC (invalid location or npctemplate)");
+	endif
+
+	if (!mobile.backpack)
+		var newbackpack := CreateItemAtLocation (5288, 1176, 0, UOBJ_BACKPACK, 1, REALM_BRITANNIA);
+		if (!EquipItem (mobile, newbackpack));
+			DestroyItem (newbackpack);
+		endif
+	endif
+
+	var ignorethis := 0;
+	foreach property in GetObjPropertyNames (totem)
+		//not all property should be passed on:  Some are put on the doll by the shrink script.
+		//Ignore those
+		case (property)
+			"script":
+			"graphic":
+			"skills":
+			"equippack":
+			"lootbag":
+			"str":
+			"int":
+			"dex":
+			"str_mod":
+			"int_mod":
+			"dex_mod":
+			"ar_mod":
+			"gender":
+			"npctemplate":
+			"title_prefix":
+			"title_suffix":
+			"title_race":
+			"title_guild":
+				ignorethis := 1;	//need to put something here to split this up
+			default:
+				var value := GetObjProperty (totem, property);
+				SetObjProperty (mobile, property, value);
+		endcase
+	endforeach
+
+	mobile.script := GetObjProperty (totem, "script");
+	RestartScript (mobile);
+
+	mobile.name := totem.name;
+	if (mobile.name["<random>"])
+		var tempstring := mobile.name;
+		tempstring["<random>"] := RandomName (mobile);
+		mobile.name := tempstring;
+	endif
+	
+	if (GetObjProperty (totem, "title_prefix"))
+		mobile.title_prefix := GetObjProperty (totem, "title_prefix");
+	endif
+	if (GetObjProperty (totem, "title_suffix"))
+		mobile.title_suffix := GetObjProperty (totem, "title_suffix");
+	endif
+	if (GetObjProperty (totem, "title_race"))
+		mobile.title_race := GetObjProperty (totem, "title_race");
+	endif
+	if (GetObjProperty (totem, "title_guild"))
+		mobile.title_guild := GetObjProperty (totem, "title_guild");
+	endif
+	if (GetObjProperty (totem, "gender"))
+		mobile.gender := GetObjProperty (totem, "gender");
+	endif
+	if (GetObjProperty (totem, "ar_mod"))
+		mobile.ar_mod := GetObjProperty (totem, "ar_mod");
+	endif
+
+	mobile.graphic := GetObjProperty (totem, "graphic");
+	mobile.color := totem.color;
+	SetObjProperty (mobile, "color", mobile.color);
+
+	SetAttributeBaseValue (mobile, "Strength", GetObjProperty (totem, "str") * 10);
+	SetAttributeBaseValue (mobile, "Intelligence", GetObjProperty (totem, "int") * 10);
+	SetAttributeBaseValue (mobile, "Dexterity", GetObjProperty (totem, "dex") * 10);
+
+	SetAttributeTemporaryMod (mobile, "Strength", CINT (GetObjProperty (totem, "str_mod")) * 10);
+	SetAttributeTemporaryMod (mobile, "Intelligence", CINT (GetObjProperty (totem, "int_modt")) * 10);
+	SetAttributeTemporaryMod (mobile, "Dexterity", CINT (GetObjProperty (totem, "dex_mod")) * 10);
+
+	RecalcVitals (mobile);
+
+	SetVital (mobile, "Life", GetVitalMaximumValue (mobile, "Life"));
+	SetVital (mobile, "Mana", GetVitalMaximumValue (mobile, "Mana"));
+	SetVital (mobile, "Stamina", GetVitalMaximumValue (mobile, "Stamina"));
+
+	var equippackserial := GetObjProperty (totem, "equippack");
+	var equippack := 0;
+	foreach item in ListRootItemsInContainer (totem)
+		if (item.serial == equippackserial)
+			equippack := item;
+		endif
+	endforeach
+	if (equippack)
+		foreach item in ListRootItemsInContainer (equippack)
+			var newitem := CopyItemInContainer (item, mobile.backpack);
+			if (!EquipItem (mobile, newitem))
+				DestroyItem (newitem);
+			endif
+		endforeach
+	endif
+
+	var lootbagserial := Getobjproperty (totem, "lootbag");
+	var lootbag := 0;
+	foreach item in ListRootItemsInContainer (totem)
+		if (item.serial == lootbagserial)
+			lootbag := item;
+		endif
+	endforeach
+	if (lootbag)
+		foreach item in ListRootItemsInContainer(lootbag)
+			CopyItemInContainer (item, mobile.backpack);
+		endforeach
+	endif
+
+	var skills := GetObjProperty (totem, "skills");
+	for i := 0 to 48
+		SetAttributeBaseValue (mobile, GetAttributeIDBySkillID (i), skills[i]*10);
+	endfor
+
+	return mobile;
+endprogram
+
+
+
+

@@ -1,0 +1,74 @@
+use uo;
+use os;
+use util;
+Const SOUND_EFFECT_EXPLOSION	   := 0x208; 
+Const EFFECT_EXPLOSION             := 0x36b0;
+
+include "include/client";
+include "include/objtype";
+include "include/spawn";
+include "include/magic";
+include "include/wodinc";
+
+
+program cannon_dot_command (character, text)
+	text := lower (text);
+	if (text == "set")
+		SendSysmessage (character, "What cannon do you want to fire?");
+		var cannon := Target (character);
+		if (!cannon)
+			SendSysMessage (character, "Canceled!");
+			return;
+		endif
+		SetObjProperty (character, "#cannon", cannon.serial);
+		return;
+	endif
+	
+	if (text)
+		SendSysMessage (character, "Valid options are:  set");
+		return;
+	endif
+	
+	var cannonserial := GetObjProperty (character, "#cannon");
+	if (!cannonserial)
+		SendSysMessage (character, "You must set a cannon to fire first!");
+		return;
+	endif
+	
+	var cannon := SystemFindObjectBySerial (cannonserial);
+	if (!cannon)
+		SendSysMessage (character, "Cannon does not exist!");
+		return;
+	endif
+	
+	SendSysMessage (character, "Select a target:");
+	var targetted := TargetCoordinates (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	
+	PlaySoundEffect (cannon, 0x11d);
+	PlayStationaryEffect( cannon.x, cannon.y, cannon.z + 1, FX_SMOKE, 0xA, 0xA, 0, cannon.realm );
+	PlayMovingEffectXYZ (cannon.x, cannon.y, cannon.z+15,
+			targetted.x, targetted.y, targetted.z,
+			0xe73, 8, 0, 0, targetted.realm );
+
+	sleep (1);
+	
+	PlayStationaryEffect (targetted.x, targetted.y, targetted.z, EFFECT_EXPLOSION, 7, 0x10, 0, targetted.realm);
+	foreach critter in ListMobilesNearLocationEx (targetted.x, targetted.y, targetted.z, 4, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, targetted.realm );
+		PlayObjectCenteredEffect (critter, EFFECT_EXPLOSION, 7, 0x10);
+		var dmg := (Randomint(11) + 5) * 4;
+		DoDamageByType (0, critter, dmg, DAMAGETYPE_PHYSICAL);
+	endforeach
+
+
+
+endprogram
+
+
+
+
+
+

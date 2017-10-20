@@ -1,0 +1,18 @@
+use uo;
+use os;
+
+include "include/dotempmods";
+include "include/client";
+
+program walkon_spiderweb(character, web)
+
+	web := "not used right now";
+
+	if (!character.cmdlevel)
+        	if (!checkskill(character, SKILLID_MAGICRESISTANCE, -1, 0))
+                	sendsysmessage(character, "You are trapped in a spider web!");
+	                DoTempMod(character, "p", 1, 15, "A spider's web");
+	        endif
+	endif
+
+endprogram

@@ -1,0 +1,198 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "../pkg/guilds/guilds";
+
+var gump_layout := array{};
+var gump_data := array{};
+var string_counter := 1;
+
+var item_cfg_file;
+var players_tickets;
+
+program display_forsale_items (parms)
+	var shopkeep := parms[1];
+	var player := parms[2];
+	var guild_name := parms[3];
+	if (!shopkeep or !player or !guild_name)
+		return;
+	endif
+
+	if (GetObjProperty (player, "guildbuywindow") )
+		return;
+	endif
+	SetObjProperty (player, "guildbuywindow", 1);
+
+	item_cfg_file := ReadConfigFile (":" + guild_name + ":itemsforsale");
+	if (!item_cfg_file)
+		Syslog ("Can't open " + guild_name + " itemsforsale cfgfile!");
+		PrintTextAbovePrivate (shopkeep, "Sorry, but I'm having a bit of a problem right now.", player);
+		EraseObjProperty (player, "guildbuywindow");
+		return;
+	endif
+
+	players_tickets := CountPlayersTickets (player.acctname, guild_name);
+	PrintTextAbovePrivate (shopkeep, "Hello, there!  What do you want?", player);
+
+	BuildDisplayGump (guild_name);
+	var gump_return := SendDialogGump (player, gump_layout, gump_data);
+	if (!gump_return and gump_return[0] != 0)
+		PrintTextAbovePrivate (shopkeep, "Please close other gumps first.", player);
+		EraseObjProperty (player, "guildbuywindow");
+		return;
+	elseif (gump_return[0] == 0)
+		PrintTextAbovePrivate (shopkeep, "OK, maybe next time then.", player);
+		EraseObjProperty (player, "guildbuywindow");
+		return;
+	endif
+	
+	var intkeyarray := GetConfigIntKeys (item_cfg_file);
+	var thekey := intkeyarray[gump_return[0]];
+	var chosen_item := FindConfigElem (item_cfg_file, thekey);
+	if (!chosen_item)
+		Syslog ("Error finding key " + thekey);
+		PrintTextAbovePrivate (shopkeep, "Sorry, but I'm having a bit of a problem right now.", player);
+		EraseObjProperty (player, "guildbuywindow");
+		return;
+	endif
+	
+	if (chosen_item.price > players_tickets)
+		PrintTextAbovePrivate (shopkeep, "I'm sorry, but you can't afford that right now.", player);
+		EraseObjProperty (player, "guildbuywindow");
+		return;
+	endif
+	
+	var theitem := CreateItemInBackpack (player, chosen_item.objtype, 1);
+	if (!theitem)
+		PrintTextAbovePrivate (shopkeep, "Clean out your backpack and try again.", player);
+		EraseObjProperty (player, "guildbuywindow");
+		return;
+	endif
+	
+	AddTicketsToPlayer (player.acctname, (0-chosen_item.price), guild_name);
+	PrintTextAbovePrivate (shopkeep, "Thanks!  Come again soon!", player);
+	EraseObjProperty (player, "guildbuywindow");
+
+endprogram
+
+
+
+
+///////////////////
+//  does thw grunt work of building the gump
+///////////////////
+
+function BuildDisplayGump (guild_name)
+	gump_layout := array {
+		"page 0",
+		"nodispose",
+		"resizepic 20 20 2600 400 300",
+		"resizepic 60 60 5120 60 60",
+		"text 140 50 1327 0",
+		"text 140 100 1327 1",
+		"text 140 270 1327 2",
+		"text 280 270 0 3",
+		"text 200 240 0 4",
+		"page 1"
+	};
+	
+	gump_data := array {
+		"Item:",
+		"Price:",
+		"Your tickets:",
+		players_tickets,
+		"Buy item"
+	};
+	
+	string_counter := len (gump_data);
+	var pagenumber := 1;
+	var intkeyarray := GetConfigIntKeys (item_cfg_file);
+	var number_of_keys := len (intkeyarray);
+
+	foreach intkey in intkeyarray
+		var elem := FindConfigElem (item_cfg_file, intkey);
+		if (!elem)
+			Syslog ("Error finding " + guild_name + " key " + intkey);
+		endif
+
+		gump_layout.append ("tilepic 70 70 " + elem.graphic);
+		gump_layout.append ("text 200 50 0 " + string_counter);
+		gump_data.append (elem.desc_1);
+		string_counter := string_counter + 1;
+
+		gump_layout.append ("text 220 70 0 " + string_counter);
+		gump_data.append (elem.desc_2);
+		string_counter := string_counter + 1;
+
+		gump_layout.append ("text 200 100 0 " + string_counter);
+		gump_data.append (elem.price);
+		string_counter := string_counter + 1;
+		
+		gump_layout.append ("text 100 140 0 " + string_counter);
+		gump_data.append (elem.line_1);
+		string_counter := string_counter + 1;
+
+		gump_layout.append ("text 100 160 0 " + string_counter);
+		gump_data.append (elem.line_2);
+		string_counter := string_counter + 1;
+
+		gump_layout.append ("text 100 180 0 " + string_counter);
+		gump_data.append (elem.line_3);
+		string_counter := string_counter + 1;
+
+		gump_layout.append ("button 180 245 2104 2103 1 0 " + (pagenumber));
+
+		if (pagenumber == 1)
+			if (number_of_keys > 1)
+				gump_layout.append ("button 365 200 5601 5605 0 2");
+				gump_layout.append ("page 2");
+				gump_layout.append ("button 60 200 5603 5607 0 1");
+				pagenumber := 2;
+			endif
+		elseif (pagenumber == number_of_keys)
+			gump_layout.append ("button 60 200 5603 5607 0 " + (pagenumber-1) );
+		else
+			pagenumber := pagenumber + 1;
+			gump_layout.append ("button 365 200 5601 5605 0 " + pagenumber);
+			gump_layout.append ("page " + pagenumber);
+			gump_layout.append ("button 60 200 5603 5607 0 " + (pagenumber-1) );
+ 		endif
+	endforeach
+/*	
+	//special unique items
+	var storage := FindStorageArea ("Guild Storage");
+	if (!storage)
+		storage := CreateStorageArea ("Guild Storage");
+		if (!storage)
+			Syslog ("Unable to find or create Guild Storage");
+			return;
+		endif
+	endif
+	var guildbox := find_or_create_item (storage, guild_name + "_items", 0xE7C);
+	if (!guildbox)
+		Syslog ("Unable to create guild storage box");
+		return;
+	endif
+
+	//if there's no items in storage, just exit
+	if (len (EnumerateItemsInContainer (guildbox)))
+		return;
+	endif
+
+	var toplevel_items := {};
+	foreach item in EnumerateItemsInContainer (guildbox)
+		if (item.container == guildbox)
+			toplevel_items.append (item);
+		endif
+	endforeach
+*/
+	
+endfunction
+
+
+
+
+
+

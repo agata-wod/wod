@@ -1,0 +1,20 @@
+use os;
+use uo;
+use vitals;
+
+include "include/client";
+include "include/attributes";
+
+program textcmd_setskill( who )
+
+	for i := 0 to 57
+		SetAttributeBaseValue (who, GetAttributeIDBySkillID (i), 0);
+	endfor
+
+	SetAttributeBaseValue (who, "Strength", 0);
+	SetAttributeBaseValue (who, "Intelligence", 0);
+	SetAttributeBaseValue (who, "Dexterity", 0);
+	RecalcVitals (who);
+	SendSysMessage (who, "You are now fully powered down.");
+
+endprogram

@@ -1,0 +1,55 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+
+program open_bank (who, text)
+	if (text)
+		FindOtherBankbox (who, text);
+		return;
+	endif
+
+	var bankbox := FindBankBox (who.acctname);
+	SendOpenSpecialContainer (who, bankbox);
+endprogram
+
+
+///////////////////
+// finds a bankbox based on the passed serial number
+///////////////////
+
+function FindOtherBankbox (character, text)
+	var bankbox := FindBankBox (text, 1);
+	if (bankbox)
+		var items := EnumerateItemsInContainer (bankbox);
+		SendSysMessage (character, "Total items: " + len(items));
+		SendSysMessage (character, "Total gold: " + CountGoldInBankbox (bankbox));
+		SendOpenSpecialContainer (character, bankbox);
+	else
+		SendSysMessage (character, "No bankbox!");
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  counts all the gold the player has in his bankbox
+///////////////////
+
+function CountGoldInBankbox (bankbox)
+	if (!bankbox)
+		return 0;
+	endif
+	
+	var gold_count := 0;
+	foreach item in EnumerateItemsInContainer (bankbox)
+		if (item.objtype == UOBJ_GOLD_COIN)
+			gold_count := gold_count + item.amount;
+		endif
+	endforeach
+	return gold_count;
+endfunction
+

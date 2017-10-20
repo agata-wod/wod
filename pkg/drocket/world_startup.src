@@ -1,0 +1,11 @@
+use uo;
+use os;
+
+program world_startup ()
+	Syslog ("Starting world");
+	SetGlobalProperty ("#starting_server", 1);
+
+	sleep (900);
+	EraseGlobalProperty ("#starting_server");
+	Syslog ("Startup complete");
+endprogram

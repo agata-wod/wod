@@ -1,0 +1,655 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/wodinc";
+include "include/utility";
+include "include/gumps";
+
+program DisplayHelpMenu (character)
+	if (GetObjProperty (character, "HELP"))
+		SendSysMessage (character, "Your help page has been REMOVED from the queue");
+		EraseObjProperty (character, "HELP");
+		return;
+	endif
+
+	if (GetObjProperty (character, "#help_window"))
+		if (GetProcess (GetObjProperty (character, "#help_window")))
+			SendSysmessage (character, "That gump is already open!");
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#help_window", GetPid());
+
+	var gump_layout := array {
+		"nomove",
+		"nodispose",
+
+		"page 0",
+		"resizepic 120 70 5170 500 450",
+		"text 200 95 0 0",
+		"text 315 95 1318 1",
+		"text 450 95 0 2",
+
+		"button 160 140 5563 5564 1 0 1",	//help volunteers
+		"text 230 135 1318 3",
+		"text 230 150 0 4",
+		"text 230 165 0 5",
+		"text 230 180 0 6",
+
+		"button 160 230 5581 5582 1 0 2",	//Dot command reference
+		"text 230 225 1318 7",
+		"text 230 240 0 8",
+		"text 230 255 0 9",
+		"text 230 270 0 10",
+
+		"button 160 320 5583 5584 1 0 3",	//Websites
+		"text 230 315 1318 11",
+		"button 230 339 2104 2103 1 0 4",
+		"text 250 335 0 12",
+		"button 230 359 2104 2103 1 0 5",
+		"text 250 355 0 13",
+
+		"button 160 410 5569 5570 1 0 6",	//Page a GM
+		"text 230 410 1318 15",
+		"text 230 425 0 16",
+		"text 230 440 0 17",
+  		"text 230 455 0 18"
+	};
+	
+	var gump_data := array {
+		"Welcome to the",								//0
+		"World of Dreams",
+		"Help System",
+		"Online Help Volunteer List",
+		"Have a question?  Ask one of these players who",
+		"have volunteered to help those in need.",			//5
+		"Know the answer?  Volunteer to help others!",
+		
+		"Dot Command Reference List",
+		"Help with all of those difficult-to-",
+		"remember (yet ever-so-useful) dot",
+		"commands.",									//10
+
+		"Useful WoD Websites",
+		"Main World of Dreams Website",
+		"World of Dreams Manual",
+		"",
+
+		"Page a GM",									//15
+		"None of the above solve your problem?",
+		"Page a GM!",
+		""
+	};
+
+	var gump_return := SendDialogGump (character, gump_layout, gump_data);
+	if (!gump_return[0])
+		SendSysMessage (character, "Canceled.");
+		EraseObjProperty (character, "#help_window");
+		return;
+	endif
+	
+	case (gump_return[0])
+		1:
+			DisplayOnlineHelpVolunteerList (character);
+		2:
+			DisplayDotCommandReference (character);
+		3:
+		4:
+			OpenBrowser (character, "http://www.theworldofdreams.com/");
+			return;
+		5:
+			OpenBrowser (character, "http://www.theworldofdreams.com/manual/index.php?title=Main_Page");
+			return;
+		6:
+			PutInAHelpPage (character);
+		default:
+			SendSysMessage (character, "This is not supposed to happen.");
+			EraseObjProperty (character, "#help_window");
+			return;
+	endcase
+	EraseObjProperty (character, "#help_window");
+endprogram
+
+
+
+
+///////////////////
+//  Displays a list of online help volunteers
+///////////////////
+
+function DisplayOnlineHelpVolunteerList (character)
+	SendSysMessage (character, "The names you see listed here are players who have volunteered");
+	SendSysMessage (character, "their time to help those in need.  Please be nice  :)");
+	SendSysMessage (character, "Pressing the button beside the listed name sends a .msg to");
+	SendSysMessage (character, "the selected person.  You can then follow up with the conversation");
+	SendSysMessage (character, "with .msg or .reply (see the dot command help list for more");
+	SendSysMessage (character, "information about these commands.)");
+
+	var gump_layout := array {
+		"nodispose",
+		"page 0",
+		"resizepic 330 30 5170 300 400",
+		"button 370 60 2104 2103 1 0 99",
+		"text 385 56 0 1"
+	};
+
+	var gump_data := array {
+		"filler",
+		"Volunteer to answer questions"
+	};
+	if (GetObjProperty (character, "helpvolunteer") )
+		gump_data[2] := "Unvolunteer";
+	endif
+
+	var ypos := 85;
+	var string_counter := 2;
+	var volunteer_array := array {};
+	var volunteer_counter := 1;
+
+	foreach player in EnumerateOnlineCharacters ()
+		if (GetObjProperty (player, "helpvolunteer") and !GetObjProperty(player,"private") )
+			gump_layout.append ("button 350 " + ypos + " 2104 2103 1 0 " + volunteer_counter);
+			volunteer_array.append (player.name);
+			gump_layout.append ("text 365 " + CInt(ypos-4) + " 0 " + string_counter);
+			string_counter := string_counter + 1;
+			gump_data.append (player.name);
+			volunteer_counter := volunteer_counter + 1;
+			ypos := ypos + 20;
+		endif
+	endforeach
+
+	var gump_return := SendDialogGump (character, gump_layout, gump_data);
+	if (gump_return[0] == 99)
+		if (GetObjProperty (character, "helpvolunteer") )
+			EraseObjProperty (character, "helpvolunteer");
+			SendSysMessage (character, "You will no longer be listed on the help page.");
+		else
+			SetObjProperty (character, "helpvolunteer", 1);
+			SendSysMessage (character, "You have been added to the help page.  Thank you for volunteering.");
+		endif
+		return;
+
+	elseif (gump_return [0])
+		var volunteer_name := volunteer_array[gump_return[0]];
+
+		foreach player in EnumerateOnlineCharacters()
+			if (player.name == volunteer_name)
+				SetObjProperty (character, "replyto", player.name);
+				start_script ("::textcmd/player/reply", character);
+				return;
+			endif
+		endforeach
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  A quick-help guide to the assorted player dot commands
+///////////////////
+
+function DisplayDotCommandReference (character)
+	var gump_layout := array {
+		"nomove",
+		"nodispose",
+
+		"page 0",
+		"resizepic 100 50 5170 380 300",
+		"text 140 80 0 0",
+		
+		"button 140 115 2104 2103 1 0 1",	//.spec
+		"text 160 110 0 1",
+		"button 140 135 2104 2103 1 0 2",	//.online
+		"text 160 130 0 2",
+		"button 140 155 2104 2103 1 0 3",	//.msg
+		"text 160 150 0 3",
+		"button 140 175 2104 2103 1 0 4",	//.reply
+		"text 160 170 0 4",
+		"button 140 195 2104 2103 1 0 5",	//.private
+		"text 160 190 0 5",
+		"button 140 215 2104 2103 1 0 6",	//.options
+		"text 160 210 0 6",
+		"button 140 235 2104 2103 1 0 7",	//.status
+		"text 160 230 0 7",
+		"button 140 255 2104 2103 1 0 8",	//.grab
+		"text 160 250 0 8",
+
+		//Next row
+		"button 240 115 2104 2103 1 0 9",	//.arm
+		"text 260 110 0 9",
+		"button 240 135 2104 2103 1 0 10",	//.disarm
+		"text 260 130 0 10",
+		"button 240 155 2104 2103 1 0 11",	//.undress
+		"text 260 150 0 11",
+		"button 240 175 2104 2103 1 0 12",	//.prac
+		"text 260 170 0 12",
+		"button 240 195 2104 2103 1 0 13",	//.lastskill
+		"text 260 190 0 13",
+		"button 240 215 2104 2103 1 0 14",	//.sort
+		"text 260 210 0 14",
+		"button 240 235 2104 2103 1 0 15",	//.door
+		"text 260 230 0 15",
+		"button 240 255 2104 2103 1 0 16",	//.count
+		"text 260 250 0 16",
+
+		//next row
+		"button 340 115 2104 2103 1 0 17",	//.heal
+		"text 360 110 0 17",
+		"button 340 135 2104 2103 1 0 18",	//.cure
+		"text 360 130 0 18",
+		"button 340 155 2104 2103 1 0 19",	//.dump
+		"text 360 150 0 19",
+		"button 340 175 2104 2103 1 0 20",	//.move
+		"text 360 170 0 20",
+		"button 340 195 2104 2103 1 0 21",	//.reg
+		"text 360 190 0 21",
+		"button 340 215 2104 2103 1 0 22",	//.own
+		"text 360 210 0 22",
+		"button 340 235 2104 2103 1 0 23",	//.fix
+		"text 360 230 0 23",
+		"button 340 255 2104 2103 1 0 24",	//.point
+		"text 360 250 0 24"
+	};
+
+	var gump_data := array {
+		"Select a dot command to learn about:",
+		".spec",
+		".online",
+		".msg",
+		".reply",
+		".private",
+		".options",
+		".status",
+		".grab",
+		".arm",
+		".disarm",
+		".undress",
+		".prac",
+		".lastskill",
+		".sort",
+		".door",
+		".count",
+		".heal",
+		".cure",
+		".dump",
+		".move",
+		".reg",
+		".own",
+		".fix",
+		".point"
+	};
+
+	var done := 0;
+	repeat
+		var gump_return := SendDialogGump (character, gump_layout, gump_data);
+		if (!gump_return[0])
+			return;
+		endif
+	
+		case (gump_return[0])
+			1:
+				SendStringAsHtmlWindow (character,
+				"One of the most important dot " +
+				"commands, .spec allows you to select what skills you want your character to " + 
+				"specialize in.  Each character can select 3 primary skills (which can raise to 100), " +
+				"3 secondary skills (which can raise to 80), and 1 trade skill (which can raise to 100 " +
+				"and is limited to a small number of non-combat skills.  All other skills are limited " +
+				"to 60.  The skills that you select determine your STR/INT/DEX maximums.  You can change " +
+				"what skills you are specialized in at any time",
+				 ".spec");
+			2:
+				SendStringAsHtmlWindow (character,
+				"Provides a list of all players that are online.  If a player is in " +
+				"private mode (.private), their name will be replaced by [PRIVATE] ",
+				 ".online");
+			3:
+				SendStringAsHtmlWindow (character,
+				".msg allows you to send private messages to other players.  You can either " +
+				"type '.msg' by itself to recieve a list of online players from which you can " +
+				"select, or you can type '.msg [name]' (where [name] is the name of the player " +
+				"you want to send a message to) to do it directly.  In the latter case, you can " +
+				"also specify a partial name and it will try to guess what player you mean " +
+				"(not always correctly.) " +
+				"<p><b>Options:</b> " +
+				"<br>'.msg style' - Select from a couple of different messaging styles.  This selection " +
+				"also affects .reply",
+				 ".msg");
+			4:
+				SendStringAsHtmlWindow (character,
+				".reply sends a message to the last player who sent you a message.  It works very " +
+				"similarly to .msg, except that you don't need to specify a recipient.  You can also " +
+				"type your message right after .reply (such as '.reply I'm fine, thank you') to enter your " +
+				"message directly instead of going through a pop-up window.",
+				 ".reply");
+			5:
+				SendStringAsHtmlWindow (character,
+				".private toggles the privacy option for your character on and off.  While it is on, " +
+				"your name does not show up in the .online list, and other players cannot send you " +
+				"messages.  If you try to send a message to another player (either through .msg or .reply), " +
+				".private will automatically be turned off.",
+				 ".private");
+			6:
+				SendStringAsHtmlWindow (character,
+				".options allows you to set a number of options related to your account.  Some of " +
+				"these options include changing the password for your account, setting the points at which " +
+				"autoheal will kick in, and much more.",
+				 ".options");
+			7:
+				SendStringAsHtmlWindow (character,
+				".status displays a variety of different bits of information about your character, such as " +
+				"a listing of spell effects that you are under and how long they will last, how long your " +
+				"account has been online, and quests that you may be on. " +
+				"<p><b>Options:</b>" + 
+				"<br>'status playtime' - a shortcut to the playtime page of .status " +
+				"<br>'status guild' - a shortcut to the guild & quests page of .status ",
+				 ".status");
+			8:
+				SendStringAsHtmlWindow (character,
+				".grab allows you to quickly pick up items from the ground or from a corpse. " +
+				"<p><b>Options:</b>" + 
+				"<br>'.grab bag' - sets a bag into which .grab'bed items will be placed.  If a bag " +
+				"is not set, the root level of your backpack will be used instead. " +
+				"<br>'.grab autostack' - toggles the autograb option on and off.  If autostack is enabled, " +
+				".grab will automatically stack stackable items with others that you may possess." +
+				"<br>'.grab autocarve' - toggles the autocarve option on and off.  If autocarve is enabled, " +
+				".grab will automatically skin any corpses from which you .grab items" +
+				"<br>'.grab 1' - typing '.grab 1' will only grab items that are .own'ed by you." +
+				"<br>'.grab 2' - typing '.grab 2' will allow you to select a bag in which to loot. " +
+				"This is a one-time grab bag selection:  the next time you loot, the items will go into your " + 
+				"normal grab bag.",
+				 ".grab");
+			9:
+				SendStringAsHtmlWindow (character,
+				".arm [1/2/3] allows you to quickly equip weapons that you have already set up (see .disarm " +
+				"for how to set up weapon selections for these slots.)  You must specify which weapon setup " +
+				"you wish to use (1, 2 or 3)",
+				 ".arm");
+			10:
+				SendStringAsHtmlWindow (character,
+				".disarm allows you to quickly remove your weapon and/or shield." +
+				"<p><b>Options:</b>" + 
+				"<br>'.disarm [1/2/3] - Sets a weapon slot selection.  You can then quickly re-equip these items " +
+				"by typing '.arm [1/2/3]'  " +
+				"<br>'.disarm bag' - Allows you to select a bag into which .disarm'ed weapons will be place.  If a " +
+				"bag is not selected, your main backpack will be used instead.",
+				 ".disarm");
+			11:
+				SendStringAsHtmlWindow (character,
+				"Quickly removes all equipped items." +
+				"<p><b>Options:</b>" + 
+				"<br>'undress jewelry' - quickly removes all equipped jewelry" +
+				"<br>'undress nojewelry' - quickly removes everything EXCEPT equipped jewelry",
+				 ".undress");
+			12:
+				SendStringAsHtmlWindow (character,
+				"Displays information about skills that you're practicing.",
+				 ".prac");
+			13:
+				SendStringAsHtmlWindow (character,
+				"Attempts to reuse the last skill which you used.",
+				 ".lastskill");
+			14:
+				SendStringAsHtmlWindow (character,
+				".sort helps you to quickly find items or types of items in your backpack and " +
+				"subcontainers.  By itself, it provides a list of items in your backpack from which you " +
+				"can select one to bring up to the top level of your backpack." +
+				"<p><b>Options:</b>" + 
+				"<br>'.sort bag' - performs a .sort only in the selected bag instead of your main backpack." +
+				"<br>'.sort regs' - Sorts all of your reagents into the selected bag." +
+				"<br>'.sort gems' - Sorts all of your gems into the selected bag." +
+				"<br>'.sort ammo' - Sorts arrows and bolts into the selected bag." +
+				"<br>'.sort potions' - Sorts all your stackable potions into the selected bag." +
+				"<br>'.sort bank' - Stacks all stackable items in a selected bag with items in your bankbox",
+				 ".sort");
+			15:
+				SendStringAsHtmlWindow (character,
+				"Quickly opens or closes all doors in your immediate vicinity.",
+				 ".door");
+			16:
+				SendStringAsHtmlWindow (character,
+				"Counts the number of items inside of a container.",
+				 ".count");
+			17:
+				SendStringAsHtmlWindow (character,
+				"Fast way to access healing methods.  Any and all timing or skillcheck restrictions are still checked. " +
+				"<p><b>Options:</b>" + 
+				"<br>'.heal 1' - Default, tries to drink a healing potion." +
+				"<br>'.heal 2' - Tries to cast Greater Heal on yourself" +
+				"<br>'.heal 3' - Tries to apply a bandage to yourself",
+				 ".heal");
+			18:
+				SendStringAsHtmlWindow (character,
+				"Fast way to access curing methods.  Any and all timing or skillcheck restrictions are still checked. " +
+				"<p><b>Options:</b>" + 
+				"<br>'.cure 1' - Default, tries to drink a curing potion." +
+				"<br>'.cure 2' - Tries to cast Cure on yourself" +
+				"<br>'.cure 3' - Tries to apply a bandage to yourself",
+				 ".cure");
+			19:
+				SendStringAsHtmlWindow (character,
+				"Moves items from first targetted container to second." +
+				"<p><b>Options:</b>" + 
+				"<br>'.dump sort' - Stackable items are stacked with others you have, even if not in the chosen container" +
+				"<br>'.dump recurse' - dumps containers withing the dumped container, but not the container itself",
+				 ".dump");
+			20:
+				SendStringAsHtmlWindow (character,
+				"Moves all the items of the chosen type from one container into another.",
+				 ".move");
+			21:
+				SendStringAsHtmlWindow (character,
+				".reg provides a list enumerating how many you have of a number of number of key " +
+				"items, such as reagents, bandages, potions and more.",
+				 ".reg");
+			22:
+				SendStringAsHtmlWindow (character,
+				".own allows you to mark an item as belonging to you (commonly refered to as an " +
+				"owner's mark.)  As long as the mark remains on the item, other players cannot use it.  " +
+				"If a .own'ed item is placed in a Lost and Found box (commonly found in almost all banks) " +
+				"the item will automatically be returned to your bankbox.  To remove your mark from a " +
+				".own'ed item, use .own on it again.  Only the character who marked the item is able to " + 
+				"remove the mark.",
+				 ".own");
+			23:
+				SendStringAsHtmlWindow (character,
+				"If you get stuck somewhere, .fix is sometimes able to get you out.  Its strongly " +
+				"recommended that you do not use the command carelessly, though:  if you use it while " +
+				"you're not actually stuck, its quite possible that it will cause you to become stuck.",
+				 ".fix");
+			24:
+				SendStringAsHtmlWindow (character,
+				".point is a handy command for pointing out items and locations to other players. ",
+				 ".point");
+			default:
+				SendSysMessage (character, "This isn't supposed to happen!");
+				return;
+		endcase
+	until (done);
+endfunction
+
+
+
+
+///////////////////
+//  Adds a help page to the queue
+///////////////////
+
+function PutInAHelpPage (character)
+	var gump_layout := array {
+		"nomove",
+		"nodispose",
+
+		"page 0",
+		"resizepic 100 50 5170 380 300",
+		"text 140 80 0 0",
+		
+		"button 140 115 2104 2103 1 0 1",	//stuck
+		"text 160 110 0 1",
+		"button 140 135 2104 2103 1 0 2",	//bug report
+		"text 160 130 0 2",
+		"button 140 155 2104 2103 1 0 3",	//housing
+		"text 160 150 0 3",
+		"button 140 175 2104 2103 1 0 4",	//other
+		"text 160 170 0 4"
+	};
+
+	var gump_data := array {
+		"Select a help-page type:",
+		"Stuck",
+		"Bug Report",
+		"Housing Question",
+		"Other"
+	};
+
+	var gump_return := SendDialogGump (character, gump_layout, gump_data);
+	if (!gump_return[0])
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	
+	var alert := 0;
+	var queit := 0;
+	var cat;
+	case (gump_return[0])
+		1: 
+			cat := "STUCK: ";
+			alert := 1;
+			queit := 1;
+		2: 
+			cat := "BUG: ";
+			SendSysMessage (character, "Bug reports are logged, but GMs do not answer them.");
+			SendSysMessage (character, "If you need a GM, choose another help page option.");
+		3: 
+			cat := "HOUSE: ";
+			queit := 1;
+		4: 
+			cat := "OTHER: ";
+			alert := 1;
+			queit := 1;	
+	endcase
+
+	var msg := cat;
+	var log := array { };
+	log.append (msg);
+
+	gump_layout := array {
+		"resizepic 100 100 2600 400 300",
+		"text 140 140 0 0",
+		"text 140 160 0 1",
+		"text 140 180 0 2",
+		"text 140 200 0 3",
+		"resizepic 140 220 3000 320 20",
+		"textentry 140 220 320 20 0 10 10",
+		"resizepic 140 240 3000 320 20",
+		"textentry 140 240 320 20 0 11 11",
+		"resizepic 140 260 3000 320 20",
+		"textentry 140 260 320 20 0 12 12",
+		"resizepic 140 280 3000 320 20",
+		"textentry 140 280 320 20 0 13 13",
+		"resizepic 140 300 3000 320 20",
+		"textentry 140 300 320 20 0 14 14",
+		"resizepic 140 320 3000 320 20",
+		"textentry 140 320 320 20 0 15 15",
+		"button 200 350 243 241 1 0 0",
+		"button 300 350 249 247 1 0 1"
+	};
+	gump_data := array {
+		"Please enter your problem:",
+		"A GM will respond when one is available",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		""
+	};
+	
+	if (!queit)
+		gump_data[1] := "Bug reports are logged, but a GM will not";
+		gump_data[2] := "respond directly to you.  If you need a GM,";
+		gump_data[3] := "select a different help page category.";
+	endif
+
+	gump_return := SendDialogGump (character, gump_layout, gump_data);
+	if (!gump_return[1])
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	for i := 10 to 15
+		var msg := CSTR (gump_return[i]);
+		msg := msg[(find(msg, " ", 1)+1), len(msg)];
+		if (msg)
+			log.append (msg);
+		endif
+	endfor
+
+	if (!len(log) or len(log) == 1)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+
+	SendSysMessage (character, "Your help page has been logged.");
+	if (alert)
+		foreach player in EnumerateOnlineCharacters ()
+			if (IsAGM (player))
+	        		SendSysMessage (player, "HELP PAGE FROM " + character.name, FONT_NORMAL, 38);
+				foreach line in log
+		        		SendSysMessage (player, line, FONT_NORMAL, 41);
+				endforeach
+			endif
+		endforeach
+
+		SetObjProperty (character, "HELP", log);
+		SetObjProperty (character, "HELPTIMER", ReadGameClock());
+	endif
+
+	if (queit)
+		SendSysMessage (character, "The next available GM will respond");
+		SetObjProperty (character, "HELP", log);
+		SetObjProperty (character, "HELPTIMER", ReadGameClock());
+	endif
+
+	log.append (character.x +", "+character.y+", "+character.z);
+	AppendLog (character, log);
+endfunction
+
+function AppendLog (who, thehelppage)
+	var log := array {};
+	var prop := struct {};
+	prop.+pname := "";
+	prop.+pvalue := "";
+	foreach line in thehelppage
+		prop.pvalue := line;
+		log.append (prop);
+	endforeach
+	
+	prop.pname := "TIME: ";
+	prop.pvalue := ReadGameClock();
+	log.append (prop);
+
+	var elemkey := who.name + "(" + who.acctname + ")";
+	UnloadConfigFile("::helppages");
+	AppendConfigFileElem( "::helppages", "PAGE FROM", elemkey, log );
+	UnloadConfigFile("::helppages");
+endfunction
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,40 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/attributes";
+include "../pkg/skills/bardskills/bard";
+include "../pkg/character/skillcheck/skillcheck";
+
+program music (character, instrument)
+	if (GetObjProperty (character, "#useskill"))
+		if (GetProcess (GetObjProperty (character, "#useskill")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#useskill", GetPid());
+
+//	var inst_id := instrument.objtype;
+//	var ret := 0;
+	var cx := character.x;
+	var cy := character.y;
+	
+	if (!ReserveItem (instrument))
+		SendSysMessage (character, "The instrument is already in use");
+		EraseObjProperty (character, "#useskill");
+		return;
+	endif
+
+	SetObjProperty (character, "instrument", instrument.serial);
+	SendSysMessage (character, "You begin playing...");
+	repeat
+		PlayNoise (character, instrument, -1);
+		sleep (2);
+	until (character.x != cx or character.y != cy or !character);
+
+	SendSysMessage (character, "You stop playing...");
+endprogram

@@ -1,0 +1,180 @@
+use uo;
+use os;
+use http;
+use cfgfile;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/string";
+include "include/skills";
+include "include/attributes";
+include "include/www";
+
+program view_character_Info ()
+	LogWWWPageAccess (QueryIP());
+
+	WriteHTML ("<html><head><title>Character Information</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+	
+	var serialnumber := CINT (QueryParam ("serial"));
+	if (!serialnumber)
+		WriteHTML ("Please enter a character serial");
+		WriteHTML ("<form method=GET action=character_info.ecl>");
+		WriteHTML ("Serial number: <input name=character_serial>");
+		WriteHTML ("<input id=submit1 name=submit1 type=submit value=Search>");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	
+	var character := FindCharacterBySerial (serialnumber);
+	if (!character)
+		WriteHTML ("Unable to find player</body></html>");
+		return;
+	endif
+	
+	WriteHTML ("<table cellpadding=5><tr>");
+	WriteHTML ("<td align=right>Character</td>");
+	WriteHTML ("<td>" + character.name + "</td>");
+	WriteHTML ("</tr></tr>");
+	WriteHTML ("<td align=right>Account</td>");
+	WriteHTML ("<td><a href=account_info.ecl?acctname=" + character.acctname + ">" + character.acctname +"</a></td>");
+	WriteHTML ("</tr></tr>");
+	WriteHTML ("<td align=right>Serial</td>");
+	WriteHTML ("<td>" + character.serial + "</td>");
+	WriteHTML ("</tr></table>");
+	
+	var maxstr := GetObjProperty (character, "maxstr");
+	if (!maxstr)
+		maxstr := "Unset";
+	endif
+	var maxdex := GetObjProperty (character, "maxdex");
+	if (!maxdex)
+		maxdex := "Unset";
+	endif
+	var maxint := GetObjProperty (character, "maxint");
+	if (!maxint)
+		maxint := "Unset";
+	endif
+	var unmod_str := CINT (GetAttributeBaseValue (character, "Strength")/10);
+	var unmod_dex := CINT (GetAttributeBaseValue (character, "Dexterity")/10);
+	var unmod_int := CINT (GetAttributeBaseValue (character, "Intelligence")/10);
+	
+	WriteHTML ("<p><b>Stats:</b>");
+	WriteHTML ("<table cellpadding=5><tr>");
+	WriteHTML ("<td align=right>Str</td><td>" + unmod_str + " / " + maxstr + "</td>");
+	WriteHTML ("<td align=right>Dex</td><td>" + unmod_dex + " / " + maxdex + "</td>");
+	WriteHTML ("<td align=right>Int</td><td>" + unmod_int + " / " + maxint + "</td>");
+	
+	WriteHTML ("</tr></table>");
+	
+	
+	
+	WriteHTML ("<p><b>Skills:</b>");
+	WriteHTML ("<table cellpadding=2>");
+	var specs := LoadSpecializations (character);
+	if (len (specs))
+		for i := 1 to 8
+			WriteHTML ("<tr><td><li>" + GetAttributeIDBySkillID (specs[i]) + "</td>");
+			WriteHTML ("<td>" + GetAttribute (character, GetAttributeIDBySkillID (specs[i])) + "</td></tr>");
+		endfor
+		
+		for i := 0 to 57
+			if (GetSkillName (i) != "None")
+				if (!(i in specs))
+					WriteHTML ("<tr><td><li>" + GetAttributeIDBySkillID (i) + "</td>");
+					WriteHTML ("<td>" + GetAttribute (character, GetAttributeIDBySkillID (i)) + "</td></tr>");
+				endif
+			endif
+		endfor
+	else
+		WriteHTML ("<b>Specs not set</b");
+		for i := 0 to 57
+			if (GetSkillName (i) != "None")
+				WriteHTML ("<tr><td><li>" + GetAttributeIDBySkillID (i) + "</td>");
+				WriteHTML ("<td>" + GetAttribute (character, GetAttributeIDBySkillID (i)) + "</td></tr>");
+			endif
+		endfor
+	endif
+	WriteHTML ("</table>");
+	
+	
+	WriteHTML ("<p><b>Equipped items:</b>");
+	WriteHTML ("<table cellpadding=2>");
+	foreach item in ListEquippedItems (character)
+		if (item.desc)
+			WriteHTML ("<tr><td><li>" + item.desc + "</td></tr>");
+		else
+			WriteHTML ("<tr><td><li>Unnamed item, objtype " + item.objtype + "</td></tr>");
+		endif
+	endforeach
+	WriteHTML ("</table>");
+	
+	
+	var showbackpack := CINT (QueryParam ("showbackpack"));
+	if (!showbackpack)
+		WriteHTML ("<a href=character_info.ecl?serial=" + serialnumber + "&showbackpack=1>Show Backpack Items</a>");
+	else
+		WriteHTML ("<p>Backpack items:");
+		WriteHTML ("<table cellpadding=2>");
+		foreach item in EnumerateItemsInContainer (character.backpack)
+			if (item.desc)
+				WriteHTML ("<tr><td><li>" + item.desc + "</td></tr>");
+			else
+				WriteHTML ("<tr><td><li>Unnamed item, objtype " + item.objtype + "</td></tr>");
+			endif
+		endforeach
+		WriteHTML ("</table>");
+	endif
+	WriteHTML ("</body></html>");
+endprogram
+
+
+function FindCharacterBySerial (serialnumber)
+	var account, player;
+	foreach acctname in ListAccounts ()
+		account := FindAccount (acctname);
+		if (account)
+			for counter := 1 to 7
+				player := account.GetCharacter (counter);
+				if (player)
+					if (player.serial == serialnumber)
+						return player;
+					endif
+				endif
+			endfor
+		endif
+	endforeach
+endfunction
+
+
+///////////////////
+//  Figured out how long its been since an account has logged on, in days
+///////////////////
+
+function GetAccountLastLogon (accountname)
+	var account := FindAccount (accountname);
+	if (!account)
+		Syslog ("Error finding accountname " + accountname);
+		return 9999;
+	endif
+
+	var logontime := 0;
+	for counter := 1 to 7
+		var player := account.GetCharacter (counter);
+		if (player)
+			var templogontime := GetObjProperty (player, "logontime");
+			if (templogontime and templogontime > logontime)
+				logontime := templogontime;
+			endif
+		endif
+	endfor
+	
+	var seconds := ReadGameClock () - logontime;
+	var days := CINT (seconds/86400);
+	return days;
+endfunction
+
+
+

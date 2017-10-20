@@ -1,0 +1,1 @@
+.grab will loot corpses, chests and items into your lootpack.  .grab 1 will loot only your .own'd items.  .grab 2 will ask which bag to loot into.  ".grab bag" will allow you to designate a lootpack.

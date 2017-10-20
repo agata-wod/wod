@@ -1,0 +1,281 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/eventid";
+include "include/magic";
+include "include/wodinc";
+
+program cast_spell (character, text)
+	text := Lower (text);
+	if (!text)
+		SendSysMessage (character, "You must specify a spell to cast.  Use the form '.spell [name]");
+		SendSysMessage (character, "where [name] is the name of the spell in the spellbook, but without spaces");
+		return;
+	endif
+	
+	case (text)
+		//Statmod spells
+		"clumsy":
+			GetTargettedMobile (character, ":statmod_spells:clumsy");
+		"feeblemind":
+			GetTargettedMobile (character, ":statmod_spells:feeblemind");
+		"weaken":
+			GetTargettedMobile (character, ":statmod_spells:weaken");
+		"strength":
+			GetTargettedMobile (character, ":statmod_spells:strength");
+		"agility":
+			GetTargettedMobile (character, ":statmod_spells:agility");
+		"cunning":
+			GetTargettedMobile (character, ":statmod_spells:cunning");
+		"protection":
+			GetTargettedMobile (character, ":statmod_spells:protection");
+		"bless":
+			GetTargettedMobile (character, ":statmod_spells:bless");
+		"curse":
+			GetTargettedMobile (character, ":statmod_spells:curse");
+		"paralyze":
+			GetTargettedMobile (character, ":statmod_spells:paralyze");
+
+		//Healing & poison spells
+		"heal":
+			GetTargettedMobile (character, ":misc_spells:heal");
+		"greater heal":
+		"greaterheal":
+		"gheal":
+			GetTargettedMobile (character, ":misc_spells:gheal");
+		"poison":
+			GetTargettedMobile (character, ":poison_spells:poison");
+		"night sight":
+		"nightsight":
+			GetTargettedArea (character, ":misc_spells:nightsight");
+
+
+		//Direct damage spells
+		"magic arrow":
+		"magicarrow":
+			GetTargettedMobile (character, ":damage_spells:magicarrow");
+		"harm":
+			GetTargettedMobile (character, ":damage_spells:harm");
+		"lightning":
+			GetTargettedMobile (character, ":damage_spells:lightning");
+		"fireball":
+			GetTargettedMobile (character, ":damage_spells:fireball");
+		"mind blast":
+		"mindblast":
+			GetTargettedMobile (character, ":damage_spells:mindblast");
+		"energy bolt":
+		"energybolt":
+		"ebolt":
+			GetTargettedMobile (character, ":damage_spells:ebolt");
+		"flame strike":
+		"flamestrike":
+			GetTargettedMobile (character, ":damage_spells:fstrike");
+		"tidal wave":
+		"tidalwave":
+			GetTargettedMobile (character, ":druid_spells:tidalwave");
+		"snow storm":
+		"snowstorm":
+			GetTargettedArea (character, ":druid_spells:snowstorm");
+
+
+		//AOE spells
+		"explosion":
+			GetTargettedArea (character, ":damage_spells:explosion");
+		"chain lightning":
+		"chainlightning":
+			GetTargettedArea (character, ":damage_spells:chain_lightning");
+		"earth quake":
+		"earthquake":
+			GetTargettedArea (character, ":damage_spells:earthquake");
+		"mass dispel":
+		"mass dispel":
+			GetTargettedArea (character, ":summoning_spells:mass_dispel");
+		"dispel field":
+		"dispelfield":
+			GetTargettedArea (character, ":field_spells:dispel_field");
+
+
+		//Field spells
+		"wall of stone":
+		"wallofstone":
+			var targetted := TargetCoordinates (character);
+			if (!targetted)
+				return;
+			endif
+			CreateField (0, targetted.x, targetted.y, targetted.z, "stone", 80, GetFieldDirection (character, targetted.x, targetted.y), targetted.realm);
+		"firefield":
+		"fire field":
+			var targetted := TargetCoordinates (character);
+			if (!targetted)
+				return;
+			endif
+			CreateField (0, targetted.x, targetted.y, targetted.z, "fire", 80, GetFieldDirection (character, targetted.x, targetted.y), targetted.realm);
+		"poisonfield":
+		"poison field":
+			var targetted := TargetCoordinates (character);
+			if (!targetted)
+				return;
+			endif
+			CreateField (0, targetted.x, targetted.y, targetted.z, "poison", 80, GetFieldDirection (character, targetted.x, targetted.y), targetted.realm);
+		"paralyzefield":
+		"paralyze field":
+			var targetted := TargetCoordinates (character);
+			if (!targetted)
+				return;
+			endif
+			CreateField (0, targetted.x, targetted.y, targetted.z, "para", 80, GetFieldDirection (character, targetted.x, targetted.y), targetted.realm);
+		"energyfield":
+		"energy field":
+			var targetted := TargetCoordinates (character);
+			if (!targetted)
+				return;
+			endif
+			CreateField (0, targetted.x, targetted.y, targetted.z, "energy", 80, GetFieldDirection (character, targetted.x, targetted.y), targetted.realm);
+
+
+		"totem":
+			DoTotemSpellEffect (character);
+		"darkness":
+			var targetted := TargetCoordinates (character);
+			if (!targetted)
+				return;
+			endif
+			foreach mobile in ListMobilesNearLocation (targetted.x, targetted.y, targetted.z, 10, targetted.realm)
+				if (!mobile.npctemplate)
+					PlaySoundEffect (mobile, SFX_SPELL_NIGHT_SIGHT );
+					PlayObjectCenteredEffect (mobile, FX_BLESS_EFFECT, 10, 10);
+					PrintTextAbove (mobile, mobile.name + " is blinded!");
+					mobile.setlightlevel (30, 200);
+				endif
+			endforeach
+		"stinging swarm":
+		"stingingswarm":
+			var targetted := TargetCoordinates (character);
+			if (!targetted)
+				return;
+			endif
+			var bees := CreateItemAtLocation (targetted.x, targetted.y, targetted.z, 0x091b, 1, targetted.realm);
+			PlaySoundEffect (bees, SFX_SPELL_SUMMON_ELEMENTAL);
+		"toad":
+			DoToadEffect (character);
+		default:
+			SendSysMessage (character, "Not a valid spell.");
+	endcase;
+endprogram
+
+
+
+
+///////////////////
+//  Get a target mobile
+///////////////////
+
+function GetTargettedMobile (character, spellscript)
+	var targetted := Target (character, TGTOPT_CHECK_LOS);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return 0;
+	endif
+
+	if (!GetVital (targetted, "Life"))
+		SendSysMessage (character, "Invalid target.");
+		return 0;
+	endif
+
+	var parms := array{};
+	parms [1] := "#SPECIALNONE";
+	parms [2] := targetted;
+	start_script (spellscript, parms);
+endfunction
+
+
+
+///////////////////
+//  Get a target area
+///////////////////
+
+function GetTargettedArea (character, spellscript)
+	var targetted := TargetCoordinates (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return 0;
+	endif
+
+	var parms := array{};
+	parms [1] := "#SPECIALNONE";
+	parms [2] := targetted;
+	start_script (spellscript, parms);
+endfunction
+
+
+
+
+///////////////////
+//  Temporarily turn the target into a toad
+///////////////////
+
+function DoToadEffect (character)
+	var targetted := Target (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return 0;
+	endif
+
+	if (!GetVital (targetted, "Life"))
+		SendSysMessage (character, "Invalid target.");
+		return 0;
+	endif
+
+	PlayStationaryEffect (targetted.x, targetted.y, targetted.z, FX_SMOKE, 0xA, 0xA, 0, targetted.realm);
+	PlaySoundEffect (targetted, SFX_SPELL_MANA_VAMPIRE);
+
+	DoTempMod (targetted, "cpoly", 0 - GetModAmount (100), 120, "Toad");
+	DoPersistedMod (targetted, "color", 1425, targetted.color, 120, "Toad");
+	DoPersistedMod (targetted, "graphic", 0x51, targetted.graphic, 120, "Toad");
+endfunction
+
+
+
+function DoTotemSpellEffect (character)
+
+	SendSysMessage (character, "Pick a player:");
+	var targetted := Target (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	PlayStationaryEffect( targetted.x, targetted.y, targetted.z+1, FX_SMOKE, 0xA, 0xA, 0, targetted.realm );
+	targetted.graphic := 100;
+	targetted.frozen := 1;
+
+	var doll;
+	if (targetted.gender)
+		doll := CreateItemAtLocation (targetted.x+1, targetted.y+1, targetted.z, 0x2107, 1, targetted.realm);
+	else
+		doll := CreateItemAtLocation (targetted.x+1, targetted.y+1, targetted.z, 0x2106, 1, targetted.realm);
+	endif
+	doll.movable := 0;
+	doll.name := "a shrunken " + targetted.name;
+
+	sleep (40);
+	PlayStationaryEffect( targetted.x, targetted.y, targetted.z+1, FX_SMOKE, 0xA, 0xA, 0, targetted.realm );
+	DestroyItem (doll);
+	if (targetted.gender)
+		targetted.graphic := 401;
+	else
+		targetted.graphic := 400;
+	endif
+	targetted.frozen := 0;
+
+	//create an event and send it to all the mobiles in the area
+	var ev := struct;
+	ev.+type := EVID_ENTEREDAREA;
+	ev.+source := targetted;
+
+	foreach mobile in ListMobilesNearLocationEx( targetted.x, targetted.y, targetted.z, 15, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, targetted.realm )
+		SendEvent(mobile, ev);
+	endforeach
+endfunction

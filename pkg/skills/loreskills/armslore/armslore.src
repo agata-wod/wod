@@ -1,0 +1,196 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/itemtypes";
+include "include/skills";
+include "include/attributes";
+
+program use_armslore_skill (character)
+	if (GetObjProperty (character, "#useskill"))
+		if (GetProcess (GetObjProperty (character, "#useskill")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#useskill", GetPid());
+
+	SendSysMessage ( character, "Select an object to evaluate." );
+	var targetted := TargetCoordinates (character);
+	if (!targetted)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+
+	if (targetted.mobile)
+		EvaluatePerson (character, targetted.mobile);
+		return;
+	endif
+	
+	var item := targetted.item;
+	if (!item)
+		SendSysmessage (character, "Invalid target.  Canceled.");
+		return;
+	elseif (item.isa (POLCLASS_CONTAINER))
+		EvaluateContainer (character, item);
+		return;
+	endif
+
+	var armsloreskill := SKILLID_BLACKSMITHY;
+	if (IsWoodenWeapon (item) or IsWoodenShield (item) or IsWoodenArmor(item))
+		armsloreskill := SKILLID_CARPENTRY;
+	elseif (IsLeatherArmor (item) or IsClothing (item))
+		armsloreskill := SKILLID_TAILORING;
+	endif
+ 
+	if (item.attribute)
+		if (GetAttribute (character, item.attribute) > GetAttribute (character, GetAttributeIDBySkillID (armsloreskill)))
+			armsloreskill := GetSkillIDByAttributeID (item.attribute);
+		endif
+	elseif (IsShield (item))
+		if (GetAttribute (character, ATTRIBUTEID_PARRY) > GetAttribute (character, GetAttributeIDBySkillID (armsloreskill)))
+			armsloreskill := SKILLID_PARRY;
+		endif
+	endif
+	
+	var skillname := GetSkillName (armsloreskill);
+	if (skillname)
+		SendSysMessage (character, "Using " + skillname + " skill to identify " + item.desc + ".");
+	endif
+
+	if (!CheckSkill (character, armsloreskill, -1, 0) )
+		SendSysmessage (character, "I can't quite tell...");
+		return;
+	endif
+
+	SendSysMessage (character, GetItemDescription (item));
+	if ( GetObjProperty (item, "poison_level") )
+		Sendsysmessage (character, "This is poisoned!");
+	endif
+endprogram
+
+
+
+
+///////////////////
+//  If the skill is used on yourself or a henchman, tell about all items
+//  at 90% or lower HP
+///////////////////
+
+function EvaluatePerson (character, targetted)
+	if (character != targetted)
+		if (!GetObjProperty (targetted, "master"))
+			SendSysMessage (character, "You don't know anything about that.");
+		endif
+		if (GetObjProperty (targetted, "master") != character.serial)
+			SendSysMessage (character, "You don't know anything about that.");
+		endif
+	endif
+
+	if (!CheckSkill (character, SKILLID_BLACKSMITHY, -1, 0) )
+		SendSysmessage (character, "I can't quite tell...");
+		return;
+	endif
+
+	var bad_items := 0;
+	foreach item in ListEquippedItems (targetted)
+		if (item.hp)
+			var item_hp_percentage := CINT ( (item.hp * 100) / item.maxhp );
+			if (item_hp_percentage < 91)
+				var thedesc := item.desc + ": " + GetItemDescription (item);
+				SendSysMessage (character, thedesc);
+				bad_items := bad_items + 1;
+			endif
+		endif
+	endforeach
+	if (!bad_items)
+		SendSysMessage (character, "Everything seems to be in pretty good condition.");
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Similar to EvaluatePerson, this function checks all items in a bag
+///////////////////
+
+function EvaluateContainer (character, targetted)
+	if (!CheckSkill (character, SKILLID_BLACKSMITHY, -1, 0) )
+		SendSysmessage (character, "I can't quite tell...");
+		return;
+	endif
+
+	var bad_items := 0;
+	foreach item in EnumerateItemsInContainer (targetted)
+		if (item.hp)
+			var item_hp_percentage := CINT ( (item.hp * 100) / item.maxhp );
+			if (item_hp_percentage < 91)
+				var thedesc := item.desc + ": " + GetItemDescription (item);
+				SendSysMessage (character, thedesc);
+				bad_items := bad_items + 1;
+			endif
+		endif
+	endforeach
+	if (!bad_items)
+		SendSysMessage (character, "Everything seems to be in pretty good condition.");
+	endif
+endfunction
+
+
+
+///////////////////
+//  Returns a description of the item's condition
+///////////////////
+
+function GetItemDescription (item)
+	var quality_desc;
+	var damage_desc;
+	
+	if (!item.maxhp)
+		damage_desc := "fine";
+	else
+		var item_hp_percentage := CINT ( (item.hp * 100) / item.maxhp );
+		if (item_hp_percentage > 99)
+			damage_desc := "perfect";
+		elseif (item_hp_percentage > 90)
+			damage_desc := "good";
+		elseif (item_hp_percentage > 80)
+			damage_desc := "acceptable";
+		elseif (item_hp_percentage > 70)
+			damage_desc := "fair";
+		elseif (item_hp_percentage > 40)
+			damage_desc := "poor";
+		else
+			damage_desc := "terrible";
+		endif
+	endif
+
+	if (!item.quality)
+		quality_desc := "a normal";
+	else
+		var total_damage := CINT (GetObjProperty (item, "total_damage"));
+		if (!total_damage)
+			quality_desc := "a brand new";
+		else
+			var percentage := 100 - CINT (((item.maxhp - total_damage)*100)/item.maxhp);
+			if (!percentage or percentage < 5)
+				quality_desc := "a virtually new";
+			elseif (percentage < 25)
+				quality_desc := "a relatively new";
+			elseif (percentage < 50)
+				quality_desc := "a somewhat worn";
+			elseif (percentage < 75)
+				quality_desc := "a rather worn";
+			else
+				quality_desc := "a very badly worn";
+			endif
+		endif
+	endif
+
+	var the_message := "This is " + quality_desc + " item, and is in " + damage_desc + " condition.";
+	return the_message;
+endfunction
+

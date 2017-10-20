@@ -1,0 +1,11 @@
+use uo;
+use npc;
+
+include "../pkg/npcs/main_ai/setup/setup";
+
+var mob := self();
+
+program missingai ()
+	RevokePrivilege (mob, "invul");
+	KillMe ();
+endprogram

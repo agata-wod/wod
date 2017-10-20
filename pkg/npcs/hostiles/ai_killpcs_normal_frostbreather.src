@@ -1,0 +1,108 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/mainloop_killpcs_normal";
+include "../pkg/npcs/main_ai/main/sleepmode_normal";
+include "../pkg/npcs/main_ai/combat/fightmode_normal_default";
+include "../pkg/npcs/main_ai/combat/closedistance_default";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/main_ai/combat/gethelp_default";
+
+const HALT_THRESHOLD := 8; // how close before he attacks?
+drop_anchor();
+
+program KillPlayers()
+	if (!me.backpack)
+		DoOnCreationSetup ();
+	endif
+	DoStartupSetup ();
+
+	if (GetObjProperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	post_combat ();
+	main_AI_loop ();
+endprogram
+
+
+function process_combat_event (byref ev)
+	BreathFrost (ev.source);
+	if (ev.type == EVID_DAMAGED)
+		if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/10))
+			EraseObjProperty (me, "#flees");
+			Flee (ev.source);
+		endif
+	endif
+endfunction
+
+
+function in_combat_event_loop (byref opponent)
+  	BreathFrost (opponent);
+endfunction
+
+function post_combat()
+	ClearEventQueue ();
+	DisableCombatEvents();
+	EnableMainEvents();
+
+	SetWarMode ( 0 );
+	sleep(1);
+	look_around();
+endfunction
+
+function prepare_for_fight (byref opponent)
+	if (opponent)
+	endif
+	ClearEventQueue ();
+	DisableMainEvents();
+	EnableCombatEvents();
+endfunction
+
+function BreathFrost (byref opponent)
+	if (Distance (me, opponent) > 3)
+		return;
+	endif
+
+	var nextbreath := GetObjProperty (me, "#lastbreath");
+	if (nextbreath and nextbreath > ReadGameClock())
+		return;
+	endif
+
+	SetObjProperty (me, "#lastbreath", ReadGameClock() + CINT (RandomInt(10)+10) );
+	var torch := CreateItemInContainer (me.backpack, 0x0a15, 1);
+	EquipItem (me, torch);
+
+	PerformAction (me, 0x0c);
+	PrintTextAbove (me, "*breathes frost*");
+
+	var MyTemplateElem := GetNpcTemplateElem (me.npctemplate);
+	var firedamage := MyTemplateElem.firedamage;
+
+	var basedmg;
+	if (firedamage)
+		basedmg := RandomDiceRoll (firedamage);
+	else
+		basedmg := RandomDiceRoll ("5d10");
+	endif
+
+	foreach mobile in ListMobilesNearLocationEx (me.x, me.y, me.z, 4, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, me.realm)
+		if (!mobile.hidden or !GetObjProperty (mobile, "#specialhidden_nodamage"))
+			if (mobile != me and !mobile.npctemplate["humuc"])
+				var dmg := RandomInt (CINT (basedmg * GetVital (me, "Life")/GetVitalMaximumValue (me, "Life")))+5;
+				if (!dmg)
+					dmg := 1;
+				endif
+				PlayMovingEffect (me, mobile, MOVING_EFFECT_FROST, 10, 10, 0);
+				DoDamageByType (me, mobile, dmg, DAMAGETYPE_COLD);
+			endif
+		endif
+	endforeach
+
+	sleep (1);
+	DestroyItem (torch);
+endfunction

@@ -1,0 +1,94 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/crafting";
+include "include/attributes";
+
+
+program use_scrubbrush (character, brush)
+	if (!TryToEquipItem (character, brush))
+		return;
+	endif
+
+	SendSysMessage (character, "What do you want to use the brush on?");
+
+	var use_on := Target (character);
+	if (!use_on)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (Distance (character, use_on) > 3)
+		SendSysMessage (character, "That's too far away!");
+		return;
+	endif
+
+	if (use_on.objtype == 0x0f3c)
+		PlaySoundEffect (character, 0x248);
+		sleep (1);
+		DestroyItem (use_on);
+	else
+		SendSysMessage (character, "You can't use the brush on that.");
+	endif
+endprogram
+
+
+
+function TryToEquipItem (character, item)
+	if (!ReserveItem (item))
+		SendSysMessage (character, "That item is already being used by someone!");
+		return 0;
+	endif
+
+	//don't equip a scrubbrush
+	if (item.objtype == 0x1371)
+		return 1;
+	endif
+
+	foreach equipped_item in ListEquippedItems (character)
+		if (equipped_item == item)
+			return 1;
+		endif
+	endforeach
+
+	if (!InInventory (character.backpack, item))
+		SendSysMessage (character, "The item must be in your backpack to use it!");
+		return 0;
+	endif
+
+	if (!item.movable)
+		SendSysMessage (character, "You cannot use that item!");
+		return 0;
+	endif
+
+	//Just try to equip it to be a bit faster
+	if (EquipItem (character, item))
+		sleep (2);
+		return 0;
+	endif
+
+	var thepack := item.container;
+	if (!thepack)
+		thepack := character.backpack;
+	endif
+
+	//Unequip old items to equip this one
+	var item_hand_one := GetEquipmentByLayer (character, LAYER_HAND1);
+	MoveItemToContainer (item_hand_one, thepack);
+	var item_hand_two := GetEquipmentByLayer (character, LAYER_HAND2);
+	MoveItemToContainer (item_hand_two, thepack);
+	if (EquipItem (character, item))
+		//try to requip whatever else they had and we're done
+		EquipItem (character, item_hand_one);
+		EquipItem (character, item_hand_two);
+		sleep (2);
+		return 0;
+	endif
+
+	EquipItem (character, item_hand_one);
+	EquipItem (character, item_hand_two);
+	return 0;
+endfunction

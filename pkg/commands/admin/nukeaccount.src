@@ -1,0 +1,66 @@
+use uo;
+use os;
+
+include "include/gumps";
+include "include/utility";
+include "include/clock";
+include "include/accounts";
+
+program nukeaccount (character, acctname)
+	if (!acctname)
+		SendSysMessage (character, "Usage: .nukeaccount [acctname]");
+		return;
+	endif
+
+	var acct := FindAccount (acctname);
+	if (!acct)
+		SendSysMessage (character, "Invalid account name!");
+		return;
+	endif
+
+	for counter := 1 to 7
+		var player := acct.GetCharacter (counter);
+		if (player)
+			SendSysMessage (character, "Character: " + player.name);
+			SendSysMessage (character, "Serial: " + player.serial);
+		endif
+	endfor
+
+	var playtime := GetAccountProperty (acctname, "online_time");
+	var hours := CINT (playtime/3600);
+	SendSysMessage (character, "Total play time: " + hours + " hours");
+	
+	var lastlogon := acct.GetProp ("lastlogon");
+	if (!lastlogon)
+		SendSysMessage (character, "Last logon: Unknown");
+	else
+		var passed_time := ReadGameClock () - lastlogon;
+		var days := CINT (passed_time/ (60*60*24) );
+		SendSysMessage (character, "Last logon: " + days + " days ago");
+	endif
+
+	var housevalue := GetGlobalProperty ("#housevalue of " + acctname);
+	if (!housevalue)
+		housevalue := 0;
+	endif
+	SendSysMessage (character, "House Value: " + housevalue);
+
+	if (!YesNo (character, "Confirm?"))
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	for counter := 1 to 7
+		var player := acct.GetCharacter (counter);
+		if (player)
+			foreach item in ListEquippedItems (player)
+				DestroyItem (item);
+			endforeach
+		endif
+		acct.DeleteCharacter (counter);
+	endfor
+
+	var worldbank := OpenWorldBank();
+	var bank_obj_name := "Bankbox of " + acctname;
+	DestroyRootItemInStorageArea (worldbank, bank_obj_name);
+endprogram

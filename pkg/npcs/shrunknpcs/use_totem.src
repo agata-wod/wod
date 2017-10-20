@@ -1,0 +1,30 @@
+use os;
+use uo;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/spawn";
+include "include/attributes";
+include "../pkg/npcs/npc_util";
+include "../pkg/npcs/shrunknpcs/shrunknpcs";
+
+program unshrink_npcs (character, totem)
+	SendSysMessage (character, "Un-shrink where? (press Esc to cancel or finish)");
+	
+	repeat
+		var where := TargetCoordinates (character);
+		if (!where)
+			SendSysMessage (character, "Canceled.");
+			return;
+		endif
+		
+		var mob := UnshrinkNPC (totem, where.x, where.y, where.z, where.realm);
+		if (mob == error)
+			SendSysMessage (character, "Error:  " + mob.errortext);
+			return;
+		endif
+	until (!character or !totem);
+	SendSysMessage (character, "Done.");
+endprogram

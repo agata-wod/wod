@@ -1,0 +1,19 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/possess";
+
+program textcmd_possess( me )
+
+	set_critical(1);
+
+	var npc := Target( me , TGTOPT_NOCHECK_LOS );
+	if (!npc.npctemplate)
+		sendsysmessage(me, "That is not an npc!");
+		return;
+	endif
+
+	possess(me, npc);
+
+endprogram

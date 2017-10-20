@@ -1,0 +1,71 @@
+use os;
+use uo;
+use cfgfile;
+
+include "include/skills";
+include "../pkg/character/advancement/skillcap";
+
+program skilladvancement (player)
+	if (player.cmdlevel)
+		return;
+	endif
+
+	var starttime := GetObjProperty (player, "logontime");
+	while (player)
+		sleep ( 5 * 60 );
+		if (player)
+			if (starttime != GetObjProperty (player, "logontime"))
+				return;
+			endif
+			start_script (":advancement:practice", player);
+			SetTitle (player);
+		endif
+	endwhile    
+endprogram
+
+function SetTitle (byref player)
+	if (GetObjProperty (player, "guardtype"))
+		//Check to make sure they still qualify to be a virtue guard
+		if (GetAttributeBaseValue (player, ATTRIBUTEID_LEADERSHIP) < 900)
+			SendSysMessage (player, "It is better to have a lion lead an army of sheep");
+			SendSysMessage (player, "Than a sheep lead an army of lions.");
+			EraseObjProperty (player, "guardtype");
+		else
+			player.title_suffix := ", Virtue Guard";
+			return;
+		endif
+	endif
+
+	var skill1 := GetObjProperty (player, "primary1");
+	if (!skill1 and skill1 != 0)
+		SendSysMessage (player, "Remember to set your specializations with .spec", FONT_BOLD, MESSAGE_COLOR_WARNING);
+		SendSysMessage (player, "Check the World of Dreams manual for more information.", FONT_NORMAL, MESSAGE_COLOR_WARNING);
+		return;
+	endif
+
+	var skill2 := GetObjProperty (player, "primary2");
+	var skill3 := GetObjProperty (player, "primary3");
+
+	var skilllevel := GetAttributeBaseValue (player, GetAttributeIDBySkillID (skill1))
+			+ GetAttributeBaseValue (player, GetAttributeIDBySkillID (skill2))
+			+ GetAttributeBaseValue (player, GetAttributeIDBySkillID (skill3));
+	skilllevel := CINT (skilllevel/30);
+
+	var skilltitle;
+	if ( skilllevel  > 95 )
+		skilltitle := "Master ";
+	elseif ( skilllevel > 85 )
+		skilltitle := "Adept ";
+	elseif ( skilllevel > 75 )
+		skilltitle := "Expert ";
+	elseif ( skilllevel > 65 )
+		skilltitle := "Journeyman ";
+	elseif ( skilllevel > 55 )
+		skilltitle := "Novice ";
+	else
+		skilltitle := "Neophyte ";
+	endif
+
+	player.title_suffix := ", " + skilltitle + GetSkillTitle (skill1);
+endfunction
+

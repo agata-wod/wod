@@ -1,0 +1,119 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/mainloop_killpcs_dumb";
+include "../pkg/npcs/main_ai/main/sleepmode_normal";
+include "../pkg/npcs/main_ai/combat/fightmode_normal_default";
+include "../pkg/npcs/main_ai/combat/closedistance_default";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/main_ai/combat/gethelp_default";
+include "include/magic";
+
+const HALT_THRESHOLD := 8; // how close before he attacks?
+drop_anchor();
+
+program KillPlayers()
+	if (!me.backpack)
+		DoOnCreationSetup ();
+	endif
+	DoStartupSetup ();
+
+	if (getobjproperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	post_combat ();
+	main_AI_loop ();
+endprogram
+
+
+function process_combat_event (byref ev)
+	SpitWeb (ev.source);
+	if (ev.type == EVID_DAMAGED)
+		if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/10))
+			EraseObjProperty (me, "#flees");
+			Flee (ev.source);
+		endif
+	endif
+endfunction
+
+
+function in_combat_event_loop (byref opponent)
+	SpitWeb (opponent);
+endfunction
+
+function post_combat()
+	DisableCombatEvents();
+	EnableMainEvents();
+
+	SetWarMode ( 0 );
+	SetOpponent ( 0 );
+
+	sleep(1);
+	look_around();
+endfunction
+
+function prepare_for_fight (byref opponent)
+	if (opponent)
+	endif
+	DisableMainEvents();
+	EnableCombatEvents();
+endfunction
+
+
+
+
+///////////////////
+//  spit a web to paralyze opponent
+///////////////////
+
+function SpitWeb (byref opponent)
+	if (!GetObjProperty (me, "#lastbreath"))
+		SetObjProperty (me, "#lastbreath", ReadGameClock () - 15);
+	endif
+
+	if (GetObjProperty (me, "#lastbreath") > ReadGameClock() )
+		return;
+	endif
+
+	SetObjProperty (me, "#lastbreath", ReadGameClock()+15);
+	
+	//if we're within melee range of our opponent, poison them instead
+	if (Distance (me, opponent) < 2)
+		var plvl := RandomInt (GetVitalMaximumValue (me, "Life")/4000)+1;
+		SetPoison (opponent, plvl, "You have been poisoned by " + me.name);
+		return;
+	endif
+
+	if (distance (me, opponent) > 10)
+		SetObjProperty (me, "#lastbreath", ReadGameClock()+2);
+		return;
+	endif
+
+	if (!CheckLoSAt (me, opponent.x, opponent.y, opponent.z))
+		SetObjProperty (me, "#lastbreath", ReadGameClock()+2);
+		return;
+	endif
+
+	PrintTextAbove (me, "The spider spits a web!");
+	var x := opponent.x;
+	var y := opponent.y;
+	var z := opponent.z;
+	var rlm := opponent.realm;
+	PlaySoundEffect (me, 0x185);
+	PerformAction (me, 0x5bf);
+	sleep(1);
+
+	CreateItemAtLocation (x, y, z, UOBJ_SPIDERWEB, 1, rlm);
+	if (opponent.x == x and opponent.y == y)
+		SendSysMessage (opponent, "You are trapped in a spider web!");
+		DoMagicStatMod (opponent, STATMOD_PARALYZE, 1, 10, "A spider's web");
+	endif
+endfunction
+
+
+

@@ -1,0 +1,108 @@
+<html>
+<head>
+	<title>POL Server Performance Center</title>
+	<style>
+	<!--
+		.showhand {cursor:hand}
+
+	//-->
+	</style>
+
+	<script language="JavaScript">
+	<!--
+		var old_group = '';
+		function DisplaySubItems (groupname) {
+			var theelem = document.getElementById (groupname);
+			if (theelem.style.display == "none") {
+				theelem.style.display = '';
+			} else {
+				theelem.style.display = "none";
+			}
+		};
+	//-->
+	</script>	
+	
+</head>
+<body bgcolor="#dcdeed">
+	<p><b>POL Server Performance Center</b></p>
+	<div onClick="javascript:DisplaySubItems ('group1')" class="showhand">Server Information:</div>
+	<ul id="group1" style="">
+	    <li><a href="/server_stats.ecl" target="display">Server Stats</a></li>
+	    <li><a href="/online_characters.ecl" target="display">Online Characters</a></li>
+	    <li><a href="/helppages.ecl" target="display">Help Pages</a></li>
+
+	    <li><a href="/servperf/script_profiles.ecl" target="display">Script Profiles </a></li>
+	    <li><a href="/servperf/running_scripts.ecl" target="display">Running Scripts </a></li>
+	    <li><a href="/servperf/long_running_scripts.ecl" target="display">Long Running Scripts </a></li>
+	    <li><a href="/servperf/bandwidth.ecl" target="display">Bandwidth Usage </a></li>
+	</ul>
+	<br>
+
+	<div onClick="javascript:DisplaySubItems ('group2')" class="showhand">Server Management:</div>
+	<ul id="group2" style="display:none">
+	    <li><a href="/servperf/unloadall.ecl" target="display">Unload All Scripts</a></li>
+	    <li><a href="/servperf/shutdown.ecl" target="display">Save and Shut Down the server</a></li>
+	</ul>
+	<br>
+
+	<div onClick="javascript:DisplaySubItems ('randomstats')" class="showhand">Random Statistics:</div>
+	<ul id="randomstats" style="display:none">
+	    <li><a href="/info/gambling_stats.ecl" target="display">Gambling Stats</a></li>
+	    <li><a href="/info/benson_count.ecl" target="display">View Benson Info</a></li>
+	    <li><a href="/info/adventurers_guild.ecl" target="display">View Adv. Guild Info</a></li>
+	    <li><a href="/info/shadowpack_contest.ecl" target="display">Shadowpack Constest</a></li>
+	</ul>
+	<br>
+
+	<div onClick="javascript:DisplaySubItems ('group3')" class="showhand">Account Information:</div>
+	<ul id="group3" style="display:none">
+	    <li><a href="/character/search_account.ecl" target="display">Search By Name</a></li>
+	    <li><a href="/character/search_email.ecl" target="display">Search By email</a></li>
+	    <li><a href="/character/playtime_info.ecl" target="display">View Playtimes</a></li>
+	    <li><a href="/character/inactive_accounts.ecl" target="display">View Inactive</a></li>
+	    <li><a href="/character/semiactive_accounts.ecl" target="display">View Semi-active</a></li>
+	    <li><a href="/item_logging/house_search.ecl" target="display">Search for housing</a></li>
+	</ul>
+	<br>
+
+	<div onClick="javascript:DisplaySubItems ('group4')" class="showhand">Account Management:</div>
+	<ul id="group4" style="display:none">
+	    <li><a href="/character/change_password.ecl" target="display">Change Password</a></li>
+	    <li><a href="/character/createaccount_quick.ecl" target="display">Create New Account (Quick)</a></li>
+	    <li><a href="/character/createaccount.ecl" target="display">Create New Account (Full)</a></li>
+	</ul>
+	<br>
+
+	<div onClick="javascript:DisplaySubItems ('group5')" class="showhand">Character Information:</div>
+	<ul id="group5" style="display:none">
+	    <li><a href="/character/search_character_name.ecl" target="display">Search By Name</a></li>
+	    <li><a href="/character/msgviewer.ecl" target="display">View logged messages for account</a></li>
+	</ul>
+	<br>
+
+	<div onClick="javascript:DisplaySubItems ('group6')" class="showhand">NPCS:</div>
+	<ul id="group6" style="display:none">
+	    <li><a href="/merchants/index.html" target="display">Search Player Merchants</a></li>
+	    <li><a href="/servperf/npcgroup.ecl" target="display">NPC Grouping</a></li>
+	</ul>
+	<br>
+
+	<div onClick="javascript:DisplaySubItems ('group7')" class="showhand">Items:</div>
+	<ul id="group7" style="display:none">
+	    <li><a href="/item_logging/item_search.ecl" target="display">Search for item by serial number</a></li>
+	    <li><a href="/item_logging/item_name_search.ecl" target="display">Search for item by name</a></li>
+	    <li><a href="/item_logging/boat_search.ecl" target="display">Search for boat by owner serial</a></li>
+	    <li><a href="/item_logging/houseowner.ecl" target="display">Theft log - By house owner</a></li>
+	    <li><a href="/item_logging/thiefacctname.ecl" target="display">Theft log - By possible thief</a></li>
+	    <li><a href="/character/check_dupers.ecl" target="display">Duper check</a></li>
+	</ul>
+	<br>
+
+	<div onClick="javascript:DisplaySubItems ('group8')" class="showhand">Spawners:</div>
+	<ul id="group8" style="display:none">
+	    <li><a href="/regionspawner/index.html" target="display">Regionspawner</a></li>
+	</ul>
+	<br>
+
+</body>
+</html>

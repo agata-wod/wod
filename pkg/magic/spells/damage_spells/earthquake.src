@@ -1,0 +1,44 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 8;
+
+program cast_earthquake (parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	elseif (caster == "nocaster")
+		caster := parms[2];
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+
+	var range := CINT (caster_magery/15);
+	var dmg := 0;
+	PlaySoundEffect (caster, SFX_220);
+	foreach mobile in ListMobilesNearLocationEx (caster.x, caster.y, caster.z, range, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, caster.realm)
+		if (mobile != caster)
+			if (!mobile.hidden or !GetObjProperty (mobile, "#specialhidden_nodamage"))
+				dmg := Resisted (caster, mobile, CalcSpellDamageByCircle (spell_circle-1));
+				if (caster.acctname)
+					if (mobile.npctemplate)
+						if (!GetObjProperty (mobile, "master"))
+							dmg := CINT (dmg * 1.5 + 1);
+						endif
+					endif
+				endif
+
+				PrintTextAbovePrivate (mobile, "You are tossed about as the earth trembles below your feet!", mobile);
+				PlaySoundEffect (mobile, SFX_SPELL_EARTHQUAKE);
+				PlayObjectCenteredEffect (mobile, FX_SMOKE, 7, 7);
+				DoDamageByType (caster, mobile, dmg, DAMAGETYPE_MAGIC);
+			endif
+		endif
+    	endforeach
+	sleep(2);
+	PlaySoundEffect (caster, SFX_223);
+	return 1;
+endprogram

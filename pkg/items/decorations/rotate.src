@@ -1,0 +1,128 @@
+use uo;
+use os;
+use cfgfile;
+
+program rotate_item (character, item)
+	if (!Accessible (character, item))
+		SendSysMessage (character, "You can't reach it.");
+		return;
+	endif
+
+	//these don't need to be movable
+	case (item.graphic)
+		//Stone Face
+		0x10FC:
+			if (item.movable)
+				SendSysMessage (character, "This must be locked down inside of your house to use it.");
+			else
+				item.facing := 29;
+				PlaySoundEffect (item, 0x209);
+				item.graphic := 0x10FF;
+				sleepms (400);
+				item.graphic := 0x1100;
+				sleepms (400);
+				PlaySoundEffect (item, 0x1DE);
+				for i := 1 to 3
+					item.graphic := 0x1101;
+					sleepms (425);
+					item.graphic := 0x1102;
+					sleepms (425);
+				endfor
+				item.graphic := 0x1100;
+				sleepms (400);
+				item.graphic := 0x10FF;
+				sleepms (400);
+				item.graphic := 0x10FC;
+			endif
+			return;
+		0x110f:
+			if (item.movable)
+				SendSysMessage (character, "This must be locked down inside of your house to use it.");
+			else
+				item.facing := 29;
+				PlaySoundEffect (item, 0x209);
+				item.graphic := 0x1112;
+				sleepms (400);
+				item.graphic := 0x1113;
+				sleepms (400);
+				PlaySoundEffect (item, 0x1DE);
+				for i := 1 to 3
+					item.graphic := 0x1114;
+					sleepms (425);
+					item.graphic := 0x1115;
+					sleepms (425);
+				endfor
+				item.graphic := 0x1113;
+				sleepms (400);
+				item.graphic := 0x1112;
+				sleepms (400);
+				item.graphic := 0x110f;
+			endif
+			return;
+	
+	endcase
+
+	//these items have to be movable
+	if (!item.movable)
+		case (item.graphic)
+			//curtains
+			0x12DB:
+				item.graphic := 0x12DD;
+			0x12DD:
+				item.graphic := 0x12DB;
+			0x12E1:
+				item.graphic := 0x12DF;
+			0x12DF:
+				item.graphic := 0x12E1;
+
+			0x12E6:
+				item.graphic := 0x12E8;
+			0x12E8:
+				item.graphic := 0x12E6;
+			0x12EA:
+				item.graphic := 0x12EC;
+			0x12EC:
+				item.graphic := 0x12EA;
+
+
+
+
+
+
+			0xa068:
+				item.graphic := 0xa069;
+			0xa069:
+				item.graphic := 0xa068;
+			0xa06a:
+				item.graphic := 0xa06b;
+			0xa06b:
+				item.graphic := 0xa06a;
+			0xa06c:
+				item.graphic := 0xa06d;
+			0xa06d:
+				item.graphic := 0xa06c;
+			0xa06e:
+				item.graphic := 0xa06f;
+			0xa06f:
+				item.graphic := 0xa06e;
+			default:
+				SendSysMessage (character, "You can't move it.");
+		endcase
+		return;
+	endif
+
+	var rotatecfg := ReadConfigFile (":decorations:rotate");
+	var elem := rotatecfg[item.graphic];
+	if (elem)
+		if (elem.newgraphic)
+			item.graphic := elem.newgraphic;
+		else
+			SendSysMessage (character, "You can't move it.");
+			return;
+		endif
+	else
+		SendSysMessage (character, "You can't move it.");
+		return;
+	endif
+
+endprogram

@@ -1,0 +1,263 @@
+///////////////////
+//  When a weapon of piece of armor is double clicked, this script is called and tries
+//  to equip it.
+///////////////////
+
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+
+program double_clicked_item (character, item)
+	if (!item.movable)
+		SendSysMessage (character, "You cannot equip that item!");
+		return;
+	endif
+	if(!IsOfAppropriateRace(character, item))
+		SendSysMessage (character, "The item isn't appropriate for your race!");
+		return 0;
+	endif
+
+	//the item needs to be in their inventory
+	if (!InInventory (character.backpack, item))
+		//see if its already equipped
+		if (CheckIfAlreadyEquipped (character, item))
+			//bows are used while equipped
+			if (IsBow (item))
+				ChangeArcheryAmmo (character, item);
+			endif
+			return;
+		endif
+		SendSysMessage (character, "The item must be in your backpack to equip it!");
+		return;
+	endif
+
+	if (!ReserveItem (item))
+		SendSysMessage (character, "That item is already being used by someone!");
+		return;
+	endif
+
+	//See if we're able to equip it without any further screwing around
+	if (EquipItem (character, item))
+		sleep (2);
+		return;
+	endif
+	
+	//Nope.  We'll have to unequip other items to equip this one
+	var thepack := item.container;
+	if (!thepack)
+		thepack := character.backpack;
+	endif
+
+	//If its a weapon or shield, we should be able to just unequip whatever is in their hands
+	if (item.isa (POLCLASS_WEAPON) or IsShield (item))
+		var item_hand_one := GetEquipmentByLayer (character, LAYER_HAND1);
+		MoveItemToContainer (item_hand_one, thepack);
+		var item_hand_two := GetEquipmentByLayer (character, LAYER_HAND2);
+		MoveItemToContainer (item_hand_two, thepack);
+		if (EquipItem (character, item))
+			//try to requip whatever else they had and we're done
+			EquipItem (character, item_hand_one);
+			EquipItem (character, item_hand_two);
+			sleep (2);
+			return;
+		endif
+	endif
+	
+	var old_items := array{};
+	var successful_equip := 0;
+	var equipped_item_elem, equipped_item_coverage_array;
+
+	//Try to go by area coverage in itemdesc.cfg
+	var itemdesc_cfg := ReadConfigFile (":*:itemdesc");
+	if (itemdesc_cfg)
+		var item_elem := FindConfigElem (itemdesc_cfg, item.objtype);
+		if (item_elem)
+			var item_coverage_array := GetConfigStringArray (item_elem, "Coverage");
+			if (item_coverage_array and len (item_coverage_array))
+				set_critical (1);
+				foreach equipped_item in ListEquippedItems (character)
+					if (RemoveIt (character, equipped_item))
+						equipped_item_elem := FindConfigElem (itemdesc_cfg, equipped_item.objtype);
+						if (equipped_item_elem)
+							equipped_item_coverage_array := GetConfigStringArray (equipped_item_elem, "Coverage");
+							if (equipped_item_coverage_array and len (equipped_item_coverage_array))
+								foreach coverage_elem in item_coverage_array
+									if (coverage_elem in equipped_item_coverage_array)
+										old_items.append (equipped_item);
+										MoveItemToContainer (equipped_item, thepack);
+									endif
+								endforeach
+							endif
+						endif
+					endif
+				endforeach
+				successful_equip := EquipItem (character, item);
+				if (successful_equip)
+					foreach equipped_item in old_items
+						EquipItem (character, equipped_item);
+					endforeach
+					sleep (2);
+					return;
+				endif
+				set_critical (0);
+			endif
+		endif
+	endif
+
+	//Ok, we have to do the whole mess
+	set_critical (1);
+	foreach equipped_item in ListEquippedItems (character)
+		if (RemoveIt (character, equipped_item))
+			old_items.append (equipped_item);
+			MoveItemToContainer (equipped_item, thepack);
+		endif
+	endforeach
+	successful_equip := EquipItem (character, item);
+	foreach equipped_item in old_items
+		EquipItem (character, equipped_item);
+	endforeach
+	set_critical (0);
+	if (!successful_equip)
+		SendSysMessage (character, "You cannot equip that.");
+		return;
+	endif
+	
+	sleep (1);
+endprogram
+
+
+
+///////////////////
+//  makes sure that the item given is one that can be removed
+///////////////////
+
+function RemoveIt (byref character, byref it)
+	if (it == GetEquipmentByLayer (character, LAYER_BEARD))
+		return 0;
+	elseif (it == GetEquipmentByLayer (character, LAYER_HAIR))
+		return 0;
+	elseif (it == GetEquipmentByLayer (character, LAYER_MOUNT))
+		return 0;
+	elseif (it == GetEquipmentByLayer (character, LAYER_HAIR))
+		return 0;
+	elseif (it == (character.backpack))
+		return 0;
+	endif
+
+	return 1;
+endfunction
+
+
+
+///////////////////
+//  See if the item is already equipped
+///////////////////
+
+function CheckIfAlreadyEquipped (character, the_item)
+	foreach item in ListEquippedItems (character)
+		if (item == the_item)
+			return 1;
+		endif
+	endforeach
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Bows, when double-clicked while equipped, allow the player to change their ammo
+///////////////////
+
+function ChangeArcheryAmmo (character, thebow)
+	var valid_arrows := array{0x0f3f, 0x16051, 0x16052};
+	var valid_bolts := array{0x1bfb, 0x16053, 0x16054};
+	var valid_darts := array{0x2804, 0x16055, 0x16056};
+	var valid_shuriken := array{0x27ac, 0x16057, 0x16058};
+	var valid_axes := array{0x255d, 0x16059, 0x1605a};
+
+	SendSysMessage (character, "Target the ammo that you want to use:");
+	var theammo := Target (character);
+	if (!theammo)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+
+	if (!theammo.movable)
+		SendSysMessage (character, "You cannot use that ammo!");
+		return;
+	else
+		var quiver := GetEquipmentByLayer (character, LAYER_CAPE);
+		if (quiver and quiver.isa (POLCLASS_CONTAINER))
+			if (!InInventory (quiver, theammo))
+				SendSysMessage (character, "The ammo needs to be in your quiver to use it!");
+			endif
+		else
+			if (!InInventory (character.backpack, theammo))
+				SendSysMessage (character, "The ammo needs to be in your backpack to use it!");
+				return;
+			endif
+		endif
+	endif
+	
+	case (thebow.objtype)
+		0x13B2:
+		0x26C2:
+		0x27f0:
+		0x2d2a:
+		0x2d2b:
+			if (!(theammo.objtype in valid_arrows))
+				SendSysMessage (character, "Bows need arrows for ammo");
+				return;
+			endif
+		0x0f4f:
+		0x13fd:
+		0x26C3:
+			if (!(theammo.objtype in valid_bolts))
+				SendSysMessage (character, "Crossbows need bolts for ammo");
+				return;
+			endif
+		0x27f5:
+			if (!(theammo.objtype in valid_darts))
+				SendSysMessage (character, "Dart throwers need darts for ammo");
+				return;
+			endif
+		0x2790:
+			if (!(theammo.objtype in valid_shuriken))
+				SendSysMessage (character, "Shuriken throwers need shuriken for ammo");
+				return;
+			endif
+		0x27db:
+			if (!(theammo.objtype in valid_axes))
+				SendSysMessage (character, "Axe throwers need throwing axes for ammo");
+				return;
+			endif
+		default:
+			SendSysMessage (character, "Error:  That isn't a bow!");
+			return;
+	endcase
+	
+	var splitted := SplitWords (theammo.desc);
+	var ammodesc := "";
+	if (splitted.size() > 1)
+		for i := 2 to (splitted.size())
+			ammodesc := ammodesc + splitted[i];
+			if (i != splitted.size())
+				ammodesc := ammodesc + " ";
+			endif
+		endfor
+	else
+		ammodesc := theammo.desc;
+	endif
+	
+	
+	SetObjProperty (thebow, "archery_ammo", theammo.objtype);
+	SendSysMessage (character, thebow.desc + " will now use " + ammodesc + " when fired.");
+	return;
+endfunction
+
+

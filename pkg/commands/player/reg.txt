@@ -1,0 +1,2 @@
+.reg lists the number of reagents, bandages, arrows, potions, etc. that you are currently carrying.
+

@@ -1,0 +1,83 @@
+use uo;
+use os;
+
+include "../pkg/guilds/guilds";
+
+program check_quest_status (character)
+	var players_guild := GetObjProperty (character, "players_guild");
+	if (!players_guild)
+		SendSysMessage (character, "You're not a member of any guild.");
+		return;
+	endif
+	SendSysMessage (character, "You are a member of the Adventurers Guild");
+
+	var quest_parms := GetObjProperty (character, "guild_quest");
+	if (!quest_parms)
+		SendSysMessage (character, "You do not currently have a guild quest.");
+		return;
+	endif
+	
+	if (quest_parms [7] < ReadGameClock () )
+		SendSysMessage (character, "You have a guild quest, but it has expired!");
+		return;
+	endif
+
+	var quest_desc := GetQuestDescription (quest_parms);
+	if (!quest_desc)
+		SendSysMessage (character, "You have a quest, but there was an error determining what it is.");
+		return;
+	endif
+
+	SendSysMessage (character, "Your quest is: " + quest_desc);
+endprogram
+
+
+
+
+///////////////////
+//  figures out a good way to phrase what the quest is
+///////////////////
+
+function GetQuestDescription (quest_parms)
+	var timeleft := quest_parms[7] - ReadGameClock();
+	var daysleft := CINT (timeleft/86400);
+	if (daysleft < 1)
+		daysleft := 1;
+	endif
+
+	var quest_cfg_file := ReadConfigFile (quest_parms[1]);
+	if (!quest_cfg_file)
+		Syslog ("Can't open adventurers guild quest cfgfile!");
+		return 0;
+	endif
+
+	var chosen_quest := FindConfigElem (quest_cfg_file, quest_parms[2]);
+	if (!chosen_quest)
+		Syslog ("error opening " + quest_parms[2] + " quest in adventurers guild quest cfgfile!");
+		return 0;
+	endif
+
+	if (quest_parms [1] == ":adventurers_guild:quests_heads")
+		var desc_plural := chosen_quest.desc_plural;
+		var thestring := CSTR ("Return with the heads of " + quest_parms[6] + " " + desc_plural + " within " 
+					+ daysleft + " day");
+		if (daysleft > 1)
+			thestring := thestring + "s.";
+		else
+			thestring := thestring + ".";
+		endif
+		return thestring;
+	elseif (quest_parms [1] == ":adventurers_guild:quests_items")
+		var regionname := chosen_quest.dungeonname;
+		var thestring := CSTR ("Find " + quest_parms[5] + " in " + regionname + " within " 
+					+ daysleft + " day");
+		if (daysleft > 1)
+			thestring := thestring + "s.";
+		else
+			thestring := thestring + ".";
+		endif
+		return thestring;
+	endif
+endfunction
+
+

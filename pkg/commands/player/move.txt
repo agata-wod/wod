@@ -1,0 +1,1 @@
+.move will ask you to select an item and a container.  It will then move all the items of that type from the container it is in, to the container you chose.

@@ -1,0 +1,296 @@
+///////////////////
+//  this program is called when an NPC is first created.  It names then, dresses them, and does
+//  whatever other setup is needed
+///////////////////
+
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "../pkg/npcs/npc_util";
+include "../pkg/npcs/npcinfo";
+
+program npc_setup (npc)
+	var MyTemplateElem := GetNpcTemplateElem (npc.npctemplate);
+	var newbackpack := CreateItemAtLocation (5288, 1176, 0, UOBJ_BACKPACK, 1, REALM_BRITANNIA);
+	if (!EquipItem (npc, newbackpack))
+		DestroyItem (newbackpack);
+	endif
+
+	//Some NPCs can have multiple graphics
+	if (MyTemplateElem.altGraphic)
+		if (RandomInt (2))
+			npc.graphic := MyTemplateElem.altGraphic;
+		endif
+	endif
+	
+
+	var templatesuffix := "";
+	if (MyTemplateElem.localized)
+		if (npc.realm == "britannia")
+			if ( (npc.x >= 6907 and npc.x <= 7170) and (npc.y >= 251 and npc.y <= 516) )
+				templatesuffix := "elf";
+				npc.graphic := 605;
+				npc.race := RACE_ELF;
+			endif
+		elseif (npc.realm == "tokuno")
+			templatesuffix := "tokuno";
+		elseif (npc.realm == "termur")
+			templatesuffix := "garg";
+			npc.graphic := 666;
+			npc.race := RACE_GARGOYLE;
+		else
+			case (npc.race)
+				RACE_ELF: templatesuffix := "elf";
+				RACE_GARGOYLE: templatesuffix := "garg";
+			endcase
+		endif
+	endif
+
+	//Some NPCs can be colored a range of colors
+	if (MyTemplateElem.colorrange)
+		if (MyTemplateElem.colorrange == "human")
+			if (npc.race == RACE_ELF)
+				npc.color := RandomElfSkinHue();
+			elseif (npc.race == RACE_GARGOYLE)
+				npc.color := 1755 + RandomInt (25);
+			else
+				if (RandomInt (2))
+					npc.color := 1002 + RandomInt (57);
+				else
+					npc.color := 33784;
+				endif
+			endif
+			SetObjProperty (npc, "color", npc.color);
+		elseif (MyTemplateElem.colorrange == "elf")
+			npc.color := RandomElfSkinHue();
+			SetObjProperty (npc, "color", npc.color);
+		elseif (MyTemplateElem.colorrange == "gargoyle")
+			npc.color := 1755 + RandomInt (25);
+			SetObjProperty (npc, "color", npc.color);
+		elseif (MyTemplateElem.colorrange["monster"])
+			npc.color := RandomMonsterColor (MyTemplateElem.colorrange);
+			SetObjProperty (npc, "color", npc.color);
+		else
+			//if there's multiple color ranges, pick one
+			var colorarray := GetConfigStringArray (MyTemplateElem, "colorrange");
+			var colorstring := colorarray[1];
+			
+			if (len (colorarray) > 1)
+				colorstring := colorarray[RandomInt (len(colorarray)) + 1];
+			endif
+
+			var parms := splitwords(colorstring);
+			npc.color := RandomInt(CINT(parms[2]) - CINT(parms[1])) + CINT (parms[1]);
+			SetObjProperty (npc, "color", npc.color);
+		endif
+	endif
+	
+	//if the NPC has a gender of 2, randomize it
+	if (npc.gender == 2)
+		npc.gender := RandomInt (2);
+		if (npc.graphic == 400 or npc.graphic == 401)
+			npc.graphic := 400+npc.gender;
+		elseif (npc.graphic == 605 or npc.graphic == 606)
+			npc.graphic := 605+npc.gender;
+		elseif (npc.graphic == 666 or npc.graphic == 667)
+			npc.graphic := 666+npc.gender;
+		endif
+	endif
+
+	if (npc.name ["<random>"])
+		//for some reason, we have to go through a temporary string.  It doesn't work, otherwise
+		var tempstring := npc.name;
+		tempstring ["<random>"] := RandomName (npc, 1);
+		npc.name := tempstring;
+	endif
+
+	//set their title, if they have one
+	if (MyTemplateElem.title)
+		if (MyTemplateElem.title == "<random>")
+			if(npc.race == RACE_ELF)
+				if (MyTemplateElem.dress["rich"])
+					npc.title_suffix := "the elven noble";
+				else
+					npc.title_suffix := "the elf";
+				endif
+			elseif (npc.race == RACE_GARGOYLE)
+				if (MyTemplateElem.dress["rich"])
+					npc.title_suffix := "the gargish noble";
+				else
+					npc.title_suffix := "the gargoyle";
+				endif
+			else
+				case (RandomInt (20) ) 
+					0:	npc.title_suffix := "the townsperson";
+					1:	npc.title_suffix := "the farmer";
+					2:	npc.title_suffix := "the sailor";
+					3:	npc.title_suffix := "the drunkard";
+					4:	npc.title_suffix := "the wanderer";
+					5:	npc.title_suffix := "the villager";
+					6:	npc.title_suffix := "the gypsie";
+					7:	npc.title_suffix := "the vagabond";
+					8:	npc.title_suffix := "the laborer";
+					default:
+						npc.title_suffix := "";
+				endcase
+			endif
+		else
+			npc.title_suffix := MyTemplateElem.title;
+		endif
+	endif
+
+	//dress them
+	if (MyTemplateElem.dress)
+		var parms := array{};
+		parms[1]:= npc;
+		parms[2]:= MyTemplateElem.dress + templatesuffix;
+		run_script_to_completion ("::/misc/dressme", parms);
+	elseif (MyTemplateElem.equip)
+		EquipFromTemplate (npc, MyTemplateElem.equip + templatesuffix);
+	endif
+
+	//give them a bow and ammo, if they're missle users
+	if (MyTemplateElem.ammotype)
+		var weapon := GetEquipmentByLayer (npc, LAYER_HAND1);
+		if (weapon)
+			MoveItemToContainer (weapon, npc.backpack);
+		endif
+		var shield := GetEquipmentByLayer (npc, LAYER_HAND2);
+		if (shield)
+			MoveItemToContainer (shield, npc.backpack);
+		endif
+		var mybow := MyTemplateElem.missileweapon;
+		var ammotype := MyTemplateElem.ammotype;
+		var ammoamount := MyTemplateElem.ammoamount;
+		if (!ammoamount)
+			ammoamount := 30;
+		endif
+
+		equipfromtemplate (npc, mybow);
+		CreateItemInBackpack (npc, ammotype, ammoamount);
+	endif
+
+	//give them a horse, if they have one
+	if ( MyTemplateElem.mount )
+		var mount_template := MyTemplateElem.mount;
+		var MountTemplateElem := GetNpcTemplateElem (mount_template);
+		if (!MountTemplateElem)
+			Syslog ("Can't find template!");
+		endif
+
+		if (MountTemplateElem)
+			var mymount := CreateItemAtLocation (5288, 1176, 0, UOBJ_MOUNT, 1, REALM_BRITANNIA);
+			case (mountTemplateElem.objtype)
+				CID_BROWN_HORSE:
+					mymount.graphic := 0x3ea2;
+				CID_TAN_HORSE:
+					mymount.graphic := 0x3e9f;
+				CID_LIGHT_HORSE:
+					mymount.graphic := 0x3ea0;
+				CID_GREY_HORSE:
+					mymount.graphic := 0x3ea1;
+				CID_LLAMA:
+					mymount.graphic := 0x3ea6;
+				CID_DESERT_OSTARD:
+					mymount.graphic := 0x3ea3;
+				CID_FRENZIED_OSTARD:
+					mymount.graphic := 0x3ea4;
+				CID_FOREST_OSTARD:
+					mymount.graphic := 0x3ea5;
+				CID_REPTALON:
+					mymount.graphic := 0x3e90;
+				CID_CU_SIDHE:
+					mymount.graphic := 0x3e91;
+				CID_CHARGER_HORSE:
+					mymount.graphic := 0x3e92;
+				CID_HIRYU:
+					mymount.graphic := 0x3e94;
+				CID_GIANT_BEETLE:
+					mymount.graphic := 0x3ebc;
+				CID_FIRE_BEETLE:
+					mymount.graphic := 0x3e95;
+				CID_SWAMP_DRAGON:
+					mymount.graphic := 0x3ebd;
+				CID_RIDGEBACK:
+					mymount.graphic := 0x3eba;
+				CID_UNICORN:
+					mymount.graphic := 0x3eb4;
+				CID_KIRIN:
+					mymount.graphic := 0x3ead;
+				CID_FIRESTEED:
+					mymount.graphic := 0x3e9e;
+				CID_SAVAGE_RIDGEBACK:
+					mymount.graphic := 0x3eb8;
+				CID_HELLSTEED:
+					mymount.graphic := 0x3ebb;
+				CID_ARMORED_SWAMP_DRAGON:
+					mymount.graphic := 0x3ebe;
+				CID_POLAR_BEAR:
+					mymount.graphic := 0x3ec5;
+				CID_ARMORED_BOURA:
+					mymount.graphic := 0x3ec6;
+			endcase
+			mymount.color := MountTemplateElem.TrueColor;
+			SetObjProperty (mymount, "npctemplate", mount_template);
+			EquipItem (npc, mymount);
+		endif
+	endif
+
+	//light source for NPCs that should glow
+	if ( MyTemplateElem.light )
+		var light_type := MyTemplateElem.light;
+		var light := CreateItemAtLocation (5288, 1176, 0, light_type, 1, REALM_BRITANNIA);
+		light.newbie := 1;
+		light.facing := 29;
+		if (!EquipItem (npc, light))
+			DestroyItem (light);
+		endif
+	endif
+
+	//Set our weapon poison, if we're poisonous
+	if (MyTemplateElem.weapon_poison)
+		SetObjProperty (npc.weapon, "poison_level", MyTemplateElem.weapon_poison);
+	endif
+	
+	//make sure the ladies and elves didn't get a beard
+	if (npc.graphic == 401 or npc.graphic == 605 or npc.graphic == 606 or npc.graphic == 667)
+		if (GetEquipmentByLayer (npc, LAYER_BEARD))
+			DestroyItem (GetEquipmentByLayer (npc, LAYER_BEARD));
+		endif
+	endif
+	
+	//Fix for shoes
+	foreach item in ListEquippedItems (npc)
+		if (item.objtype == 0x170F or item.objtype == 0x1710)
+			MoveItemToContainer (item, npc.backpack);
+			item.graphic := 0x1710;
+			EquipItem (npc, item);
+		endif
+	endforeach
+endprogram
+
+function RandomElfSkinHue()
+	var elfskinhues := array {
+					0x0BF, 0x24D, 0x24E, 0x24F, 0x353, 0x361, 0x367, 0x374,
+					0x375, 0x376, 0x381, 0x382, 0x383, 0x384, 0x385, 0x389,
+					0x3DE, 0x3E5, 0x3E6, 0x3E8, 0x3E9, 0x430, 0x4A7, 0x4DE,
+					0x51D, 0x53F, 0x579, 0x76B, 0x76C, 0x76D, 0x835, 0x903
+				};
+	return elfskinhues[RandomInt(32)+1];
+endfunction
+
+function RandomMonsterColor(monstertype)
+	if (monstertype == "monsterhiryu")
+		var hiryuhues := array {
+					0x0000, 0x847f, 0x848d, 0x8495, 0x8899, 0x8032, 0x8487,
+					0x8482, 0x8123, 0x8295, 0x8037, 0x8030, 0x8490, 0x855c
+					};
+		return hiryuhues[RandomInt(14)+1];
+	endif
+	Syslog ("Monstertype " + monstertype + "color template not found!");
+	return 0;
+endfunction

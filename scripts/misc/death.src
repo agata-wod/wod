@@ -1,0 +1,423 @@
+use uo;
+use cfgfile;
+use util;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/wodinc";
+include "include/npcbackpacks";
+//include "include/math";
+include "include/string";
+include "include/spawn";
+include "../pkg/combat/loot/loot";
+include "../pkg/npcs/npcinfo";
+include "../pkg/npcs/npc_util";
+include "../pkg/character/virtue/virtue";
+
+program npcdeath (corpse)
+	var npctemplate := TrimTemplate (GetObjProperty (corpse, "npctemplate"));
+	var NPCTemplateElem := GetNpcTemplateElem (npctemplate);
+
+	set_critical(1);
+	if (GetObjProperty (corpse, "regspawn"))
+		var SpawnName := GetObjProperty (corpse, "regspawn");
+		var numspawns := CINT (GetGlobalProperty (SpawnName));
+		if (numspawns and numspawns > 1 )
+			numspawns := numspawns - 1;
+			SetGlobalProperty (SpawnName, numspawns);
+		else
+			EraseGlobalProperty (SpawnName);
+		endif
+	elseif (!GetObjProperty (corpse, "guardkill"))
+		AddToSpawner (corpse, npctemplate);
+	endif
+	set_critical(0);
+
+	if (NPCTemplateElem.DeathSound)
+		PlaySoundEffect (corpse, NPCTemplateElem.DeathSound);
+	endif
+
+	if (GetObjProperty (corpse, "color"))
+		corpse.color := GetObjProperty (corpse, "color");
+	endif
+
+	MoveBackpackToCorpse (corpse);
+	ZapStorageAreas (corpse);
+
+	if ( GetObjProperty (corpse, "guardkill") )
+		DestroyItem (corpse);
+		return;
+	endif
+
+	if (GetObjProperty (corpse, "totem"))
+		RemakeTotem (corpse, npctemplate);
+		return;
+	endif
+
+	//if the NPC was riding a horse, make a new one
+	var horse := Dismount (corpse, 0);
+	if (horse)
+		//gotta do special stuff for doppelgangers
+		if (npctemplate["doppelganger"])
+			set_critical (1);
+			var newbackpack := CreateItemAtLocation (5288 , 1176 , 0, UOBJ_BACKPACK, 1, REALM_BRITANNIA);
+			if (!EquipItem (horse, newbackpack))
+				DestroyItem (newbackpack);
+			endif
+
+			foreach item in ListRootItemsInContainer (corpse)
+				MoveItemToContainer (item, horse.backpack);
+			endforeach
+			set_critical (0);
+
+			sleep (2);
+			DestroyItem (corpse);
+		else
+			SetObjProperty (horse, "killme", 1);
+		endif
+	endif
+
+	var nocorpse := HasNoCorpse (npctemplate);
+	if( GetObjProperty (corpse, "summoned") )
+		nocorpse := 1;
+	else
+		if (GetObjProperty (corpse, "master"))
+			CheckNPCMurderCount (corpse);
+		else
+			AwardVirtue (corpse, npctemplate);
+			DoGuildDeathChecks (corpse);
+			if (GetObjProperty (corpse, "override_lootgroup"))
+				if (GetObjProperty (corpse, "override_lootgroup") != "none")
+					MakeLootOnCorpse (corpse, GetObjProperty (corpse, "override_lootgroup"));
+				endif
+			else
+				MakeLootOnCorpse (corpse , npctemplate);
+			endif
+		endif
+	endif
+
+	if (npctemplate == "giantslime")
+		for i := 1 to 5
+			var tries := 0;
+			var slime := 0;
+			while (!slime and tries < 10)
+				var randomx := RandomInt (5) - 2;
+				var randomy := RandomInt (5) - 2;
+				slime := SpawnNPCAtLocation ("slime", corpse.x + randomx, corpse.y + randomy, corpse.z, 0, corpse.realm);
+				tries := tries + 1;
+			endwhile
+		endfor
+		nocorpse := 1;
+	elseif (npctemplate == "greatervoiddragon")
+		for i := 1 to 3
+			var tries := 0;
+			var slime := 0;
+			while (!slime and tries < 10)
+				var randomx := RandomInt (5) - 2;
+				var randomy := RandomInt (5) - 2;
+				slime := SpawnNPCAtLocation ("voidspawn", corpse.x + randomx, corpse.y + randomy, corpse.z, 0, corpse.realm);
+				tries := tries + 1;
+			endwhile
+		endfor
+		nocorpse := 1;
+	elseif (npctemplate["necromancer"] and RandomInt (8) == 0)
+		var lich := SpawnNPCAtLocation ("lich", corpse.x, corpse.y, corpse.z, 0, corpse.realm);
+		if (lich)
+			PrintTextAbove (lich, "In death, I grow only stronger!");
+			if (GetObjProperty (corpse, "deliverto"))
+				SetObjProperty (lich, "deliverto", GetObjProperty (corpse, "deliverto"));
+				SetObjProperty (lich, "delivertoname", GetObjProperty (corpse, "delivertoname"));
+			endif
+			nocorpse := 1;
+		endif
+	elseif (npctemplate["doppelganger"])
+		corpse.name := "A corpse of a doppelganger";
+	elseif (npctemplate == "orcbomber")
+		sleep (1);
+		PrintTextAbove (corpse, "5");
+		sleep (1);
+		PrintTextAbove (corpse, "4");
+		sleep (1);
+		PrintTextAbove (corpse, "3");
+		sleep (1);
+		PrintTextAbove (corpse, "2");
+		sleep (1);
+		PrintTextAbove (corpse, "1");
+		sleep (1);
+		foreach critter in ListMobilesNearLocationEx (corpse.x, corpse.y, corpse.z, 5, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, corpse.realm );
+			PlaySoundEffectPrivate (critter, 0x208, critter);
+			PlayObjectCenteredEffect (critter, 0x36b0, 7, 0x10);
+			if (!critter.npctemplate or GetObjProperty (critter, "master"))
+				DoDamageByType (0, critter, RandomDiceRoll ("4d8+8"), DAMAGETYPE_PHYSICAL);
+			else
+				DoDamageByType (0, critter, RandomDiceRoll ("2d10+10"), DAMAGETYPE_PHYSICAL);
+			endif
+		endforeach
+		nocorpse := 1;
+	endif
+
+	if (nocorpse)
+		foreach item in ListRootItemsInContainer (corpse)
+			MoveObjectToLocation( item, corpse.x, corpse.y, corpse.z, corpse.realm, MOVEOBJECT_FORCELOCATION );
+		endforeach
+		DestroyItem (corpse);
+	endif
+
+	if ( getobjproperty (corpse, "diseased") )
+		foreach mob in listmobilesnearlocation (corpse.x, corpse.y, corpse.z, 10, corpse.realm)
+			if ( (mob.script == "barker") or (mob.script == "animal") or
+				(mob.script == "wolf") or (mob.script == "sheep") or (mob.script == "dumbkillpcs") )
+				mob.name := "a diseased " + TruncateArticle(mob.name);
+				setobjproperty (mob, "diseased", 1);
+				RestartScript (mob);
+			endif
+		endforeach
+	endif
+
+endprogram
+
+
+
+
+///////////////////
+//  awards virtue for everyone that helped kill this NPC
+///////////////////
+
+function AwardVirtue(corpse, npctemplate)
+	var hitlist := GetObjProperty (corpse, "#hitlist");
+	if (!hitlist)
+		return;
+	endif
+
+	var npccfg := ReadConfigFile (":*:npcdesc");
+	var virtue := cint(npccfg[npctemplate].virtue);
+	var hostile := cint(npccfg[npctemplate].hostile);
+
+	if (npccfg[npctemplate].alignment == "good") 
+		virtue := -5;
+	elseif (npccfg[npctemplate].alignment == "evil")
+		if (!virtue)
+			virtue := 1;
+		endif
+	elseif (!hostile)
+		return;
+	endif
+
+	foreach person in hitlist
+		var you := SystemFindObjectBySerial (person);
+		if (you)
+			if (virtue)
+				AddVirtue (you, virtue);
+			elseif (hostile and abs (GetVirtueAmount (you)) < 200)
+				AddVirtue (you, 1);
+			endif
+		endif
+	endforeach
+endfunction
+
+
+
+
+///////////////////
+//  Launches an external script to do some checks for the Adventurer's Guild
+///////////////////
+
+function DoGuildDeathChecks (corpse)
+	Start_Script (":guilds:guild_monsterdeath", corpse);
+endfunction
+
+
+
+///////////////////
+//  if whatever died was a totem, this function (sometimes) makes another totem that can be repaired
+///////////////////
+
+function RemakeTotem (corpse, npctemplate)
+	PlaySoundEffect (corpse, SFX_SPELL_DISPEL);
+	PlayStationaryEffect (corpse.x, corpse.y, corpse.z, FX_SMOKE, 0xA, 0xA, 0, corpse.realm );
+	EraseObjProperty (corpse, "totemdeaths");
+
+	var totemtype := GetObjProperty (corpse, "totem");
+	var totemcolor := GetObjProperty (corpse, "totemcolor");
+	var color := GetObjProperty (corpse, "color");
+	var skills := GetObjProperty (corpse, "skills");
+	var stats := GetObjProperty (corpse, "stats");
+
+	set_critical (1);
+	var totem := CreateItemAtLocation (corpse.x, corpse.y, corpse.z, totemtype, 1, corpse.realm);
+	if (!totem)
+		foreach item in ListRootItemsInContainer (corpse)
+			MoveObjectToLocation( item, corpse.x, corpse.y, corpse.z, corpse.realm, MOVEOBJECT_FORCELOCATION );
+		endforeach
+		DestroyItem (corpse);
+		return;
+		set_critical (0);
+	endif
+
+	var temp_string := corpse.desc;
+	temp_string["A corpse of "] := "";
+	totem.name := temp_string;
+
+	totem.decayat := 0;
+	totem.movable := 1;
+	totem.usescript := ":dundee:totem";
+
+	if (totemcolor)
+		totem.color := totemcolor;
+	endif
+	if (color)
+		SetObjProperty (totem, "critcolor", color);
+	endif
+	SetObjProperty (totem, "critgraphic", corpse.graphic);
+
+	SetObjProperty (totem, "critter", npctemplate);
+	SetObjProperty (totem, "totemhp", 170);
+	SetObjProperty (totem, "broken", RandomInt (20) + 20);
+	SetObjProperty (totem, "skills", skills);
+	SetObjProperty (totem, "stats", stats);
+
+	if (GetObjProperty (corpse, "ownerserial"))
+		SetObjProperty (totem, "ownerserial", GetObjProperty (corpse, "ownerserial"));
+		SetObjProperty (totem, "ownername", GetObjProperty (corpse, "ownername"));
+		SetObjProperty (totem, "oldname", GetObjProperty (corpse, "oldname"));
+	endif
+
+	foreach item in ListRootItemsInContainer (corpse)
+		MoveObjectToLocation( item, corpse.x, corpse.y, corpse.z, corpse.realm, MOVEOBJECT_FORCELOCATION );
+	endforeach
+	DestroyItem (corpse);
+	set_critical (0);
+
+endfunction
+
+
+
+
+///////////////////
+//  destroys all storage areas associated with the NPC
+///////////////////
+
+function ZapStorageAreas (corpse)
+
+	var corpseserial := GetObjProperty (corpse, "serial");
+	if (!corpseserial)
+		return;
+	endif
+
+	var storage := FindStorageArea ("Merchant Storage");
+	var npctemplate := TrimTemplate (GetObjProperty (corpse, "npctemplate"));
+
+	if (npctemplate["playervendor"])
+		var ownerserial := CINT (GetObjProperty (corpse, "master"));
+		if (ownerserial)
+			var bankbox := FindBankBox ("deadmerchants");
+			var newpack := CreateItemInContainer (bankbox, UOBJ_BACKPACK, 1);
+			
+			var temp_string := corpse.desc;
+			temp_string["A corpse of "] := "";
+			newpack.name := "Remains of " + temp_string;
+
+			var itembox := find_or_create_item( storage, corpseserial + " FS", 0xE7C );
+			foreach item in ListRootItemsInContainer (itembox)
+				MoveItemToContainer (item, newpack);
+			endforeach
+			itembox := find_or_create_item( storage, corpseserial + " PB", 0xE7C );
+			foreach item in ListRootItemsInContainer (itembox)
+				MoveItemToContainer (item, newpack);
+			endforeach
+			itembox := find_or_create_item( storage, corpseserial + " 1C", 0xE7C );
+			foreach item in ListRootItemsInContainer (itembox)
+				MoveItemToContainer (item, newpack);
+			endforeach
+			foreach item in ListRootItemsInContainer (corpse)
+				if (!GetObjProperty (item, "mine"))
+					MoveItemToContainer (item, newpack);
+				endif
+			endforeach
+			var gold := CINT (GetObjProperty (corpse, "g"));
+			while (gold > 60000)
+				CreateItemInContainer (newpack, "goldcoin", 60000);
+				gold := gold - 60000;
+			endwhile
+			CreateItemInContainer (newpack, "goldcoin", gold);
+			if (!len (EnumerateItemsInContainer (newpack) ) )
+				DestroyItem (newpack);
+			endif
+		endif
+	endif
+
+	DestroyRootItemInStorageArea (storage, corpseserial + " FS");
+	DestroyRootItemInStorageArea (storage, corpseserial + " PB");
+	DestroyRootItemInStorageArea (storage, corpseserial + " 1C");
+
+	storage := FindStorageArea ("Tamed Storage");
+	DestroyRootItemInStorageArea (storage, "Bankbox  " + hex(corpseserial));
+
+endfunction
+
+
+
+
+///////////////////
+//  this function makes merchants and other similar NPCs respawn
+///////////////////
+
+function AddToSpawner (corpse, npctemplate)
+	var homepoint := GetObjProperty (corpse, "myhome");
+	if (!homepoint)
+		return;
+	endif
+
+	set_critical (1);
+	homepoint[5] := npctemplate;
+	
+	var merchants_to_respawn := array { };
+	if (GetGlobalProperty ("respawnmerchants"))
+		merchants_to_respawn := GetGlobalProperty ("respawnmerchants");
+	endif
+
+	merchants_to_respawn.append (homepoint);
+	SetGlobalProperty ("respawnmerchants", merchants_to_respawn);
+	set_critical(0);
+endfunction
+
+
+
+
+///////////////////
+//  Records a log of henchmen killed by players
+///////////////////
+
+function CheckNPCMurderCount (corpse)
+	if (!getobjproperty (corpse, "#hitlist"))
+		return;
+	endif
+	if (!getobjproperty (corpse, "master"))
+		return;
+	endif
+	
+	var masterserial := getobjproperty (corpse, "master");
+	var master := SystemFindObjectBySerial (masterserial, SYSFIND_SEARCH_OFFLINE_MOBILES );
+	if (!master)
+		return;
+	endif
+
+	var hitlist := GetObjProperty (corpse, "#hitlist");
+	var thelog := array {};
+	var prop := struct {};
+	prop.+pname := "Attacker:";
+	prop.+pvalue := "";
+	foreach plrserial in hitlist
+		var plr := SystemFindObjectBySerial (plrserial, SYSFIND_SEARCH_OFFLINE_MOBILES);
+		if (plr)
+			prop.pvalue := plr.name + " (" + plr.acctname + ")";
+			thelog.append (prop);
+		endif
+	endforeach
+	
+	var elemkey := corpse.desc + "(owner is " + master.name + ", acctname " + master.acctname + ")";
+	AppendConfigFileElem (":drocket:henchmandeathlog", "HENCHMAN DEATH:", elemkey, thelog );
+	UnloadConfigFile (":drocket:henchmandeathlog");	
+endfunction

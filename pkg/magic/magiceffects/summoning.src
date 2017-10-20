@@ -1,0 +1,99 @@
+use os;
+use uo;
+
+include "include/client";
+include "include/objtype";
+include "include/spawn";
+include "include/magic";
+include "../pkg/npcs/npc_util";
+
+program summon_creature (parms)
+	var caster := parms[1];
+	var npctemplate := parms[2];
+	var cast_loc := parms[3];
+	var duration := parms[4];
+	var controllable := parms[5];
+	var npc_name := parms[6];
+	var npc_color := parms[7];
+	var savedprop := parms[8];
+
+	var thecritter;
+	var IsMob := 0;
+	var magery := GetAttribute (caster, ATTRIBUTEID_MAGERY);
+
+	var npc_parms := struct;
+	if (npc_name)
+		npc_parms.+name := npc_name;
+	endif
+	if (npc_color)
+		npc_parms.+color := npc_color;
+	endif
+
+	if (!caster.npctemplate and controllable)
+		npc_parms.+script := "::tamed";
+	else
+		IsMob := 1;
+	endif
+
+	var realtemplate := FindPackage (npctemplate);
+	if (!realtemplate)
+		Syslog ("Error finding NPC template - " + npctemplate);
+		return "error";
+	endif
+
+	thecritter := CreateNPCfromTemplate (realtemplate, cast_loc.x, cast_loc.y, cast_loc.z, npc_parms, cast_loc.realm);
+	if (!thecritter)
+		Syslog ("Error summoning NPC - " + thecritter);
+		return;
+	endif
+
+	SetObjProperty (thecritter, "summoned",1);
+	EraseObjProperty (thecritter, "looter");
+	if (!IsMob)
+		SetObjProperty( thecritter , "master" , caster.serial );
+		SetObjProperty( thecritter , "script" , thecritter.script );
+   		thecritter.setmaster( caster );
+		thecritter.script := "::ai/tamed";
+		RestartScript(thecritter);
+		
+		if (savedprop)
+			SetObjProperty (caster, savedprop, thecritter.serial);
+		endif
+	endif
+
+	SetAttributeBaseValue (thecritter, ATTRIBUTEID_MAGICRESISTANCE, magery*10);
+	PlaySoundEffect (caster, SFX_SPELL_SUMMON_ELEMENTAL);
+
+	//neat animation effects for summoned elementals
+	case (thecritter.npctemplate)
+		"fireelemental":
+		"airelemental":
+		"earthelemental":
+		"waterelemental":
+			thecritter.frozen := 1;
+			performAction (thecritter, 12);
+	endcase
+	sleep(3);
+	thecritter.frozen := 0;
+
+	var ev := struct;
+	ev.+type := EVID_ENGAGED;
+	ev.+source := 0;
+
+	if (IsMob or !controllable)
+		foreach critter in ListMobilesInLineOfSight (thecritter, 5)
+			if ((!critter.npctemplate) or (critter.script["tamed"]))
+				ev.source := critter;
+				SendEvent(thecritter, ev);
+			endif
+		endforeach
+	endif
+
+	sleep(duration);
+
+	if (thecritter)
+		PlaySoundEffect( thecritter , SFX_SPELL_MANA_VAMPIRE );
+		PlayStationaryEffect( thecritter.x, thecritter.y, thecritter.z, FX_SMOKE, 0xA, 0xA, 0, thecritter.realm );
+		KillNPC (thecritter);
+	endif
+endprogram

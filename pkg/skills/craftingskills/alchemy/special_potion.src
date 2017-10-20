@@ -1,0 +1,60 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+include "include/client";
+include "include/wodinc";
+include "include/poison";
+include "include/objtype";
+include "include/effects";
+include "include/attributes";
+include "../pkg/skills/craftingskills/alchemy/alchemy";
+
+program special_potion (character, potion)
+	if (!potion.movable or !ReserveItem (potion))
+		SendSysMessage (character, "You can't use that potion!");
+		return;
+	endif
+
+	PlaySoundEffect (character, SFX_DRINK);
+	CreateItemInContainer (potion.container, UOBJ_EMPTY_BOTTLE, 1);
+	SubtractAmount (potion, 1);
+	
+	sleep (5);
+	PrintTextAbove (character, "*Doesn't feel well*");
+	sleep (5);
+	PrintTextAbove (character, "*Doesn't look well*");
+	sleep (5);
+	PlaySoundEffect (character, 0x208);
+	PlayObjectCenteredEffect( character, 0x36b0, 10, 10);
+	
+	var selected_graphic := 0x32;
+	var selected_num := RandomInt (17);
+	case (selected_num)
+		0:	selected_graphic := 0x32;
+		1:	selected_graphic := 0x4c;
+		2:	selected_graphic := 0xa;
+		3:	selected_graphic := 0x3b;
+		4:	selected_graphic := 0xd;
+		5:	selected_graphic := 0xe;
+		6:	selected_graphic := 0xf;
+		7:	selected_graphic := 0x10;
+		8:	selected_graphic := 0x2;
+		9:	selected_graphic := 0x4;
+		10:	selected_graphic := 0x50;
+		11:	selected_graphic := 0x1f;
+		12:	selected_graphic := 0x21;
+		13:	selected_graphic := 0x1;
+		14:	selected_graphic := 0x45;
+		15:	selected_graphic := 0x36;
+		16:	selected_graphic := 0x3;
+	endcase
+	DoPersistedMod (character, "graphic", selected_graphic, (character.gender+400), 600, "Strange potion effect");
+	DoPersistedMod (character, "color", 0, character.truecolor, 600, "Strange potion effect");
+	PlayObjectCenteredEffect( character, 0x36b0, 10, 10);
+endprogram
+
+
+
+

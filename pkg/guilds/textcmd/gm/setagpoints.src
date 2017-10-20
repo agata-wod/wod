@@ -1,0 +1,21 @@
+use uo;
+use os;
+
+include "../pkg/guilds/guilds";
+
+program check_quest_status (character, text)
+	var player := Target (character);
+	var players_guild := GetObjProperty (player, "players_guild");
+	if (!players_guild)
+		SendSysMessage (character, "That's not a member of any guild.");
+		return;
+	endif
+	var newpg := array {};
+	newpg.append (players_guild[1]);
+	newpg.append (players_guild[2]);
+	newpg.append (players_guild[3]);
+	newpg.append (0);
+	SetObjProperty (player, "players_guild", newpg);
+	AddGuildRankingPoints (player, CINT (text), "");
+endprogram
+

@@ -1,0 +1,35 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 7;
+
+program mass_dispel ( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_loc := GetSpellCastOn (caster, parms);
+	if (!cast_loc)
+		return 0;
+	endif
+
+	var resist_difficulty := caster_magery + 20;
+	var range := CINT (caster_magery/15);
+
+	foreach mobile in ListMobilesNearLocation (cast_loc.x, cast_loc.y , cast_loc.z , range, cast_loc.realm)
+		var summoned := GetObjProperty (mobile, "summoned");
+		if (summoned and CheckLosAt (mobile, cast_loc.x , cast_loc.y, cast_loc.z) )
+			PlaySoundEffect (mobile, SFX_SPELL_MASS_DISPEL);
+			if (!checkskill (mobile, SKILLID_MAGICRESISTANCE, resist_difficulty, 0) )
+				PlayStationaryEffect (mobile.x, mobile.y, mobile.z, FX_SMOKE, 0xA, 0xA, 0, mobile.realm);
+				KillNPC (mobile);
+			endif
+		endif
+	endforeach
+	return 1;
+endprogram

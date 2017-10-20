@@ -1,0 +1,85 @@
+use uo;
+use os;
+use http;
+
+include "include/client";
+include "include/clock";
+include "include/accounts";
+
+program count_benson_potions ()
+	WriteHTML ("<html><head><title>Gambling Statistics</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+	
+	var month := Lower (QueryParam ("month"));
+	var year := QueryParam ("year");
+	if (!month or !year)
+		WriteHTML ("<form method=GET action=gambling_stats.ecl>");
+		WriteHTML ("Select a month and year to display information for:<p>");
+		WriteHTML ("<select name=\"month\">");
+		WriteHTML ("<option>January</option>");
+		WriteHTML ("<option>February</option>");
+		WriteHTML ("<option>March</option>");
+		WriteHTML ("<option>April</option>");
+		WriteHTML ("<option>May</option>");
+		WriteHTML ("<option>June</option>");
+		WriteHTML ("<option>July</option>");
+		WriteHTML ("<option>August</option>");
+		WriteHTML ("<option>September</option>");
+		WriteHTML ("<option>October</option>");
+		WriteHTML ("<option>November</option>");
+		WriteHTML ("<option>December</option>");
+		WriteHTML ("</select>");
+		WriteHTML ("<select name=\"year\">");
+		WriteHTML ("<option>2004</option>");
+		WriteHTML ("<option>2005</option>");
+		WriteHTML ("<option>2006</option>");
+		WriteHTML ("<option>2011</option>");
+		WriteHTML ("<option>2012</option>");
+		WriteHTML ("<option>2013</option>");
+		WriteHTML ("</select>");
+		WriteHTML ("<input id=submit1 name=submit1 type=submit value=Search>");
+		WriteHTML ("</form>");
+		WriteHTML ("<br><a href=gambling_stats.ecl?month=all&year=all>View complete count</a>");
+	
+		WriteHTML ("</body></html>");
+		return;
+	endif
+
+	var search_string_type;
+	if (month == "all" and year == "all")
+		WriteHTML ("<h3>Total gambling stats</h3>");
+		search_string_type := "_total";
+	else
+		WriteHTML ("<h3>Gambling stats for " + month +  ", " + year + "</h3>");
+		search_string_type := "_" + year + "_" + month;
+	endif
+
+	var jacks_or_better_games := GetGlobalProperty (CSTR ("jacks_or_better_games" + search_string_type));
+	var jacks_or_better_bets := GetGlobalProperty (CSTR ("jacks_or_better_bets" + search_string_type));
+	var jacks_or_better_winnings := GetGlobalProperty (CSTR ("jacks_or_better_winnings" + search_string_type));
+	WriteHTML ("<p><b>Jacks or Better Poker</b>");
+	WriteHTML ("<br>Games: " + jacks_or_better_games);
+	WriteHTML ("<br>Bets: " + jacks_or_better_bets);
+	WriteHTML ("<br>Winnings: " + jacks_or_better_winnings);
+
+	var blackjack_games := GetGlobalProperty (CSTR ("blackjack_games" + search_string_type));
+	var blackjack_bets := GetGlobalProperty (CSTR ("blackjack_bets" + search_string_type));
+	var blackjack_winnings := GetGlobalProperty (CSTR ("blackjack_winnings" + search_string_type));
+	WriteHTML ("<p><b>Blackjack</b>");
+	WriteHTML ("<br>Games: " + blackjack_games);
+	WriteHTML ("<br>Bets: " + blackjack_bets);
+	WriteHTML ("<br>Winnings: " + blackjack_winnings);
+
+	var total_games := jacks_or_better_games + blackjack_games;
+	var total_bets := jacks_or_better_bets + blackjack_bets;
+	var total_winnings := jacks_or_better_winnings + blackjack_winnings;
+	WriteHTML ("<p><b>Total:</b>");
+	WriteHTML ("<br>Games: " + total_games);
+	WriteHTML ("<br>Bets: " + total_bets);
+	WriteHTML ("<br>Winnings: " + total_winnings);
+
+	WriteHTML ("</body></html>");
+endprogram
+
+
+

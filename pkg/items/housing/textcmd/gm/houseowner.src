@@ -1,0 +1,88 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/gumps";
+include "../pkg/items/doors/doors";
+include "../pkg/items/housing/house";
+
+program houseowner (who)
+
+	var boxmenu := CreateMenu ("Select a sign type:");
+	AddMenuItem (boxmenu, 0xbd1, "brass");
+	AddMenuItem (boxmenu, 0xbd2, "brass2");
+	AddMenuItem (boxmenu, 0xbcf, "wooden");
+	AddMenuItem (boxmenu, 0xbd0, "wooden2");
+	var selection := SelectMenuItem2 (who, boxmenu);
+	if (!selection)
+		return;
+	endif
+
+	SendSysMessage (who, "Target the new owner");
+	var owner := Target (who, TGTOPT_NOCHECK_LOS);
+	if (!owner)
+		SendSysMessage (who, "Canceled");
+		return;
+	endif
+
+	var hvalue := SendTextEntryGump (who, "Enter the HOUSEVALUE of this place:", TE_CANCEL_ENABLE, TE_STYLE_NORMAL);
+	var housevalue := CINT (hvalue);
+	if (!housevalue)
+		housevalue := 1;
+	endif
+
+	if (!HouseValueUnderLimit (owner, housevalue));
+		SendSysMessage (who, "This would place the person over their limit!");
+		if (!YesNo(who,"Do it anyway?"))
+			return;
+		endif
+	endif
+
+	var svalue := SendTextEntryGump (who, "Enter the PRICE of this place:", TE_CANCEL_ENABLE, TE_STYLE_NORMAL,
+			10, "Default price: " + GetDefaultHousePrice (housevalue) + " gold");
+	var sellvalue := CINT (svalue);
+	if (!sellvalue)
+		sellvalue := GetDefaultHousePrice (housevalue);
+	endif
+
+	var homeinfo := array{ };
+	homeinfo[1] := owner.serial;	
+
+	SendSysMessage (who, "Target the North-West corner of the house (Up!)");
+	var coords := TargetCoordinates (who);
+	homeinfo[2]:= coords.x;
+	homeinfo[3]:= coords.y;
+
+	SendSysMessage (who, "Target the South-East corner of the house (Down!)");
+	coords := TargetCoordinates (who);
+	homeinfo[4]:= coords.x;
+	homeinfo[5]:= coords.y;
+
+	SendSysMessage (who, "Place it where?");
+	var where := TargetCoordinates (who);
+	if (!where)
+		return;
+	endif
+
+	set_critical (1);
+	var sign := CreateItemAtLocation (where.x, where.y, where.z, 0x17060, 1, where.realm);
+	if (!sign)
+		SendSysMessage (who, "Unable to create a sign there!");
+		return;
+	endif
+	sign.graphic := selection.objtype;
+	SetObjProperty (sign, "originalgraphic", selection[2]);
+	SetObjProperty (sign, "homeinfo", homeinfo);
+	SetObjProperty (sign, "account", owner.acctname );
+	SetObjProperty (sign, "lastownername", who.name );
+	SetObjProperty (sign, "housevalue", housevalue);
+	SetObjProperty (sign, "houseprice", sellvalue);
+	set_critical (0);
+
+	SendSysMessage (who, "Done!");
+
+endprogram

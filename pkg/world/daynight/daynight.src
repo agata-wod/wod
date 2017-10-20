@@ -1,0 +1,101 @@
+use uo;
+use os;
+
+Include "include/clock";
+
+var daylight_brightness := GetGlobalProperty ("daylight_level");
+if (!daylight_brightness)
+	daylight_brightness := 0;
+endif
+
+var nighttime_brightness := GetGlobalProperty ("nighttime_level");
+if (!nighttime_brightness)
+	nighttime_brightness := 20;
+endif
+
+
+program DNCycle ()
+	var hour := GetHour();
+
+	while (1)
+		daylight_brightness := GetGlobalProperty ("daylight_level");
+		if (!daylight_brightness)
+			daylight_brightness := 0;
+		endif
+
+		nighttime_brightness := GetGlobalProperty ("nighttime_level");
+		if (!nighttime_brightness)
+			nighttime_brightness := 20;
+		endif
+
+		hour := GetHour();
+		if ( (hour >= 6) and (hour <= 20) )
+			Broadcast ("It is dawn.");
+			DawnTransition ();
+			SetRegionLightLevel ("Background", daylight_brightness);
+			SetRegionLightLevel ("LostLandsBackground", daylight_brightness);
+			SetRegionLightLevel ("Heartwood", daylight_brightness);
+			SetRegionLightLevel ("Sailto", daylight_brightness);
+			SetRegionLightLevel ("IlshenarBackground", daylight_brightness);
+			SetRegionLightLevel ("MalasBackground", daylight_brightness);
+			SetRegionLightLevel ("TokunoBackground", daylight_brightness);
+			SetRegionLightLevel ("TerMurBackground", daylight_brightness);
+			repeat
+				sleep(60);
+				hour := GetHour ();
+			until ((hour < 6) or (hour > 20));
+		else
+			Broadcast ("It is dusk");
+			DuskTransition ();
+			SetRegionLightLevel ("Background", nighttime_brightness);
+			SetRegionLightLevel ("LostLandsBackground", nighttime_brightness);
+			SetRegionLightLevel ("Heartwood", nighttime_brightness);
+			SetRegionLightLevel ("Sailto", nighttime_brightness);
+			SetRegionLightLevel ("IlshenarBackground", nighttime_brightness);
+			SetRegionLightLevel ("MalasBackground", nighttime_brightness);
+			SetRegionLightLevel ("TokunoBackground", nighttime_brightness);
+			SetRegionLightLevel ("TerMurBackground", nighttime_brightness);
+			repeat
+				sleep (60);
+				hour := GetHour ();
+			until ((hour >= 6) and (hour <= 20));
+		endif
+	endwhile
+
+endprogram
+
+function DuskTransition()
+
+	var lightamt := daylight_brightness;
+	while (lightamt <= nighttime_brightness)
+		SetRegionLightLevel ("Background", lightamt);
+		SetRegionLightLevel ("LostLandsBackground", lightamt);
+		SetRegionLightLevel ("Heartwood", lightamt);
+		SetRegionLightLevel ("Sailto", lightamt);
+		SetRegionLightLevel ("IlshenarBackground", lightamt);
+		SetRegionLightLevel ("MalasBackground", lightamt);
+		SetRegionLightLevel ("TokunoBackground", lightamt);
+		SetRegionLightLevel ("TerMurBackground", lightamt);
+		lightamt := lightamt + 1;
+		sleep (3);
+	endwhile
+
+endfunction
+
+function DawnTransition()
+
+	var lightamt := nighttime_brightness - 1;
+	while (lightamt >= daylight_brightness)
+		SetRegionLightLevel ("Background", lightamt);
+		SetRegionLightLevel ("LostLandsBackground", lightamt);
+		SetRegionLightLevel ("Heartwood", lightamt);
+		SetRegionLightLevel ("Sailto", lightamt);
+		SetRegionLightLevel ("IlshenarBackground", lightamt);
+		SetRegionLightLevel ("MalasBackground", lightamt);
+		SetRegionLightLevel ("TokunoBackground", lightamt);
+		SetRegionLightLevel ("TerMurBackground", lightamt);
+		lightamt := lightamt - 1;
+  		sleep (3);
+	endwhile
+
+endfunction

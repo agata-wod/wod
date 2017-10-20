@@ -1,0 +1,12 @@
+use uo;
+use os;
+
+program bury_treasure (character, text)
+	if (text)
+	endif
+	SendSysMessage (character, "This dot command has been replaced by .bury'");
+	SendSysMessage (character, "Try '.bury help' for information on using the new command. :)");
+	return;
+endprogram
+
+

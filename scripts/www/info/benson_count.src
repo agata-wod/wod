@@ -1,0 +1,94 @@
+use uo;
+use os;
+use http;
+
+include "include/client";
+include "include/clock";
+include "include/accounts";
+
+program count_benson_potions ()
+	WriteHTML ("<html><head><title>Benson Potion & Point Information</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+	
+	var month := Lower (QueryParam ("month"));
+	var year := QueryParam ("year");
+	if (!month or !year)
+		WriteHTML ("<form method=GET action=benson_count.ecl>");
+		WriteHTML ("Select a month and year to display information for:<p>");
+		WriteHTML ("<select name=\"month\">");
+		WriteHTML ("<option>January</option>");
+		WriteHTML ("<option>February</option>");
+		WriteHTML ("<option>March</option>");
+		WriteHTML ("<option>April</option>");
+		WriteHTML ("<option>May</option>");
+		WriteHTML ("<option>June</option>");
+		WriteHTML ("<option>July</option>");
+		WriteHTML ("<option>August</option>");
+		WriteHTML ("<option>September</option>");
+		WriteHTML ("<option>October</option>");
+		WriteHTML ("<option>November</option>");
+		WriteHTML ("<option>December</option>");
+		WriteHTML ("</select>");
+		WriteHTML ("<select name=\"year\">");
+		WriteHTML ("<option>2003</option>");
+		WriteHTML ("<option>2004</option>");
+		WriteHTML ("<option>2011</option>");
+		WriteHTML ("<option>2012</option>");
+		WriteHTML ("<option>2013</option>");
+		WriteHTML ("</select>");
+		WriteHTML ("<input id=submit1 name=submit1 type=submit value=Search>");
+		WriteHTML ("</form>");
+		WriteHTML ("<br><a href=benson_count.ecl?month=all&year=all>View complete count</a>");
+	
+		WriteHTML ("</body></html>");
+		return;
+	endif
+
+	var acctinfodf := OpenDataFile (":character:character_data");
+	if (!acctinfodf)
+		acctinfodf := CreateDataFile (":character:character_data");
+		if (!acctinfodf)
+			Syslog ("Error opening character data file!");
+			WriteHTML ("Unable to open or create data file.");
+			WriteHTML ("</body></html>");
+			return;
+		endif
+	endif
+
+	var potionsearchstring, pointsearchstring;
+	if (month == "all" and year == "all")
+		WriteHTML ("<h3>Total Benson points and potions</h3>");
+		potionsearchstring := "magic_dealer_potions";
+		pointsearchstring := "magic_dealer_points";
+	else
+		WriteHTML ("<h3>Benson points and potions for " + month +  ", " + year + "</h3>");
+		potionsearchstring := "magic_dealer_potions" + year + "_" + month;
+		pointsearchstring := "magic_dealer_points" + year + "_" + month;
+	endif
+
+	var total_points := 0;
+	var total_potions := 0;
+	WriteHTML ("<table><tr><td>&nbsp</td><td>Potions</td><td>Points</td></tr>");
+	foreach acctname in ListAccounts ()
+		var tempentry := acctinfodf.FindElement (acctname);
+		if (!tempentry)
+			acctinfodf.CreateElement (acctname);
+			tempentry := acctinfodf.FindElement (acctname);
+		endif
+		var account_potions := CINT (tempentry.GetProp (potionsearchstring));
+		var account_points := CINT (tempentry.GetProp (pointsearchstring));
+		total_potions := total_potions + account_potions;
+		total_points := total_points + account_points;
+
+		if (account_potions or account_points)
+			WriteHTML ("<tr><td>" + acctname + "</td><td>" + account_potions + " </td><td>" + account_points + "</td></tr>");
+		endif
+	endforeach
+	WriteHTML ("</table>");
+	WriteHTML ("<p>Total points: " + total_points);
+	WriteHTML ("<br>Total potions: " + total_potions);
+	WriteHTML ("</body></html>");
+endprogram
+
+
+

@@ -1,0 +1,69 @@
+///////////////////
+//  This script is called from the POL www page to restart the server
+///////////////////
+
+
+use uo;
+use os;
+include "include/client";
+
+program do_shutdown ()
+	Broadcast ("Restarting the Server in 10 minutes", FONT_NORMAL, 30);
+	sleep (300);
+	if (GetGlobalProperty ("#delayserverrestart"))
+		EraseGlobalProperty ("#delayserverrestart");
+		return;
+	endif
+
+	SetGlobalProperty ("#restartingserver", 1);
+
+	Broadcast ("Restarting the Server in 5 minutes", FONT_NORMAL, 30);
+	sleep (60);
+
+	Broadcast ("Restarting the Server in 4 minutes", FONT_NORMAL, 30);
+	sleep (60);
+
+	Broadcast ("Restarting the Server in 3 minutes", FONT_NORMAL, 30);
+	sleep (60);
+
+	Broadcast ("Restarting the Server in 2 minutes", FONT_NORMAL, 30);
+	sleep (60);
+
+	Broadcast ("Restarting the Server in 1 minute", FONT_NORMAL, 30);
+	sleep (50);
+
+	Broadcast ("Restarting the Server:", FONT_NORMAL, 30);
+	for i := 1 to 10
+		Broadcast (i, FONT_NORMAL, 30);
+		sleep (1);
+	endfor
+
+	syslog ("Saving World State");
+	Broadcast ("Saving World State.");
+	sleep (1);
+	var res := SaveWorldState ();
+
+	if (res)
+		SetGlobalProperty ("#:saver:lastsave", ReadGameClock());
+		sleep (1);
+		Shutdown ();
+	else
+		Broadcast ("Error saving world state!  Oh, the humanity!");
+		syslog ("Error saving world state: " + res);
+		Broadcast ("Shutdown aborted");
+		syslog ("Shutdown aborted");
+	endif
+
+endprogram
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,63 @@
+use uo;
+use os;
+use http;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/string";
+include "include/www";
+
+WriteHTML ("<html><head><title>Search for boats by owner serial number</title></head>");
+WriteHTML ("<body bgcolor=\"#dcdeed\">");
+
+var serialnumber := CINT (QueryParam ("serial"));
+if (!serialnumber)
+	WriteHTML ("Please enter a serial number of a player");
+	WriteHTML ("<form method=GET action=boat_search.ecl>");
+	WriteHTML ("Serial: <input name=serial>");
+	WriteHTML ("<input id=submit1 name=submit1 type=submit value=Search>");
+	WriteHTML ("</body></html>");
+	return;
+endif
+
+var searchpid := GetGlobalProperty ("#searchitempid");
+if (searchpid)
+	if (GetProcess (searchpid))
+		WriteHTML ("There is another search already going on.  Because searching for items by serial number is ");
+		WriteHTML ("very stressing on the server, only one search can be performed at a time. ");
+		WriteHTML ("Try again in a minute.</body></html>");
+		return;
+	endif
+endif
+SetGlobalProperty ("#searchitempid", GetPid());
+
+WriteHTML ("Searching for boats owned by " + serialnumber + "...<br>");
+
+var x, y, found := 0;
+for (x := 6144 ; x > 64 ; x := x  - 128)
+	for( y := 64; y < 4096; y := y + 128 )
+		foreach item in ListObjectsInBox (x-64, y-64, -128, x+64, y+64, +127, REALM_BRITANNIA)
+			//look for holds
+			if (item.objtype == 0xF013)
+				var ownerserial := GetObjProperty (item, "owner");
+				if (!ownerserial)
+					WriteHTML ("Unowned boat at " + item.x + ", " + item.y + ", " + item.realm + "<br>");
+				elseif (ownerserial == serialnumber)
+					WriteHTML ("Found a match at " + item.x + ", " + item.y + ", " + item.realm + "<br>");
+					found := found + 1;
+				endif
+			endif
+		endforeach
+	endfor
+endfor
+
+WriteHTML ("Found " + found + "matches.</body></html>");
+
+
+
+
+
+
+

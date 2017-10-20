@@ -1,0 +1,155 @@
+use uo;
+use os;
+use util;
+use basic;
+use cfgfile;
+
+var reagent_list := array{};
+
+program listregs (character)
+	if (GetObjProperty (character, "#checkreggump"))
+		if (GetProcess (GetObjProperty (character, "#checkreggump")))
+			SendSysmessage (character, "That gump is already open!");
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#checkreggump", GetPid());
+
+	var gump_layout := array{
+		"nodispose",
+		"page 0",
+		"resizepic 0 20 2620 350 470",
+		"text 80 30 1644 0",
+		"gumppic 40 50 2621",
+		"page 1"
+	};
+
+	var gump_data := array{
+	    "Reagents and Resources"
+	};
+
+	LoadReagentList ();
+	var mycrap := dictionary;
+	foreach item in EnumerateItemsInContainer(character.backpack)
+		if ( mycrap.exists(item.objtype) )
+			mycrap[item.objtype] := mycrap[item.objtype] + item.amount;
+		else
+			mycrap[item.objtype] := item.amount;
+		endif
+	endforeach
+	
+	var total_pages := 1;
+	foreach reg in reagent_list
+		if (reg == "break");
+			total_pages := total_pages + 1;
+		endif
+	endforeach
+	
+	var current_y_counter := 70;
+	var current_page_counter := 1;
+	var current_string_counter := 1;
+	
+	foreach reg in reagent_list
+		if (reg == "break")
+			if (current_page_counter > 1)
+				gump_layout.append ("button 20 450 5603 5607 0 " + (current_page_counter-1));
+			endif
+			current_y_counter := 70;
+			current_page_counter := current_page_counter + 1;
+			gump_layout.append ("button 312 450 5601 5605 0 " + current_page_counter);
+			gump_layout.append ("page " + current_page_counter);			
+			if (current_page_counter == total_pages)
+				gump_layout.append ("button 20 450 5603 5607 0 " + (current_page_counter-1));
+			endif
+		else
+			gump_layout.append ("text 40 " + current_y_counter + " 1105 " + current_string_counter);
+			if (mycrap[reg[1]])
+				if (mycrap[reg[1]] > 1)
+					if (reg[3])
+						gump_data.append (mycrap[reg[1]] + " " + reg[3]);
+					else
+						gump_data.append (mycrap[reg[1]] + " " + reg[2]);
+					endif
+				else
+					gump_data.append (mycrap[reg[1]] + " " + reg[2]);
+				endif
+			else
+				gump_data.append ("0 " + reg[2]);
+			endif
+
+			current_y_counter := current_y_counter + 20;
+			current_string_counter := current_string_counter + 1;
+		endif
+	endforeach
+
+	var gump_return := SendDialogGump (character, gump_layout, gump_data);
+	if (gump_return == error)
+		SendSysMessage (character, "Trying closing other gumps first.");
+		EraseObjProperty (character, "#checkreggump");
+		return;
+	endif
+	EraseObjProperty (character, "#checkreggump");
+endprogram
+
+
+
+
+///////////////////
+//  Put into a function to try to make it easy to add new items to the list.
+//  Each line should be either an array: {objtype, singular_name, plural_name}
+// (plural name can be left off if unchanged)
+//  or "break" to insert a page break
+///////////////////
+
+function LoadReagentList ()
+	reagent_list := array {
+		array{0x0F7A, "Black Pearl"},
+		array{0x0F7B, "Blood Moss"},
+		array{0x0F84, "Garlic"},
+		array{0x0F85, "Ginseng"},
+		array{0x0F8D, "Spider Silk"},
+		array{0x0F8C, "Sulphurous Ash"},
+		array{0x0F86, "Mandrake Root"},
+		array{0x0F88, "Nightshade"},
+		"break",
+		array{0x0F79, "Blackmoor"},
+		array{0x0F7C, "Blood Spawn"},
+		array{0x0F7D, "Vial of Blood", "Vials of Blood"},
+		array{0x0F7E, "Bone", "Bones"},
+		array{0x0F7F, "Brimstone"},
+		array{0x0F80, "Daemon Bone"},
+		array{0x0F82, "Dragon's Blood"},
+		array{0x0F83, "Executioner's Cap"},
+		array{0x0F90, "Dead Wood"},
+		array{0x0F8E, "Serpent's Scales"},
+		array{0x0F81, "Fertile Dirt"},
+		array{0x0F8F, "Volcanic Ash"},
+		array{0x0F78, "Batwing"},
+		"break",
+		array{0x1422, "Wax"},
+		array{0x09f1, "Raw Ribs"},
+		array{0x1bd1, "Feathers"},
+		array{0x0F25, "Amber"},
+		array{0x0F13, "Ruby", "Rubies"},
+		array{0x0F11, "Sapphire", "Sapphires"},
+		array{0x1765, "Cloth"},
+		"break",
+		array{0xDC03, "Gr. Heal"},
+  		array{0xDC16, "Gr. Cure"},
+		array{0x0E21, "Bandages"},
+		array{0xDC12, "Gr. Strength"},
+		array{0xDC0D, "Gr. Agility"},
+		array{0xDC06, "Gr. Poison"},
+		array{0xDC17, "Deadly Poison"},
+		array{0xDC07, "Gr. Explosion"},
+		array{0xdc0f, "Gr. Refresh"},
+		array{0xdce6, "Nightsight"},
+		"break",
+		array{0x0F3F, "Arrow", "Arrows"},
+		array{0x16051, "Fire Arrow", "Fire Arrows"},
+		array{0x16052, "Frost Arrow", "Frost Arrows"},
+		array{0x1BFB, "Bolt", "Bolts"},
+		array{0x16053, "Fire Bolt", "Fire Bolts"},
+		array{0x16054, "Frost Bolt", "Frost Bolts"}
+	};
+endfunction

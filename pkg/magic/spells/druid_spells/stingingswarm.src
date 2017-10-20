@@ -1,0 +1,39 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 6;
+
+program stinging_swarm ( parms )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+	var cast_loc := GetSpellCastOn (caster, parms);
+	if (!cast_loc)
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+
+	//set the caster as the script controler and allow them to cast the next spell
+	SetScriptController (caster);
+	EraseObjProperty (caster, "#castingdruidspell");
+	detach ();
+
+	if (!CheckSkill (caster, SKILLID_ANIMALLORE, -1, 0))
+		SendSysMessage (caster, "Your spell fails.");
+		return;
+	endif
+
+	//create a swarm of bees and set the caster as their controller.  This is used in the control
+	//script for the bees so that the caster has responsibility for casting the spell
+	PlaySoundEffect (caster, SFX_SPELL_SUMMON_ELEMENTAL);
+	var swarm := CreateItemAtLocation (cast_loc.x, cast_loc.y, cast_loc.z, 0x091b, 1, cast_loc.realm);
+	SetObjProperty (swarm, "creator", caster.serial);
+	return 1;
+endprogram

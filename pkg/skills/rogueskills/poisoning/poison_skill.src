@@ -1,0 +1,177 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/attributes";
+include "../pkg/character/virtue/virtue";
+
+program do_poisoning (character)
+	if (GetObjProperty (character, "#useskill"))
+		if (GetProcess (GetObjProperty (character, "#useskill")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#useskill", GetPid());
+
+	SendSysMessage( character, "Select a poison potion, or weapon to check." );
+	var the_poison := target(character);
+	if (!the_poison)
+		SendSysmessage(character, "Canceled.");
+		return;
+	endif
+
+	if (!Accessible (character, the_poison))
+		SendSysmessage (character, "You can't reach that!");
+		return;
+	endif
+
+	case (the_poison.objtype)
+		UOBJ_LESSER_POISON_POTION:
+		UOBJ_POISON_POTION:
+		UOBJ_GREATER_POISON_POTION:
+		UOBJ_DEADLY_POISON_POTION:
+			ApplyPoisonToItem (character, the_poison);
+		default:
+			CheckForPoisonOnItem (character, the_poison);
+	endcase
+endprogram
+
+
+
+
+///////////////////
+//  attempts to apply poison to the selected object
+///////////////////
+
+function ApplyPoisonToItem (byref character, byref the_poison)
+	if (!ReserveItem (the_poison))
+		return;
+	endif
+
+	SendSysmessage (character, "Select an object to which to apply this poison");
+	var the_item := target (character);
+	if (!the_item)
+		SendSysmessage (character, "Targetting cancelled.");
+		return;
+	endif
+
+	if (!Accessible (character, the_item))
+		SendSysmessage (character, "You can't reach that!");
+		return;
+	endif
+	
+	var poisonable := 0;
+	if (the_item.isa (POLCLASS_WEAPON))
+		poisonable := 1;
+	else
+		var poison_cfgfile := ReadConfigFile ("poisoning_items");
+		var item_cfgfile_elem := FindConfigElem (poison_cfgfile, cint(the_item.objtype));
+		if (item_cfgfile_elem)
+			poisonable := 1;
+		endif
+	endif
+	
+	if (!poisonable)
+		SendSysmessage (character, "You can't apply poison to that!");
+		return;
+	endif
+   
+	var strength:= PoisonStr (the_poison);
+	if (strength == 0)
+		strength := 1;
+	endif
+
+	var skill := skillreq (strength);
+	AddVirtue (character, -2);
+
+	if (CheckSkill( character, SKILLID_POISONING, skill, 0 ))
+		SetObjProperty (the_item, "poison_level", strength);
+		SendSysmessage (character, "You succeed in poisoning the item.");
+		the_item.hitscript := ":weapons:mainhit";
+	else
+		SendSysmessage (character, "You fail to poison the item."); 
+	endif
+
+	SubtractAmount (the_poison, 1);
+	CreateIteminBackpack (character, UOBJ_EMPTY_BOTTLE, 1);   
+endfunction
+
+
+
+
+///////////////////
+//  figures out the strength of the poison based on the potion type
+///////////////////
+
+function PoisonStr (byref the_poison)
+	case (the_poison.objtype)
+		UOBJ_LESSER_POISON_POTION:
+			return 2;
+		UOBJ_POISON_POTION:
+			return 4;
+		UOBJ_GREATER_POISON_POTION:
+			return 7;
+		UOBJ_DEADLY_POISON_POTION:
+			return 10;
+		default:
+			return 8;
+	endcase
+endfunction
+
+
+
+
+///////////////////
+//  figures out the difficulty to use that kind of poison
+///////////////////
+
+function skillreq (str)
+	case (str)
+		1:
+		2:
+		3:	return 30;
+		4:
+		5:
+		6:	return 55;
+		7:
+		8:	return 75;
+		9:
+		10:	return 95;
+		default:
+			return 90;
+	endcase
+endfunction
+
+
+
+
+///////////////////
+//  determines if an item is poisonous, and its approximate poison level
+///////////////////
+
+function CheckForPoisonOnItem (byref character, byref item)
+	if (!GetObjProperty (item, "poison_level"))
+		SendSysMessage (character, "It doesn't appear to be poisoned.");
+		return;
+	endif
+	
+	var poison_level := CINT (GetObjProperty (item, "poison_level"));
+
+	case (poison_level)
+		1:
+		2:	SendSysMessage (character, "It appears to be slightly poisonous.");
+		3:
+		4:	SendSysMessage (character, "It appears to be somewhat poisonous.");
+		5:
+		6:	SendSysMessage (character, "It appears to be pretty poisonous.");
+		7:
+		8:	SendSysMessage (character, "It appears to be very poisonous.");
+		default:
+			SendSysMessage (character, "It appears to be extremely poisonous.");
+	endcase
+endfunction
+

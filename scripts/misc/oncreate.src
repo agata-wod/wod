@@ -1,0 +1,167 @@
+//
+// oncreate.src: Runs on character creation
+//
+//	Notes:
+//	runs critical (may be changed to just run to completion)
+//	parameters are (character, skillids)
+//		character: character created
+//		skillids: array of skillid integers
+//    
+
+use os;
+use uo;
+use util;
+
+include "include/skills";
+include "../pkg/combat/loot/loot";
+include "../pkg/skills/skillpick";
+
+var starteqp_cfg;
+
+program oncreate (character, skillids)
+	Print ("Character created: " + character.name);
+	CreateStartingEquipment (character, skillids);
+	if (character.race == RACE_HUMAN)
+		character.carrying_capacity_mod := 100;
+	endif
+	SendSysMessage (character, "Set your specializations before you do anything else!", FONT_BOLD, MESSAGE_COLOR_WARNING);
+	SendSysMessage (character, "Type .spec to set your spec's!", FONT_NORMAL, MESSAGE_COLOR_WARNING);
+	
+	//Used by the name checker (once character names are validated, this gets erased and the name
+	//doesn't get checked again)
+	SetObjProperty (character, "newcharacter", 1);
+endprogram
+
+
+
+
+///////////////////
+//  create the character's starting equipment
+///////////////////
+
+function CreateStartingEquipment (character, skillids);
+	case (character.race)
+		RACE_HUMAN: starteqp_cfg := ReadConfigFile ("::starteqp");
+		RACE_ELF:	starteqp_cfg := ReadConfigFile ("::starteqp_elf");
+				var oldclothes := 0;
+				var newclothes := 0;
+				oldclothes := GetEquipmentByLayer (character, 3);
+				newclothes := CreateItemInContainer (character.backpack, 0x317a, 1);
+				newclothes.color := oldclothes.color;
+				newclothes.newbie := 1;
+				DestroyItem (oldclothes);
+				EquipItem (character, newclothes);
+				
+				oldclothes := GetEquipmentByLayer (character, 1);
+				newclothes := CreateItemInContainer (character.backpack, 0x2d2d, 1);
+				newclothes.newbie := 1;
+				DestroyItem (oldclothes);
+				EquipItem (character, newclothes);
+				oldclothes := GetEquipmentByLayer (character, 5);
+				if (character.gender == 1)
+					newclothes := CreateItemInContainer (character.backpack, 0x3176, 1);
+					newclothes.color := oldclothes.color;
+					newclothes.newbie := 1;
+					DestroyItem (oldclothes);
+					EquipItem (character, newclothes);
+
+					oldclothes := GetEquipmentByLayer (character, 23);
+					newclothes := CreateItemInContainer (character.backpack, 0x3179, 1);
+					newclothes.color := oldclothes.color;
+					newclothes.newbie := 1;
+					DestroyItem (oldclothes);
+					EquipItem (character, newclothes);
+
+					newclothes := CreateItemInContainer (character.backpack, 0x3174, 1);
+					newclothes.newbie := 1;
+					EquipItem (character, newclothes);
+				else
+					newclothes := CreateItemInContainer (character.backpack, 0x3175, 1);
+					newclothes.color := oldclothes.color;
+					newclothes.newbie := 1;
+					DestroyItem (oldclothes);
+					EquipItem (character, newclothes);
+					
+					oldclothes := GetEquipmentByLayer (character, 4);
+					newclothes := CreateItemInContainer (character.backpack, 0x3179, 1);
+					newclothes.color := oldclothes.color;
+					newclothes.newbie := 1;
+					DestroyItem (oldclothes);
+					EquipItem (character, newclothes);
+					
+					newclothes := CreateItemInContainer (character.backpack, 0x3173, 1);
+					newclothes.newbie := 1;
+					EquipItem (character, newclothes);				
+				endif				
+		RACE_GARGOYLE: starteqp_cfg := ReadConfigFile ("::starteqp_garg");
+	endcase
+	foreach skillid in skillids
+		var skillname := GetAttributeIDBySkillID (skillid);
+		if (skillname == ATTRIBUTEID_AOSNECROMANCY)
+			var newval := GetAttributeBaseValue (character, ATTRIBUTEID_AOSNECROMANCY) ;
+			SetAttributeBaseValue (character, ATTRIBUTEID_AOSNECROMANCY, 0);
+			if (!GetAttributeBaseValue (character, ATTRIBUTEID_NECROMANCY))
+				skillname := ATTRIBUTEID_NECROMANCY;
+			elseif (!GetAttributeBaseValue (character, ATTRIBUTEID_MAGERY))
+				skillname := ATTRIBUTEID_MAGERY;
+			elseif (!GetAttributeBaseValue (character, ATTRIBUTEID_MEDITATION))
+				skillname := ATTRIBUTEID_MEDITATION;
+			else
+				skillname := ATTRIBUTEID_INSCRIPTION;
+			endif
+			SetAttributeBaseValue (character, skillname, newval);
+		//This is until we implement these two skills
+		elseif (skillname == ATTRIBUTEID_CHIVALRY)
+			var newval := GetAttributeBaseValue (character, ATTRIBUTEID_CHIVALRY) ;
+			SetAttributeBaseValue (character, ATTRIBUTEID_CHIVALRY, 0);
+			if (!GetAttributeBaseValue (character, ATTRIBUTEID_LEADERSHIP))
+				skillname := ATTRIBUTEID_LEADERSHIP;
+			elseif (!GetAttributeBaseValue (character, ATTRIBUTEID_PARRY))
+				skillname := ATTRIBUTEID_PARRY;
+			elseif (!GetAttributeBaseValue (character, ATTRIBUTEID_TACTICS))
+				skillname := ATTRIBUTEID_TACTICS;
+			else
+				skillname := ATTRIBUTEID_HEALING;
+			endif
+			SetAttributeBaseValue (character, skillname, newval);
+		elseif (skillname == ATTRIBUTEID_FOCUS)
+			var newval := GetAttributeBaseValue (character, ATTRIBUTEID_FOCUS) ;
+			SetAttributeBaseValue (character, ATTRIBUTEID_FOCUS, 0);
+			if (!GetAttributeBaseValue (character, ATTRIBUTEID_MEDITATION))
+				skillname := ATTRIBUTEID_MEDITATION;
+			elseif (!GetAttributeBaseValue (character, ATTRIBUTEID_HEALING))
+				skillname := ATTRIBUTEID_HEALING;
+			elseif (!GetAttributeBaseValue (character, ATTRIBUTEID_ANATOMY))
+				skillname := ATTRIBUTEID_ANATOMY;
+			else
+				skillname := ATTRIBUTEID_TACTICS;
+			endif
+			SetAttributeBaseValue (character, skillname, newval);
+		endif
+		CreateFromGroup (character.backpack, skillname);
+	endforeach
+	CreateFromGroup(character.backpack, "all");
+	
+	foreach item in EnumerateItemsInContainer (character.backpack)
+		item.newbie := 1;
+	endforeach
+endfunction
+
+
+
+function CreateFromGroup (container, skillname)
+	var elem := FindConfigElem (starteqp_cfg, skillname);
+	if (!elem)
+		Syslog ("Can't find staring equipment element for " + skillname);
+		return;
+	endif
+
+	foreach str in GetConfigStringArray (elem, "item")
+		MakeSpecifiedLootItem (container, str);
+	endforeach
+
+	foreach str in GetConfigStringArray (elem, "random")
+		MakeItemsOutOfGroup (container, str);
+	endforeach
+endfunction
+

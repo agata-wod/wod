@@ -1,0 +1,88 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 7;
+
+program cast_poly (caster, text)
+	if (text)
+	endif
+	dooldpolycalc (caster);
+	donewpolycalc (caster);
+endprogram
+
+
+function dooldpolycalc (caster)
+	caster_evalint := GetAttribute (caster, ATTRIBUTEID_INVOCATION);
+	caster_magery := GetAttribute (caster, ATTRIBUTEID_MAGERY);
+
+	var Critgroup;
+
+	if (caster_magery < 70)
+		Critgroup := RandomInt(1);
+	elseif (caster_magery < 80)
+		Critgroup := RandomInt(1)+1;
+	elseif (caster_magery < 90)
+		Critgroup := RandomInt(1)+2;
+	else
+		Critgroup := 3;
+	endif
+	
+	var critter := RandomInt(8);
+//	var newcolor := 1401+(critgroup*10)+critter;
+
+	var caster_med := GetAttribute (caster, ATTRIBUTEID_MEDITATION);
+	var caster_animallore := GetAttribute (caster, ATTRIBUTEID_ANIMALLORE);
+	if (caster_animallore > caster_evalint)
+		caster_evalint := caster_animallore;
+	endif
+
+	var caster_spiritspeak:= GetAttribute (caster, ATTRIBUTEID_NECROMANCY);
+	if (caster_spiritspeak > caster_evalint)
+		caster_evalint := caster_spiritspeak;
+	endif
+
+	var mod_amount := (critgroup*3)+critter;
+	if ( (caster_magery + caster_med + caster_evalint) > (80 * 3) ) 
+		mod_amount := mod_amount * 2;
+	endif
+
+	SendSysMessage (caster, "DEBUG - old mod_amount was " + mod_amount);
+
+endfunction
+
+function donewpolycalc (caster)
+	caster_evalint := GetAttribute (caster, ATTRIBUTEID_INVOCATION);
+	caster_magery := GetAttribute (caster, ATTRIBUTEID_MAGERY);
+
+	var Critgroup;
+	if (caster_magery < 70)
+		Critgroup := RandomInt(2);
+	elseif (caster_magery < 85)
+		Critgroup := RandomInt(2)+1;
+	elseif (caster_magery < 95)
+		Critgroup := RandomInt(2)+2;
+	else
+		Critgroup := 3;
+	endif
+
+//	var newcolor := 1401 + (critgroup*10) + RandomInt(8);
+	var caster_med := GetAttribute (caster, ATTRIBUTEID_MEDITATION);
+
+	var mod_amount := (critgroup*3) + RandomInt(4);
+	if (caster_evalint > 90)
+		var new_mod_amount := (critgroup*3) + RandomInt(4);
+		if (new_mod_amount > mod_amount)
+			mod_amount := new_mod_amount;
+		endif
+	endif
+
+	var bonusskillval := caster_magery + caster_med + caster_evalint - 200;
+	if (bonusskillval > 0)
+		bonusskillval := CINT (bonusskillval/10);
+		mod_amount := mod_amount + bonusskillval;
+	endif
+	
+	SendSysMessage (caster, "DEBUG - new mod_amount is " + mod_amount);
+endfunction

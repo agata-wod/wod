@@ -1,0 +1,54 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/gumps";
+include "include/newperformaction";
+
+program point (character)
+	if (character.concealed)
+		SendSysMessage (character, "Are you really sure you want to do that?");
+		SendSysMessage (character, "Players will be able to see.");
+		if (!yesno (character, "Continue?"))
+			return;
+		endif
+	endif
+
+	SendSysMessage (character, "Point at what?");
+	var targetted := TargetCoordinates (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	var targettedesc;
+	if (targetted.mobile)
+		targettedesc := targetted.mobile.name;
+		targetted := targetted.mobile;
+	elseif (targetted.item)
+		targettedesc := targetted.item.desc;
+		targetted := targetted.item;
+	elseif (targetted.desc)
+		targettedesc := targetted.desc;
+	else
+		targetted := CreateItemAtLocation (targetted.x, targetted.y, targetted.z, 0x1706c, 1, targetted.realm);
+		targetted.graphic := 0x206e;
+		targetted.movable := 0;
+		targetted.name := "location marker";
+		SetObjProperty (targetted, "destroyme", 1);
+		targettedesc := "that spot";
+	endif
+
+	NewPerformAction (character, NPA_ANIM_EMOTE, NPA_EMOTE_SALUTE);
+	PrintTextAbove (character, "*points at " + targettedesc + "*", FONT_NORMAL, 55);
+	sleepms (500);
+	if (!targetted.container)
+		PrintTextAbove (targetted, "*" + character.name + " points here*", FONT_NORMAL, 55);
+	endif
+	sleep (2);
+	if (targetted.objtype == 0x1706c)
+		if (GetObjProperty (targetted, "destroyme"))
+			DestroyItem (targetted);
+		endif
+	endif
+endprogram

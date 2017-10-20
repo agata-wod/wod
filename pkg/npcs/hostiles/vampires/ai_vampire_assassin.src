@@ -1,0 +1,114 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/mainloop_killpcs_normal";
+include "../pkg/npcs/main_ai/main/sleepmode_assassin";
+include "../pkg/npcs/main_ai/combat/fightmode_smart";
+include "../pkg/npcs/main_ai/combat/closedistance_default";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/hostiles/vampires/vampires";
+
+const HALT_THRESHOLD := 8; // how close before he attacks?
+drop_anchor();
+
+program KillPlayers()
+	if (!me.backpack)
+		DoOnCreationSetup ();
+	endif
+	DoStartupSetup ();
+	VampireSetup ();
+
+	foreach item in ListEquippedItems (me)
+		if (item != me.backpack)
+			item.newbie := 1;
+		endif
+	endforeach
+
+	if (getobjproperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	post_combat ();
+	main_AI_loop ();
+endprogram
+
+
+
+
+///////////////////
+//  steals some of the opponents HP and adds it to the vampire's own
+///////////////////
+
+function SuckBlood (byref opponent)
+
+	if (Distance (me, opponent) > 3)
+		return 0;
+	endif
+
+	if (GetObjProperty (me, "#nextbreath") and GetObjProperty (me, "#nextbreath") > ReadGameClock())
+		return 0;
+	endif
+
+	SetObjProperty (me, "#nextbreath", ReadGameClock() + 10);
+	PerformAction (me, 0xc3);
+	PlaySoundEffect (me, 0xfc);
+	PlayObjectCenteredEffect (opponent, FX_GLOW_SPIKE, 0x0a, 0x1e);
+	sleep (1);
+
+	var damage_done := RandomInt (vampire_drain) + vampire_drain;
+	var total_hp := GetVital (me, "Life") + damage_done * 100;
+	if (total_hp > GetVitalMaximumValue (me, "Life"))
+		total_hp := GetVitalMaximumValue (me, "Life");
+	endif
+	
+	SetVital (me, "life", total_hp);
+	DoDamageByType (me, opponent, damage_done, DAMAGETYPE_MAGIC);
+	PrintTextAbovePrivate (me, me.name + " drains your health!", opponent);
+	return 1;
+endfunction
+
+
+function process_combat_event (byref ev)
+	SuckBlood (ev.source);
+endfunction
+
+function in_combat_event_loop (byref opponent)
+	SuckBlood (opponent);
+endfunction
+
+function post_combat()
+	DisableCombatEvents();
+	EnableMainEvents();
+
+	SetWarMode( 0 );
+	sleep(1);
+	look_around();
+endfunction
+
+function prepare_for_fight (byref opponent)
+	if (opponent)
+	endif
+	DisableMainEvents();
+	EnableCombatEvents();
+endfunction
+
+function DoPoison (byref you)
+	if (!GetObjProperty(me,"#lastbreath"))
+		SetObjProperty(me,"#lastbreath",ReadGameClock() + 10);
+	endif
+
+	if (GetObjProperty (me, "#lastbreath") > ReadGameClock() )
+		return;
+	endif
+
+	SetObjProperty (me, "#lastbreath", ReadGameClock() + 10);
+
+	if ( (distance (me, you) < 2) and (RandomInt(4) = 1) )
+		var plvl := RandomInt (GetVitalMaximumValue (me, "Life")/2500)+1;
+		SetPoison (you, plvl, "You have been poisoned by " + me.name);
+	endif
+endfunction

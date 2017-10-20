@@ -1,0 +1,17 @@
+use uo;
+use os;
+use guilds;
+
+program removefromguild( me, text )
+	var guild := FindGuild(cint(text));
+	if (guild)
+		var guildname := guild.getprop("name");
+		foreach member in (guild.members)
+			guild.removemember(member);
+			SendSysMessage (me, member.name + " removed from guild " + guildname);
+		endforeach
+	else
+		SendSysMessage (me, "Guild ID not valid");
+	endif
+endprogram
+

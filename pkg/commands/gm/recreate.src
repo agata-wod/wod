@@ -1,0 +1,29 @@
+use os;
+use uo;
+
+include "include/wodinc";
+include "../pkg/npcs/npc_util";
+
+program textcmd_recreate (character)
+	var targetted := Target (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	
+	if (!targetted.npctemplate)
+		SendSysMessage (character, "Invalid target");
+		return;
+	endif
+
+	var npctemplate := targetted.npctemplate;
+	var newNPC := CreateNPCFromTemplate (npctemplate, targetted.x, targetted.y, targetted.z, 0, targetted.realm);
+	if (!newNPC)
+		SendSysMessage (character, "Unable to recreate NPC");
+		return;
+	endif
+	
+	newNPC.color := targetted.color;
+	newNPC.name := targetted.name;
+	KillNPC (targetted);
+endprogram

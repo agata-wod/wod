@@ -1,0 +1,2 @@
+.count allows you to see how many toplevel and total items are in a container.  There is a 125 toplevel item limit on all containers.
+

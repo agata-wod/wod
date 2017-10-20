@@ -1,0 +1,252 @@
+use uo;
+use os;
+
+include "include/gumps";
+include "include/itemtypes";
+
+var gump_layout := array {
+	"page 0",    
+	"nodispose", 
+	"resizepic 40 40 5054 300 400",
+	"button 60 50 5603 5607 1 0 98",
+	"text 100 50 62 0",
+	"button 300 50 5601 5605 1 0 99",
+	"htmlgump 52 79 276 248 1 1 1",
+
+	"button 72 345 2103 2104 1 0 1",
+	"text 90 340 0 2",
+	"button 72 365 2103 2104 1 0 2",
+	"text 90 360 0 3",
+	"button 72 385 2103 2104 1 0 3",
+	"text 90 380 0 4",
+	"button 72 405 2103 2104 1 0 4",
+	"text 90 400 0 5"
+};
+
+var gump_data := array {
+	"Keywords",
+	"keyword_replies",
+	"Add New Keyword",
+	"Edit This Keyword",
+	"Delete This Keyword",
+	"Assign Script to NPC"
+};
+
+var keyword_dict;
+var current_keyword;
+var dict_keys;
+
+program use_questitem (player, scriptbook)
+	var done := 0;
+	var current_page := 1;
+
+	repeat
+		keyword_dict := GetObjProperty (scriptbook, "keywords");
+		if (!keyword_dict)
+			keyword_dict := dictionary;
+		endif
+		
+		dict_keys := keyword_dict.keys ();
+		if (!len (dict_keys))
+			current_page := 0;
+			current_keyword := "";
+			gump_data[1] := "Keywords, Page 0/0";
+		elseif (current_page > len (dict_keys))
+			current_page := len (dict_keys);
+			current_keyword := dict_keys[current_page];
+			gump_data[1] := "Keywords, Page " + current_page + "/" + len (dict_keys);
+		elseif (current_page == 0)
+			current_page := 1;
+			current_keyword := dict_keys[current_page];
+			gump_data[1] := "Keywords, Page 1/" + len (dict_keys);
+		else
+			current_keyword := dict_keys[current_page];
+			gump_data[1] := "Keywords, Page " + current_page + "/" + len (dict_keys);
+		endif
+
+		if (current_keyword)
+			var tempstring := "<b>" + current_keyword + "</b>";
+			var speech_lines := keyword_dict[current_keyword];
+			foreach line in speech_lines
+				tempstring := tempstring + "<br>" + line;
+			endforeach
+			
+			gump_data[2] := tempstring;
+		else
+			gump_data[2] := "Blank";
+		endif
+
+		var gump_return := SendDialogGump (player, gump_layout, gump_data);
+		if (!gump_return[0])
+			done := 1;
+		endif
+		
+		case (gump_return[0])
+			0:
+				done := 1;
+			1:
+				AddNewKeyword (player, scriptbook);
+			2:
+				EditNewKeyword (player, scriptbook);
+			3:
+				keyword_dict.erase (dict_keys[current_page]);
+				SetObjProperty (scriptbook, "keywords", keyword_dict);
+			4:
+				AssignScriptToNPC (player);
+				done := 1;
+			98:
+				current_page := current_page - 1;
+				if (current_page <= 0)
+					current_page := len (dict_keys);
+				endif
+			
+			99:
+				current_page := current_page + 1;
+				if (current_page > len (dict_keys))
+					current_page := 1;
+				endif
+			default:
+				SendSysMessage (player, "Uh-oh.  This isn't supposed to happen!");
+				return;
+		endcase;
+
+
+	until (done or !player);
+	return;
+endprogram
+
+
+
+
+///////////////////
+//  Add a new keyword to the script
+///////////////////
+
+function AddNewKeyword (player, scriptbook)
+	var newkeyword := SendTextEntryGump (player, "Enter the new keyword", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 20, "");
+	if (!newkeyword)
+		SendSysMessage (player, "Canceled.");
+		return;
+	endif
+	
+	newkeyword := Lower (newkeyword);
+	
+	if (newkeyword in dict_keys)
+		SendSysMessage (player, "That keyword is already in use.");
+		return;
+	endif
+
+	var done := 0;
+	var speech_lines := array {};
+	repeat
+		var thisline := SendTextEntryGump (player, "Enter the new reply", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 80, "(Line " + (len (speech_lines) + 1) +")");
+		if (!thisline)
+			done := 1;
+		else
+			speech_lines.append (thisline);
+		endif
+	until (done or !player);
+
+	if (!len (speech_lines))
+		SendSysMessage (player, "No speech. Finished.");
+		return;
+	endif
+	keyword_dict[newkeyword] := speech_lines;
+	SetObjProperty (scriptbook, "keywords", keyword_dict);
+endfunction
+
+
+
+
+///////////////////
+//  Add a new keyword to the script
+///////////////////
+
+function EditNewKeyword (player, scriptbook)
+	var done := 0;
+	var speech_lines := array {};
+	repeat
+		var thisline := SendTextEntryGump (player, "Enter the new reply", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 80, "(Line " + (len (speech_lines) + 1) +")");
+		if (!thisline)
+			done := 1;
+		else
+			speech_lines.append (thisline);
+		endif
+	until (done or !player);
+
+	if (!len (speech_lines))
+		SendSysMessage (player, "No speech: edit canceled.");
+		return;
+	endif
+	keyword_dict[current_keyword] := speech_lines;
+	SetObjProperty (scriptbook, "keywords", keyword_dict);
+endfunction
+
+
+
+
+///////////////////
+//  Add a new keyword to the script
+///////////////////
+
+function AssignScriptToNPC (player)
+	if (!keyword_dict or !len (dict_keys))
+		SendSysMessage (player, "Error: Script is blank.");
+		SendSysMessage (player, "use .nukekeywords to remove script from NPC.");
+		return;
+	endif
+
+	SendSysMessage (player, "Select the NPC to assign script to:");
+	var selected_npc := Target (player);
+	if (!selected_npc)
+		SendSysMessage (player, "Canceled.");
+		return;
+	endif
+	
+	if (!selected_npc.npctemplate)
+		SendSysMessage (player, "That's not an NPC!");
+		return;
+	endif
+	
+	case (selected_npc.script)
+		"merchant":
+		":merchant:merchant":
+		"townguard":
+		":guards:townguard":
+			SendSysMessage (player, "Ok");
+		default:
+			SendSysMessage (player, "Warning: That NPC script may not be able to handle the script");
+			if (!YesNo (player, "Continue?"))
+				SendSysMessage (player, "Canceled.");
+				return;
+			endif
+	endcase;
+	
+	if (GetObjProperty (selected_npc, "keywords"))
+		SendSysMessage (player, "Warning: That NPC already has a script set.");
+		if (!YesNo (player, "Overwrite?"))
+			SendSysMessage (player, "Canceled.");
+			return;
+		endif
+	endif
+
+	SetObjProperty (selected_npc, "keywords", keyword_dict);
+	if ("quest" in dict_keys)
+		SetObjProperty (selected_npc, "override_quest", 1);
+	else
+		EraseObjProperty (selected_npc, "override_quest");
+	endif
+	
+	
+	return;
+endfunction
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,192 @@
+use uo;
+use os;
+use util;
+use attributes;
+
+include "include/client";
+include "include/crafting";
+include "include/objtype";
+
+Const	WAX_PER_CANDLE		:= 5;
+
+program make_candles (character, item)
+
+	//make sure the item is reachable
+	if (!Accessible (character, item) )
+		SendSysMessage (character, "You can't reach that!");
+		return;
+	endif
+
+	//make sure the item isn't locked down
+	if (!item.movable)
+		SendSysMessage (character, "You can't use that.");
+		return;
+	endif
+
+	//make sure the item can be reserved
+	if (!ReserveItem (item) )
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+
+	SendSysMessage (character, "What do you want to use that on?");
+	var targetted := Target (character);
+
+	//and all the checks again
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	if (!Accessible (character, targetted) )
+		SendSysMessage (character, "You can't reach that!");
+		return;
+	endif
+	if (!targetted.movable)
+		SendSysMessage (character, "You can't use that.");
+		return;
+	endif
+	if (!ReserveItem (targetted) )
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+
+	//Now decide what to do based on what was selected
+	if (item.objtype == UOBJ_WAX and targetted.objtype == UOBJ_EMPTY_KETTLE)
+		MakeKettleOfWax (character, item, targetted);
+	elseif (item.objtype == UOBJ_DIPPING_STICK and targetted.objtype == UOBJ_KETTLE_OF_WAX)
+		MakeCandles (character, item, targetted);
+	elseif (item.objtype == UOBJ_HEAD and targetted.objtype == UOBJ_EMPTY_KETTLE)
+		MakeSkullOutOfHead (character, item, targetted);
+	elseif (item.objtype == UOBJ_SKULL)
+		MakeSkullCandle (character, item, targetted);
+	else
+		SendSysMessage (character, "You don't know how to use those items together.");
+	endif
+
+endprogram
+
+
+
+
+///////////////////
+//  called when the originally selected item was wax
+///////////////////
+
+function MakeKettleOfWax (character, wax, empty_kettle)
+
+	if (wax.amount < WAX_PER_CANDLE)
+		SendSysMessage (character, "You don't have enough wax to make anything.");
+		return;
+	endif
+
+	PlaySoundEffect (character, 0x0022);
+	sleep (1);
+
+	if (!CheckSkill (character, SKILLID_TINKERING, -1, 0) )
+		SendSysMessage (character, "You ruin some of the wax!");
+		var wax_destroyed := RandomInt (WAX_PER_CANDLE) + 1;
+		SubtractAmount (wax, wax_destroyed);
+		return;
+	endif
+
+	SendSysMessage (character, "You place the pot of wax in your backpack.");
+	SubtractAmount (wax, WAX_PER_CANDLE);
+	DestroyItem (empty_kettle);
+	CreateItemInContainer (FindCraftingBag (character), 0x142a, 1);
+	return;
+endfunction
+
+
+
+
+///////////////////
+//  called if the originally selected item was a dipper
+///////////////////
+
+function MakeCandles (character, dipper, kettle_of_wax)
+
+	PlaySoundEffect (character, 0x023f);
+	sleep (1);
+
+	if (!CheckSkill (character, SKILLID_TINKERING, -1, 0) )
+		SendSysMessage (character, "You fail to make any candles.");
+		SubtractAmount (dipper, 1);
+		SubtractAmount (kettle_of_wax, 1);
+		var kettle := CreateItemInContainer (FindCraftingBag (character), 0x09ed, 1);
+		kettle.movable := 1;
+		return;
+	endif
+
+	SendSysMessage (character, "You place the candles in your backpack.");
+	SubtractAmount (dipper, 1);
+	SubtractAmount (kettle_of_wax, 1);
+	CreateItemInContainer (FindCraftingBag (character), 0x142f, 1);
+	CreateItemInContainer (FindCraftingBag (character), 0x1433, 1);
+	CreateItemInContainer (FindCraftingBag (character), 0x1437, 1);
+
+	var kettle := CreateItemInContainer (FindCraftingBag (character), 0x09ed, 1);
+	kettle.movable := 1;
+
+	return;
+endfunction
+
+
+
+
+///////////////////
+//  called when the originally selected item was a head
+///////////////////
+
+function MakeSkullOutOfHead (character, head, kettle)
+
+	PlaySoundEffect (character, 0x0021);
+	sleep (2);
+
+	if (!CheckSkill (character, SKILLID_TINKERING, -1, 0) )
+		SendSysMessage (character, "You destroy the head.");
+		SubtractAmount (head, 1);
+		if (kettle)
+		endif
+		return;
+	endif
+
+	SendSysMessage (character, "You place the skull in your backpack.");
+	SubtractAmount (head, 1);
+	CreateItemInContainer (FindCraftingBag (character), 0x1ae2, 1);
+
+	return;
+endfunction
+
+
+
+///////////////////
+//  called when the originally selected item was a skull
+///////////////////
+
+function MakeSkullCandle (character, skull, targetted)
+
+	if (targetted.objtype != 0x142f and targetted.objtype != 0x1433 and targetted.objtype != 0x1437)
+		SendSysMessage (character, "You don't know how to use those items together!");
+		return;
+	endif
+
+	PlaySoundEffect (character, 0x0248);
+	sleep (1);
+	PlaySoundEffect (character, 0x022c);
+
+	if (!CheckSkill (character, SKILLID_TINKERING, -1, 0) )
+		SendSysMessage (character, "You fail to place the candle in the skull.");
+		SubtractAmount (skull, 1);
+		SubtractAmount (targetted, 1);
+		return;
+	endif
+
+	SendSysMessage (character, "You put the candle in the skull.");
+	SubtractAmount (skull, 1);
+	SubtractAmount (targetted, 1);
+	CreateItemInContainer (FindCraftingBag (character), 0x1853, 1);
+
+	return;
+endfunction
+
+

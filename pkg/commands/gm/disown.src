@@ -1,0 +1,52 @@
+use uo;
+use os;
+
+include "include/utility";
+
+program disown_stuff (character)
+
+	var targetted := Target (character);
+	EraseObjProperty (targetted, "ownerserial");
+	EraseObjProperty (targetted, "ownername");
+
+	if ( GetObjProperty (targetted, "oldname") )
+		targetted.name:=GetObjProperty (targetted, "oldname");
+	else
+		If (!GetObjProperty(targetted, "noname"))
+			var tname := "";
+			foreach word in splitwords(targetted.name);
+				if ((word != "(*)") and (word != "Lisel's"))
+					tname := tname + " " + word;
+				endif
+			endforeach
+			targetted.name := tname;
+		else
+			targetted.name := "";
+		endif
+		EraseObjProperty (targetted, "oldname");
+	endif
+
+	foreach item in EnumerateItemsInContainer (targetted)
+
+		EraseObjProperty (item, "ownerserial");
+		EraseObjProperty (item, "ownername");
+
+		if ( GetObjProperty (item, "oldname") )
+			item.name:=GetObjProperty (item, "oldname");
+		else
+			If (!GetObjProperty(item, "noname"))
+				var tname := "";
+				foreach word in splitwords(item.name);
+					if ((word != "(*)") and (word != "Lisel's"))
+						tname := tname + " " + word;
+					endif
+				endforeach
+				item.name := tname;
+			else
+				item.name := "";
+			endif
+		endif
+		EraseObjProperty (item, "oldname");
+	endforeach
+
+endprogram

@@ -1,0 +1,409 @@
+///////////////////
+//  Called when a player says 'quest' to a townguard.  
+//
+//  The property set on the player is "CurrentQuest", and is an array as follows:
+//	[1] - quest type
+//	[2] - time the quest was given
+//	[3] - serial number of the npc that gave the quest
+//	[4] - serial number of the npc to deliver an item to to finish the quest
+//	[5] - serial number of the quest NPC and/or item that needs to be returned
+//	[6] - special descriptive text that the quest may need
+//
+///////////////////
+
+
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/eventid";
+include "include/spawn";
+include "include/locations";
+include "include/gumps";
+include "include/string";
+include "../pkg/npcs/npcinfo";
+include "../pkg/npcs/npc_util";
+include "../pkg/combat/loot/loot";
+include "../pkg/character/virtue/virtue";
+
+Const GUARD_QUEST_ERASE_TIMER		:= 1800;
+Const QUESTTYPE_BASIC_HUNT		:= 1;
+
+program guard_quest (parms)
+	var guard := parms [1];
+	var player := parms [2];
+
+	//if there's a 3rd parameter, that's the package that got delivered, so pay for it
+	if (parms[3])
+		PayForItemDelivery (guard, player, parms[3]);
+		return;
+	endif
+
+	if (GetObjProperty (player, "#guardquestthing"))
+		if (GetProcess (GetObjProperty (player, "#guardquestthing")))
+			return;
+		endif
+	endif
+	SetObjProperty (player, "#guardquestthing", GetPid ());
+	
+	if (GetObjProperty (player, "CurrentQuest"))
+		if (CurrentlyDoingAQuest (player, guard))
+			EraseObjProperty (player, "#guardquestthing");
+			return;
+		endif
+	endif
+
+	var questtimer := GetObjProperty (guard, "#questtimer");
+	if (!questtimer)
+		questtimer := 0;
+	endif
+	if (questtimer + GUARD_QUEST_ERASE_TIMER > ReadGameClock())
+		PrintTextAbovePrivate(guard, "Everything seems peaceful around here right now, virtues be praised.", player);
+		EraseObjProperty (player, "#guardquestthing");
+		return;
+	endif
+
+	SetObjProperty (guard, "#questtimer", ReadGameClock());
+	var chosenregion;
+	set_critical (1);
+		chosenregion := GetGlobalProperty ("#townguardregioncounter");
+		if (!chosenregion)
+			chosenregion := 1;
+		elseif (chosenregion > 27)
+			chosenregion := 1;
+		endif
+		SetGlobalProperty ("#townguardregioncounter", chosenregion + 1);
+	set_critical (0);
+	var regioncfg := ReadConfigFile ("townguard_quest_regions");
+	var elem := FindConfigElem (regioncfg, chosenregion);
+	if (!elem)
+		PrintTextAbovePrivate(guard, "Don't really need any help right now.  Everything seems pretty calm.", player);
+		EraseObjProperty (player, "#guardquestthing");
+		return;
+	endif
+	
+	var randomnpcelem := FindConfigElem (regioncfg, "RandomNPCTypes");
+	var npctypes := GetConfigStringArray (randomnpcelem, "npc");
+	var npctemplate := npctypes [RandomInt (37)+1];
+	var thenpc := SpawnTheNPC (elem, npctemplate);
+	thenpc.frozen := 1;
+	thenpc.hidden := 1;
+	SetObjProperty (thenpc, "#specialhidden_nodamage", 1);
+	
+	if (!thenpc)
+		PrintTextAbovePrivate(guard, "I heard about some trouble, but I think its been taken care of.", player);
+		EraseObjProperty (player, "#guardquestthing");
+		return;
+	endif
+	
+	sleepms (250);
+	PrintTextAbovePrivate (guard, thenpc.name + " has been causing some problems " + elem.name + ".", player);
+	sleep (1);
+	PrintTextAbovePrivate(guard, "If you're going that way, would you mind taking care of that for me?", player);
+
+	if (!YesNo (player,"Accept?") )
+		PrintTextAbovePrivate (guard, "Ok.  Maybe next time.", player);
+		EraseObjProperty (thenpc, "#specialhidden_nodamage");
+		KillNPC (thenpc);
+		EraseObjProperty (player, "#guardquestthing");
+		return;
+	endif
+
+	SetObjProperty (thenpc, "deliverto", guard.serial);
+	SetObjProperty (thenpc, "delivertoname", guard.name);
+	thenpc.frozen := 0;
+	thenpc.hidden := 0;
+	thenpc.cmdlevel := 0;
+	thenpc.concealed := 0;
+	EraseObjProperty (thenpc, "#specialhidden_nodamage");
+
+	PrintTextAbovePrivate (guard, "Bring back the head and I'll reward you for it.", player);
+	var currentquest := array;
+	currentquest [1] := QUESTTYPE_BASIC_HUNT;
+	currentquest [2] := ReadGameClock();
+	currentquest [3] := guard.serial;
+	currentquest [4] := guard.serial;
+	currentquest [5] := thenpc.serial;
+	currentquest [6] := elem.name;
+	SetObjProperty (player, "CurrentQuest", currentquest);
+	EraseObjProperty (player, "#guardquestthing");
+endprogram
+
+
+
+
+///////////////////
+//  Tries to spawn the quest NPC
+///////////////////
+
+function SpawnTheNPC (byref elem, npctemplate)
+	var coords := splitwords(elem.region);
+	var x1 := CINT (coords[1]);
+	var x2 := CINT (coords[2]);
+	var y1 := CINT (coords[3]);
+	var y2 := CINT (coords[4]);
+	var rlm := elem.realm;
+	if(!rlm)
+		rlm := _DEFAULT_REALM;
+	endif
+	var tries, x, y, thenpc := 0;
+	repeat
+		x := RandomInt (x2-x1)+x1;
+		y := RandomInt (y2-y1)+y1;
+		if (CheckAreaIfSpawnable (x, y, rlm) )
+			thenpc := SpawnNPCAtLocation (npctemplate, x, y, "guess", 0, rlm);
+		endif
+	until (thenpc or tries > 50);	
+	if (thenpc)
+		return thenpc;
+	endif
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Checks around the area to see if the position is inside of a house or if there's a player around
+///////////////////
+
+function CheckAreaIfSpawnable (x, y, rlm, startz := -120)
+	var sh := GetStandingHeight (x, y, startz, rlm);
+	if (sh.multi or sh.multi.serial)
+		return 0;
+	endif
+
+	if (FindHouseSignAtLocation (x, y, rlm))
+		return 0;
+	endif
+	
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  Checks to see if the player is already doing a quest
+///////////////////
+
+function CurrentlyDoingAQuest (player, guard)
+	var currentquest := GetObjProperty (player, "CurrentQuest");
+	if (!currentquest)
+		return 0;
+	endif
+	
+	var thequestitem := SystemFindObjectBySerial (currentquest[5]);
+	if (!thequestitem)
+		return 0;
+	endif
+	
+	var thequestgiver := SystemFindObjectBySerial (currentquest[3]);
+	if (!thequestgiver)
+		return 0;
+	endif
+
+	if (thequestgiver == guard)
+		PrintTextAbovePrivate (guard, "I thought I asked you to kill " + thequestitem.name + ".  Can't find it?", player);
+		sleep (1);
+		PrintTextAbovePrivate (guard, "It should still be " + currentquest[6] + ", I think.", player);
+		if (!YesNo (player, "Give up?") )
+			PrintTextAbovePrivate (guard, "Good show.  I know you'll get him.", player);
+		else
+			PrintTextAbovePrivate (guard, "Well, I have to say I'm rather disappointed in you...", player);
+			EraseObjProperty (player, "CurrentQuest");
+			SetObjProperty (guard, "#questtimer", ReadGameClock());
+		endif
+		return 1;
+	else
+		PrintTextAbovePrivate (guard, "Aren't you doing a quest for " + thequestgiver.name + "?", player);
+		sleep (1);
+		PrintTextAbovePrivate (guard, "Hunting down " + thequestitem.name + " " + currentquest[6] + " or something?", player);
+		return 1;
+	endif
+endfunction
+
+
+
+
+
+///////////////////
+//  called when someone does a quest for the guard
+///////////////////
+
+function PayForItemDelivery (guard, player, thepackage)
+	if (GetObjProperty (thepackage, "deliverto") != guard.serial)
+		PrintTextAbovePrivate (guard, "I didn't ask for that.", player);
+		return;
+	endif
+
+	PrintTextAbovePrivate (guard, "You killed them?  Great!  Now let me see...", player);
+	sleep (1);
+	DestroyItem (thepackage);
+	AddVirtue (player, 3+RandomInt(4));
+	GainStats (player);
+
+	var guardquestsdone := GetObjProperty (player, "TownGuardQuestCounter");
+	if (!guardquestsdone)
+		guardquestsdone := 0;
+	endif
+	guardquestsdone := guardquestsdone + 1;
+	SetObjProperty (player, "TownGuardQuestCounter", guardquestsdone);
+	if (guardquestsdone > 19)
+		guardquestsdone := 19;
+	endif
+	
+	if (RandomInt (20-guardquestsdone))
+		GiveJunkyDefaultReward (guard, player, guardquestsdone);
+		return;
+	endif
+
+	case (RandomInt (8))
+		0:
+			var theitem := MakeMagicItemOutOfGroup (player.backpack, "allweapons", 5+RandomInt (6));
+			if (!theitem)
+				GiveJunkyDefaultReward (guard, player);
+				return;
+			endif
+			PrintTextAbovePrivate (guard, "Here, take this " + TruncateArticle (theitem.desc) + ".", player);
+			EraseObjProperty (player, "TownGuardQuestCounter");
+			return;
+		1:
+			var theitem := MakeMagicItemOutOfGroup (player.backpack, "allarmor", 5+RandomInt (6));
+			if (!theitem)
+				GiveJunkyDefaultReward (guard, player);
+				return;
+			endif
+			PrintTextAbovePrivate (guard, "Here, take this " + TruncateArticle (theitem.desc) + ".", player);
+			EraseObjProperty (player, "TownGuardQuestCounter");
+			return;
+		2:
+			var theitem := MakeMagicItemOutOfGroup (player.backpack, "clothing", 5+RandomInt (6));
+			if (!theitem)
+				GiveJunkyDefaultReward (guard, player);
+				return;
+			endif
+			PrintTextAbovePrivate (guard, "Here, take this " + TruncateArticle (theitem.desc) + ".", player);
+			EraseObjProperty (player, "TownGuardQuestCounter");
+			return;
+		3:
+			var theitem := MakeItemsOutOfGroup (player.backpack, "TreasureMapSpecial 1 100");
+			if (!theitem)
+				GiveJunkyDefaultReward (guard, player);
+				return;
+			endif
+			PrintTextAbovePrivate (guard, "Here, take this " + TruncateArticle (theitem.desc) + ".", player);
+			EraseObjProperty (player, "TownGuardQuestCounter");
+			return;
+		4:
+			var theitem := CreateItemInContainer (player.backpack, UOBJ_BACKPACK, 1);
+			if (!theitem)
+				GiveJunkyDefaultReward (guard, player);
+				return;
+			endif
+			MakeLootInChest (theitem, "guardreward1");
+			EraseObjProperty (player, "TownGuardQuestCounter");
+			PrintTextAbovePrivate (guard, "Take this bag of junk.  Don't know how much its worth, but its all I have...", player);
+		5:
+			var theitem := CreateItemInContainer (player.backpack, UOBJ_BACKPACK, 1);
+			if (!theitem)
+				GiveJunkyDefaultReward (guard, player);
+				return;
+			endif
+			MakeLootInChest (theitem, "guardreward2");
+			EraseObjProperty (player, "TownGuardQuestCounter");
+			PrintTextAbovePrivate (guard, "Take this bag of junk.  Don't know how much its worth, but its all I have...", player);
+		6:
+			var theitem := CreateItemInContainer (player.backpack, UOBJ_BACKPACK, 1);
+			if (!theitem)
+				GiveJunkyDefaultReward (guard, player);
+				return;
+			endif
+			MakeLootInChest (theitem, "guardreward3");
+			EraseObjProperty (player, "TownGuardQuestCounter");
+			PrintTextAbovePrivate (guard, "Take this bag of junk.  Don't know how much its worth, but its all I have...", player);
+		7:
+			var theitem := MakeLockedChest (player.backpack, 100, 10);
+			if (!theitem)
+				GiveJunkyDefaultReward (guard, player);
+				return;
+			endif
+			EraseObjProperty (player, "TownGuardQuestCounter");
+			PrintTextAbovePrivate (guard, "Take this locked chest I found.  Maybe there's something good in it.", player);
+			SetObjProperty (theitem, "nodecay", 1);
+	endcase
+	
+endfunction
+
+
+
+
+
+///////////////////
+//  default junky reward
+///////////////////
+
+function GiveJunkyDefaultReward (guard, player, guardquestsdone := 20)
+	PrintTextAbovePrivate (guard, "I'm afraid I don't have much to give you as a reward.  Sorry...", player);
+	var goldamount := ((RandomInt(guardquestsdone)+2)*50) + RandomInt(100);
+	CreateItemInContainer (player.backpack, UOBJ_GOLD_COIN, goldamount);
+	PlaySoundEffect (player, 0x38);
+	SendSysMessage (player, "You gained " + goldamount + " gold.");
+	return;
+endfunction
+
+
+
+
+
+///////////////////
+//  player can sometimes increase their stats by completing a quest
+///////////////////
+
+
+function GainStats (player)
+	var maxstr := GetObjProperty (player, "maxstr");
+	var maxdex := GetObjProperty (player, "maxdex");
+	var maxint := GetObjProperty (player, "maxint");
+	var unmod_str := CINT (GetAttributeBaseValue (player, "Strength")/10);
+	var unmod_dex := CINT (GetAttributeBaseValue (player, "Dexterity")/10);
+	var unmod_int := CINT (GetAttributeBaseValue (player, "Intelligence")/10);
+
+	if (!maxstr)
+		SendSysMessage (player, "Remember to choose your specializations.");
+	endif
+
+	if (unmod_str < 30 and RandomInt (2) and unmod_str < maxstr)
+		SetAttributeBaseValue (player, "Strength", unmod_str*10 + 10);
+	elseif ( (unmod_str < maxstr) and (RandomInt(2)==1) )
+		if ( (RandomInt(140)+1 ) > unmod_str)
+			SetAttributeBaseValue (player, "Strength", unmod_str*10 + 10);
+			RecalcVitals (player);
+		endif
+	endif
+
+	if (unmod_dex < 30 and RandomInt (2) and unmod_dex < maxdex)
+		SetAttributeBaseValue (player, "Dexterity", unmod_dex*10 + 10);
+	elseif ( (unmod_dex < maxdex) and (RandomInt(2)==1) )
+		if ( (RandomInt(140)+1 ) > unmod_dex)
+			SetAttributeBaseValue (player, "Dexterity", unmod_dex*10 + 10);
+			RecalcVitals (player);
+		endif
+	endif
+
+	if (unmod_int < 30 and RandomInt (2) and unmod_int < maxint)
+		SetAttributeBaseValue (player, "Intelligence", unmod_int*10 + 10);
+	elseif ( (unmod_int < maxint) and (RandomInt(2)==1) )
+		if ( (RandomInt(140)+1 ) > unmod_int)
+			SetAttributeBaseValue (player, "Intelligence", unmod_int*10 + 10);
+			RecalcVitals (player);
+	  	endif
+	endif
+endfunction
+
+
+
+

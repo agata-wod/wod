@@ -1,0 +1,66 @@
+use uo;
+use os;
+
+program mylight (character, text)
+
+	if (text and text == "off")
+		character.setlightlevel (0, 0);
+		return;
+	endif
+
+	if (text and text == "dark")
+		character.setlightlevel (20, 3800);
+		return;
+	endif
+
+	if (text and text["level"])
+		var parms := SplitWords (text);
+		if (len(parms) != 3)
+			SendSysMessage (character, "Invalid setting.  Correct usage is:");
+			SendSysMessage (character, "light level [day or night] [0 to 30]");
+			SendSysMessage (character, "0 is normal daylight.  20 is normal night.");
+			return;
+		endif
+
+		if (parms [2] != "day" and parms[2] != "night")
+			SendSysMessage (character, "Invalid setting.  Correct usage is:");
+			SendSysMessage (character, "light level [day or night] [0 to 30]");
+			SendSysMessage (character, "0 is normal daylight.  20 is normal night.");
+			return;
+		endif
+
+		var lightlevel := CINT (parms[3]);
+		if (!lightlevel and lightlevel != 0)
+			SendSysMessage (character, "Invalid setting.  Correct usage is:");
+			SendSysMessage (character, "light level [day or night] [0 to 30]");
+			SendSysMessage (character, "0 is normal daylight.  20 is normal night.");
+			return;
+		endif
+
+		if (lightlevel < 0 or lightlevel > 30)
+			SendSysMessage (character, "Invalid setting.  Correct usage is:");
+			SendSysMessage (character, "light level [day or night] [0 to 30]");
+			SendSysMessage (character, "0 is normal daylight.  20 is normal night.");
+			return;
+		endif
+
+		if (parms[2] == "day")
+			set_critical (1);
+			SetGlobalProperty ("daylight_level", lightlevel);
+			set_critical (0);
+		else
+			set_critical (1);
+			SetGlobalProperty ("nighttime_level", lightlevel);
+			set_critical (0);
+		endif
+
+		SendSysMessage (character, "Done!");
+		return;
+	endif
+
+	character.setlightlevel (0, 3800);
+
+endprogram;
+
+
+

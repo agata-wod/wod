@@ -1,0 +1,32 @@
+Bulk order deeds:
+
+All properties are set on the bulk order deed on creation.  The key
+property is "required_items":
+
+required_items - array
+required_items[1] - deed creation time
+required_items[2] - Objtype required
+required_items[3] - Quality needed (0 = normal, 1 = quality, 2 = exceptional)
+required_items[4] - ingot objtype
+required_items[5] - Number needed
+required_items[6] - Number fulfilled
+required_items[7] - base gold reward
+required_items[8] - special reward level (1-10), not implemented
+
+required_items[9] - gold reward (if modified, overwrites #7)
+required_items[10] - special reward level (1-10), not implemented (if modified, overwrites #8)
+
+start_time - timestamp of when the deed was created
+
+completed - set when the deed is finished
+
+merchant_serial - serial number of the merchant who handed out the deed
+
+merchant_name - name of the merchant who handed out the quest
+
+merchant_location - Array {x, y, z}, location of the merchant who handed out the quest
+
+player_serial - serial number of the player who originally recieved the deed
+	(not necessarily the one who completed it)
+
+

@@ -1,0 +1,51 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 6;
+
+program cast_explosion( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms);
+	if (!cast_on)
+		return 0;
+	endif
+	
+	var range := 3;
+	if (GetAttribute (caster, ATTRIBUTEID_MAGERY) > 95)
+		range := range + 1;
+	endif
+
+	if (GetAttribute (caster, ATTRIBUTEID_INVOCATION) > 95)
+		range := range + 2;
+	elseif (GetAttribute (caster, ATTRIBUTEID_INVOCATION) > 75)
+		range := range + 1;
+	endif
+
+	var dmg := 0;
+	foreach mobile in ListMobilesNearLocationEx (cast_on.x, cast_on.y, cast_on.z, 3, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, cast_on.realm)
+		if( CheckLosAt (mobile, cast_on.x, cast_on.y, cast_on.z) )
+			if (!mobile.hidden or !GetObjProperty (mobile, "#specialhidden_nodamage"))
+				dmg := Resisted (caster, mobile, CalcSpellDamageByCircle (spell_circle-1));
+				if (caster.acctname)
+					if (mobile.npctemplate)
+						if (!GetObjProperty (mobile, "master"))
+							dmg := CINT (dmg * 1.5 + 1);
+						endif
+					endif
+				endif
+				PlaySoundEffect (mobile, SFX_SPELL_EXPLOSION);
+				PlayObjectCenteredEffect (mobile, FX_EXPLODE_3, 7, 0x10);
+				DoDamageByType (caster, mobile, dmg, DAMAGETYPE_FIRE);
+			endif
+		endif
+    	endforeach
+	return 1;
+endprogram

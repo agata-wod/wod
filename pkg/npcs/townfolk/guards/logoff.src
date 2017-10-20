@@ -1,0 +1,95 @@
+use uo;
+use os;
+use util;
+
+include "include/attributes";
+include "include/utility";
+
+program logoff (character)
+	set_critical (1);
+	if (!CheckForNoLogoutArea (character))
+		clone (character);
+	endif
+endprogram
+
+function clone (byref character)
+	if (character.dead or character.hidden or character.cmdlevel)
+		return;
+	endif
+	
+	var logoffcloneoptions := GetObjProperty (character, "logoff_clone_options");
+	if (!logoffcloneoptions or !logoffcloneoptions[1])
+		return;
+	endif
+
+	if (len (ListHostiles (character, 20)))
+		return;
+	endif
+
+	var props := struct;
+	props.+facing := character.facing;
+	props.+name := character.name;
+	props.+color := character.color;
+	props.+objtype := character.objtype;
+	props.+graphic := character.graphic;
+	props.+gender := character.gender;
+	props.+script := "clone";
+	
+	var npc := CreateNpcFromTemplate ("pcclone", character.x, character.y, character.z, props, character.realm);
+	if (!npc)
+		return;
+	endif
+	
+	SetObjProperty (npc, "guardkill", 1);
+	SetObjProperty (character, "clone", npc.serial);
+	SetObjProperty (npc, "cloneof", character.serial);
+
+	If (GetObjProperty (character, "logoff_clone_options"))
+		SetObjProperty (npc, "logoff_clone_options", GetObjProperty (character, "logoff_clone_options"));
+	endif
+	
+	SetAttributeBaseValue (npc, "Strength", GetAttribute (character, "Strength")*10);
+	SetAttributeBaseValue (npc, "Intelligence", GetAttribute (character, "Intelligence")*10);
+	SetAttributeBaseValue (npc, "Dexterity", GetAttribute (character, "Dexterity")*10);
+	SetVital (npc, "Life", GetVital (character, "Life"));
+	SetVital (npc, "Mana", GetVital (character, "Mana"));
+	SetVital (npc, "Stamina", GetVital (character, "Stamina"));
+
+	if (!character.title_suffix)
+		npc.name := character.name + " the townperson";
+	else
+		npc.name := character.name + character.title_suffix;
+	endif
+	if (character.title_prefix)
+		npc.name := character.title_prefix + " " + npc.name;
+	endif
+
+	var newname := "";
+	foreach word in (splitwords (npc.name))
+		newname := newname + " " + word;
+	endforeach
+	npc.name := newname;
+
+	var it;
+	foreach thing in ListEquippedItems (character)
+		it := CreateItemAtLocation (5288, 1176, 0, thing.objtype, 1, REALM_BRITANNIA);
+		if (it)
+			it.color := thing.color;
+			it.graphic := thing.graphic;
+			it.newbie := 1;
+			if (thing.name)
+				it.name := thing.name;
+			endif
+			if (!EquipItem (npc, it))
+				DestroyItem (it);
+			endif
+		endif
+	endforeach
+
+	foreach attribute in ListSkillAttributes ()
+		SetAttributeBaseValue (npc, attribute, GetAttribute (character, attribute)*10);
+	endforeach
+	SetAttributeBaseValue (npc, ATTRIBUTEID_HIDING, 0);
+endfunction
+
+

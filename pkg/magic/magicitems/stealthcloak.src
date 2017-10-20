@@ -1,0 +1,107 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/eventid";
+
+program equip_chargedspellitem( parms )
+
+	var who := parms[1];
+	var what := parms[2];
+	var time := parms[3];
+
+	repeat
+
+		if (who.warmode)
+			who.hidden := 0;
+			who.stealthsteps := 0;
+			SendEnteredAreaEvent( who );
+			return;
+		else
+			if (!who.dead)
+				if ( (!who.hidden) or (!who.stealthsteps) )
+					if (!UseCharge(what, who))
+						SendEnteredAreaEvent( who );
+						return;
+					else
+						PlaySoundEffect(who, 0x0204);//invis.wav
+						who.hidden := 1;
+						who.stealthsteps := 50;
+					endif
+				endif
+			endif
+		endif
+
+		sleep(3);
+
+	until ( (!who) or (!IsEquipped(who, what, time)) );
+
+	SendEnteredAreaEvent( who );
+
+endprogram
+
+function UseCharge(item, character)
+	var charges := CINT (GetObjProperty (item, "charges"));
+
+	if (charges > 1)
+		charges := charges - 1;
+		SetObjProperty (item, "charges", charges);
+		item.name := item.desc;
+		return 1;
+	else
+		EraseObjProperty (item, "charges");
+		EraseObjProperty (item, "equipspell");
+		PrintTextAbovePrivate (item, item.desc + " is out of charges", character );
+
+		var spellname := GetObjProperty (item, "itemspellname");
+		if (spellname)
+			var itemname := item.desc;
+			if (itemname[CSTR ("of " + spellname)])
+				itemname[CSTR ("of " + spellname)] := "";
+			else
+				itemname[CSTR ("and " + spellname)] := "";
+			endif
+			item.name := itemname;
+		endif
+		if (GetObjProperty (item, "oldname") )
+			var itemname := GetObjProperty (item, "oldname");
+			if (itemname[CSTR ("of " + spellname)])
+				itemname[CSTR ("of " + spellname)] := "";
+			else
+				itemname[CSTR ("and " + spellname)] := "";
+			endif
+			SetObjProperty (item, "oldname", itemname);
+		endif
+		return 0;
+	endif
+endfunction
+
+
+function IsEquipped(who, what, time)
+
+	if ( Getobjproperty(what,"equiptime") != time )
+		return 0;
+	endif
+
+	foreach item in ListEquippedItems(who)
+		if (item == what)
+			return 1;
+		endif
+	endforeach
+
+	return 0;
+
+endfunction
+
+function SendEnteredAreaEvent( who )
+
+	var ev := struct;
+	ev.+type := EVID_ENTEREDAREA;
+	ev.+source := who;
+
+	foreach critter in ListMobilesNearLocationEx( who.x, who.y, who.z, 15, 
+		LISTEX_FLAG_NORMAL, who.realm )
+		SendEvent(critter, ev);
+	endforeach
+
+endfunction

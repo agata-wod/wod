@@ -1,0 +1,37 @@
+/////////////////////////////////////////////////////////////
+// MUSIC.SRC                                               //
+//                                                         //
+// Author: DC                                              //
+// Date: 1/25/99                                           //
+//                                                         //
+// Description: An admin text command that plays a UO midi //
+//                                                         //
+// program music: takes in the music ID from the user and  //
+//                makes sure it is 1 byte long.            //
+//                                                         //
+// TODO: Dont make the user type the music id in hex.      //
+/////////////////////////////////////////////////////////////
+
+use uo;
+use os;
+use basic;
+
+program music (character, text)
+    var music_id := (text);
+    var id_len := len (music_id);
+
+    if( id_len == 0 )
+	music_id := "00";
+    elseif( id_len == 1)
+	music_id := ("0" + music_id);
+    elseif( id_len > 2)
+	return 0;
+    endif
+
+    //print("musicid: " + music_id);
+
+    PlayMusic( character, music_id );
+
+endprogram
+
+

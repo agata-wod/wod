@@ -1,0 +1,95 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/mainloop_killpcs_normal";
+include "../pkg/npcs/main_ai/main/sleepmode_normal";
+include "../pkg/npcs/main_ai/combat/fightmode_normal_spellcaster";
+include "../pkg/npcs/main_ai/combat/closedistance_spellcaster";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/hostiles/undead/undead";
+
+const HALT_THRESHOLD := 8; // how close before he attacks?
+drop_anchor();
+
+program KillPlayers()
+	if (!me.backpack)
+		DoOnCreationSetup ();
+	endif
+	DoStartupSetup ();
+
+	if (getobjproperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	post_combat ();
+	main_AI_loop ();
+endprogram
+
+function process_combat_event (byref ev)
+
+	SpellAttack (ev.source);
+
+	case (ev.type)
+		EVID_DAMAGED:
+			if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/2))
+				sleep (1);
+				CastSpell (me, me,":misc_spells:gheal");
+				if( me.poisoned )
+					CastSpell (me, me, ":poison_spells:cure");
+					CastSpell (me, ev.source, ":poison_spells:poison");
+				endif
+			endif
+	endcase
+endfunction
+
+function spellattack (byref opponent)
+
+	if (!GetObjProperty(me,"#lastspell"))
+		SetObjProperty(me,"#lastspell",ReadGameClock() + 2);
+	endif
+
+	if (GetObjProperty(me,"#lastspell") > ReadGameClock() )
+		return;
+	endif
+
+	if (RandomInt(3))
+		sleep(1);
+		cast_offensive_spell(me,opponent);
+		SetObjProperty(me,"#lastspell",ReadGameClock() + 4);
+	endif
+
+endfunction
+
+function in_combat_event_loop (byref opponent)
+
+	spellattack(opponent);
+
+endfunction
+
+function prepare_for_fight (byref opponent)
+	if (!GetObjProperty (me, "mr"))
+		CastSpell(me,me,":misc_spells:reflect");
+	endif
+	if (opponent)
+	endif
+
+	DisableMainEvents();
+	EnableCombatEvents();
+endfunction
+
+function post_combat()
+	if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/2))
+		CastSpell(me,me,":misc_spells:gheal");
+	endif
+
+	DisableCombatEvents();
+	EnableMainEvents();
+
+	SetWarMode( 0 );
+	sleep(1);
+	look_around();
+endfunction

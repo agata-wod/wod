@@ -1,0 +1,115 @@
+use os;
+use uo;
+
+include "include/utility";
+
+var matches := 0;
+
+program textcmd_start( character)
+	var storage := FindStorageArea ("Merchant Storage");
+	if (!storage)
+		exit;
+	endif
+
+	for i := 1 to 13
+		var merchantarray := GetGlobalProperty ("#merchants_of_town_" + i);
+		foreach merchant in merchantarray
+			var backpack := FindRootItemInStorageArea(storage, merchant + " FS");
+			foreach item in EnumerateItemsInContainer (backpack)
+				FixCustomItemGraphic(item);
+			endforeach
+			backpack := FindRootItemInStorageArea(storage, merchant + " PB");
+			foreach item in EnumerateItemsInContainer (backpack)
+				FixCustomItemGraphic(item);
+			endforeach
+			backpack := FindRootItemInStorageArea(storage, merchant + " 1C");
+			foreach item in EnumerateItemsInContainer (backpack)
+				FixCustomItemGraphic(item);
+			endforeach
+		endforeach
+		sleep (1);
+	endfor
+	var merchantarray := GetGlobalProperty ("#playermerchantlist");
+	foreach merchant in merchantarray
+		var backpack := FindRootItemInStorageArea(storage, merchant + " FS");
+		foreach item in EnumerateItemsInContainer (backpack)
+			FixCustomItemGraphic(item);
+		endforeach
+		backpack := FindRootItemInStorageArea(storage, merchant + " PB");
+		foreach item in EnumerateItemsInContainer (backpack)
+			FixCustomItemGraphic(item);
+		endforeach
+		backpack := FindRootItemInStorageArea(storage, merchant + " 1C");
+		foreach item in EnumerateItemsInContainer (backpack)
+			FixCustomItemGraphic(item);
+		endforeach
+	endforeach
+
+	SendSysMessage (character, "Done! " + matches + " matches");
+endprogram
+
+
+function FixCustomItemGraphic(byref item)
+	if (item.objtype == 0x2bdb)
+		item.graphic := 0x2bdb;
+		matches := matches + 1;
+	elseif (item.objtype == 0x2be2)
+		item.graphic := item.objtype;
+		matches := matches + 1;
+	elseif (item.objtype == 0x2bdd)
+		item.graphic := item.objtype;
+		matches := matches + 1;
+	elseif (item.objtype == 0x12db)
+		if (item.graphic >= 0x28b4 and item.graphic <= 0x28bb)
+			item.graphic := item.graphic + 30644;
+			matches := matches + 1;
+		endif
+	elseif (item.objtype == 0xea0 and item.graphic >= 0x2968 and item.graphic <= 0x297b)
+		item.graphic := item.graphic + 30489;
+		matches := matches + 1;
+	elseif (item.objtype == 0xa05e)
+		if (item.graphic >= 0x28a0 and item.graphic <= 0x28a9)
+			item.graphic := item.graphic + 30654;
+			matches := matches + 1;
+		endif
+	elseif (item.objtype == 0x170b4)
+		if (item.graphic >= 0x2832 and item.graphic <= 0x2839)
+			item.graphic := item.graphic + 30715;
+			matches := matches + 1;
+		endif
+	elseif (item.objtype >= 0xa000 and item.objtype <= 0xa0b0)
+		item.graphic := item.objtype;
+		matches := matches + 1;
+	elseif (item.objtype >= 0x1709b and item.objtype <= 0x1709d)
+		item.graphic := 0xa07d;
+		matches := matches + 1;
+	elseif (item.objtype == 0xdc20)
+		item.graphic := 0xa079;
+		matches := matches + 1;
+	elseif (item.objtype >= 0xdc21 and item.objtype <= 0xdc22)
+		item.graphic := 0xa07e;
+		matches := matches + 1;
+	elseif (item.objtype >= 0xdc23 and item.objtype <= 0xdc24)
+		item.graphic := 0xa075;
+		matches := matches + 1;
+	elseif (item.objtype >= 0xdc25 and item.objtype <= 0xdc26)
+		item.graphic := 0xa077;
+		matches := matches + 1;
+	elseif (item.objtype == 0xdc27)
+		item.graphic := 0xa07d;
+		matches := matches + 1;
+	elseif (item.objtype >= 0xdc28 and item.objtype <= 0xdc29)
+		item.graphic := 0xa080;
+		matches := matches + 1;
+	elseif (item.objtype == 0xdc2b)
+		item.graphic := 0xa079;
+		matches := matches + 1;
+	elseif (item.objtype == 0xbe35)
+		item.graphic := 0xa02d;
+		matches := matches + 1;
+	elseif (item.objtype == 0x16100 and item.graphic == 0xff1)
+		item.graphic := 0x22c5;
+		matches := matches + 1;
+	endif
+endfunction
+

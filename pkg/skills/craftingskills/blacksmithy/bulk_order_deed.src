@@ -1,0 +1,307 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/wodinc";
+include "include/clock";
+
+Const BUTTON_ADD_ITEM := 999;
+
+program use_blacksmithy_bulk_order_deed (character, deed)
+	if (!ReserveItem (deed))
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+
+	repeat
+		var required_items := GetObjProperty (deed, "required_items");
+		if (!required_items)
+			SendSysMessage (character, "Error:  That bulk order deed seems to be broken...");
+			return;
+		elseif (required_items.size() < 8)
+			SendSysMessage (character, "Error:  That bulk order deed seems to be broken...");
+			return;
+		endif
+		
+		var blacksmith_cfg := ReadConfigFile (":blacksmithy:blacksmithy");
+		if (!blacksmith_cfg)
+			SendSysMessage (character, "Error:  Unable to open blacksmithy.cfg file!");
+			return;
+		endif
+		
+		var chosen_item_elem :=  FindConfigElem (blacksmith_cfg, required_items[2]);
+		if (!chosen_item_elem)
+			SendSysMessage (character, "Error:  This deed seems to be for something that doesn't exist!");
+			return;
+		endif
+	
+		var chosen_item_name := chosen_item_elem.name;
+		if (required_items[3] == 2)
+			chosen_item_name := "exceptional " + chosen_item_name;
+		elseif (required_items[3] == 1)
+			chosen_item_name := "quality " + chosen_item_name;
+		else
+			chosen_item_name := chosen_item_name + " (normal)";
+		endif
+		
+		var chosen_item_amount := required_items[5] + " (" + required_items[6] + " finished)";
+		var chosen_item_material := GetIngotNameByObjtype (required_items[4]);
+		
+		var item_left_string := "";
+		if (required_items[1])
+			var time_left := 604800 - ReadGameClock () + required_items[1];
+			if (time_left > 0)
+				item_left_string := GetTimeDesc (time_left);
+			else
+				item_left_string := "Expired (why do I exist?)";
+			endif
+		else
+			item_left_string := "Unlimited";
+		endif
+		
+		var merchant_name := GetObjProperty (deed, "merchant_name");
+		if (merchant_name)
+			var position := GetObjProperty (deed, "merchant_location");
+			if (position)
+				merchant_name := merchant_name + " (" + position[1] + ", " + position[2] + ")";
+			endif
+		else
+			merchant_name := "-";
+		endif
+		
+		var contract_value := required_items[7];
+		if (!contract_value)
+			SendSysMessage (character, "Error:  Unknown contract value.");
+			contract_value := "Unknown";
+		else
+			var modified_contract_value := required_items[9];
+			if (modified_contract_value)
+				contract_value := "XXXX " + CSTR (modified_contract_value) + " gold";
+			else
+				contract_value := CSTR (contract_value) + " gold";
+			endif
+		endif
+	
+		var gump_layout := array {
+			"nodispose",
+			"page 0",
+			"resizepic 100 100 5170 400 300",	
+			"text 140 130 1322 0",
+			"text 160 160 0 1",		//item
+			"text 260 160 0 2",
+			"text 160 180 0 3",		//amount
+			"text 260 180 0 4",
+			"text 160 200 0 5",		//material
+			"text 260 200 0 6",
+			"text 160 220 0 7",		//Time left
+			"text 260 220 0 8",
+			"text 160 240 0 9",		//Merchant
+			"text 260 240 0 10",
+			"text 160 260 0 11",	//Contract value
+			"text 260 260 0 12",
+			"button 160 345 2104 2103 1 0 " + BUTTON_ADD_ITEM,
+			"text 180 340 0 20",
+			"gumppic 400 280 9004"
+		};
+		
+		var gump_data := array {
+			"Blacksmithy Special Order:",
+			"Item:",
+			chosen_item_name,
+			"Amount:",
+			chosen_item_amount,
+			"Material:",			//5
+			chosen_item_material,
+			"Time left:",
+			item_left_string,
+			"Merchant:",
+			merchant_name,			//10
+			"Contract Value:",
+			contract_value,
+			"",
+			"",
+			"",					//15
+			"",
+			"",
+			"",
+			"",
+			"Combine Item with Deed",//20
+			""
+		};
+
+		var gump_return := SendDialogGump (character, gump_layout, gump_data);
+		if (gump_return == error)
+			SendSysMessage (character, "Error:  Close other gumps first");
+			return;
+		elseif (!gump_return[0])
+			return;
+		endif
+		
+		case (gump_return[0])
+			BUTTON_ADD_ITEM:
+				AddItemToDeed (character, deed);
+			default:
+				SendSysMessage (character, "Error:  Invalid gump return!");
+				return;
+		endcase
+	until (!character or !deed);
+endprogram
+
+
+
+
+///////////////////
+//  Try to combine an item with the deed
+///////////////////
+
+function AddItemToDeed (character, deed)
+	var required_items := GetObjProperty (deed, "required_items");
+	if (!required_items)
+		SendSysMessage (character, "Error:  That bulk order deed seems to be broken...");
+		return;
+	elseif (required_items.size() < 8)
+		SendSysMessage (character, "Error:  That bulk order deed seems to be broken...");
+		return;
+	endif
+
+	var number_needed := required_items[5];
+	var number_finished := required_items[6];
+	if (number_finished >= number_needed)
+		SendSysMessage (character, "But this deed is already completed!");
+		return;
+	endif
+
+	SendSysMessage (character, "Select an item to add:");
+	var item := Target (character);
+	if (!item)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (!InInventory (character.backpack, item))
+		SendSysmessage (character, "You can't add that to the deed!");
+		return;
+	endif
+	
+	if (!ReserveItem (item))
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+
+	if (item.objtype != required_items[2])
+		SendSysmessage (character, "Wrong item!");
+		return;
+	endif
+	
+	if (item.amount > 1)
+		SendSysMessage (character, "Sorry, but you can only add one at a time.");
+		return;
+	endif
+	
+	var item_material := GetObjProperty (item, "material_objtype");
+	if (!item_material)
+		SendSysMessage (character, "Is that an old item?  Anyway, its not going to work.");
+		return;
+	endif
+
+	if (item_material != required_items[4])
+		SendSysMessage (character, "Wrong material!");
+		return;
+	endif
+
+	//check quality needed
+	if (required_items[3])
+		var item_desc := Lower (item.name);
+		if (required_items[3] == 2)
+			if (!item_desc["xceptional"])
+				SendSysMessage (character, "This deed requires exceptional items!");
+				return;
+			endif
+		else
+			if (!item_desc["xceptional"])
+				if (!item_desc["uality"])
+					SendSysMessage (character, "This deed requires quality items (or better)!");
+					return;
+				endif
+			endif
+		endif
+	endif
+
+	set_critical (1);
+		required_items := GetObjProperty (deed, "required_items");
+		if (!required_items)
+			SendSysMessage (character, "Error:  That bulk order deed seems to be broken...");
+			set_critical (0);
+			return;
+		elseif (required_items.size() < 8)
+			SendSysMessage (character, "Error:  That bulk order deed seems to be broken...");
+			set_critical (0);
+			return;
+		endif
+		
+		SubtractAmount (item, 1);
+		required_items[6] := required_items[6] + 1;
+		SetObjProperty (deed, "required_items", required_items);
+	set_critical (0);
+	
+	SendSysMessage (character, "You add the finished item to the contract.");
+	number_needed := required_items[5];
+	number_finished := required_items[6];
+	if (number_finished >= number_needed)
+		SendSysMessage (character, "Congratulations!  The contract is filled!");
+		SendSysMessage (character, "Now you just need to turn it in.");
+		SetObjProperty (deed, "completed", 1);	
+	else
+		SendSysMessage (character, "(" + CSTR (number_needed - number_finished) + " more needed to complete the contract)");
+	endif
+	
+endfunction
+
+
+
+
+///////////////////
+//  Returns the name of the metal based on the ingot objtype
+///////////////////
+
+function GetIngotNameByObjtype (ingot_objtype)
+	case (ingot_objtype)
+		UOBJ_IRON_INGOT:
+			return "iron";
+		UOBJ_BRONZE_INGOT:
+			return "bronze";
+		UOBJ_DULLCOPPER_INGOT:
+			return "dull copper";
+		UOBJ_COPPER_INGOT:
+			return "copper";
+		UOBJ_ONYX_INGOT:
+			return "onyx";
+		UOBJ_PYRITE_INGOT:
+			return "pyrite";
+		UOBJ_MALACHITE_INGOT:
+			return "malachite";
+		UOBJ_AZURITE_INGOT:
+			return "azurite";
+		UOBJ_BLUESTEEL_INGOT:
+			return "bluesteel";
+		UOBJ_RUBYSTEEL_INGOT:
+			return "rubysteel";
+		default:
+			return CreateError ("Unable to find metal type for objtype " + ingot_objtype);
+	endcase
+endfunction
+
+
+
+
+
+
+
+
+
+
+
+
+

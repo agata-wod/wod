@@ -1,0 +1,53 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 6;
+
+program cast_controlundead (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	SendSysMessage (caster, "Transfer the health to who?");
+	var targetted := Target (caster, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+	if (!targetted)
+		SendSysMessage (caster, "Canceled.");
+		return 0;
+	endif
+
+	if (cast_on == caster)
+		SendSysMessage (caster, "How do you expect to do that?");
+		return 0;
+	endif
+
+	if (targetted.npctemplate["playervendor"])
+		SendSysMessage (caster, "You know we can track this stuff, right?");
+	endif
+
+	var heal_amount := RandomDiceRoll ("3d6") + CINT (GetAttribute (caster, ATTRIBUTEID_NECROMANCY)/8);
+	cast_on := CheckMagicReflection (caster, cast_on);
+	if (!cast_on or cast_on == caster)
+		return 0;
+	endif
+
+	if (heal_amount > CINT (GetVital (cast_on, "Life") / 100))
+		heal_amount := CINT (GetVital (cast_on, "Life") / 100);
+	endif
+
+	DoDamageByType (caster, cast_on, heal_amount, DAMAGETYPE_MAGIC);
+	HealDamage (targetted, heal_amount);
+	PlayObjectCenteredEffect (targetted, FX_SPARK_EFFECT, 7, 0x10);
+	PlaySoundEffect (cast_on, SFX_SPELL_HEAL );
+	SendSysMessage (caster, "You healed " + heal_amount + " damage.");
+	return 1;
+endprogram

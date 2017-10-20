@@ -1,0 +1,45 @@
+use uo;
+use os;
+use http;
+
+include "include/client";
+include "include/clock";
+include "include/accounts";
+
+program count_benson_potions ()
+	WriteHTML ("<html><head><title>Christmas Gift Counter</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+
+	var acctinfodf := OpenDataFile (":character:character_data");
+	if (!acctinfodf)
+		acctinfodf := CreateDataFile (":character:character_data");
+		if (!acctinfodf)
+			Syslog ("Error opening character data file!");
+			WriteHTML ("Unable to open or create data file.");
+			WriteHTML ("</body></html>");
+			return;
+		endif
+	endif
+
+	var total_points := 0;
+	WriteHTML ("<table><tr><td>&nbsp</td><td>Points</td></tr>");
+	foreach acctname in ListAccounts ()
+		var tempentry := acctinfodf.FindElement (acctname);
+		if (!tempentry)
+			acctinfodf.CreateElement (acctname);
+			tempentry := acctinfodf.FindElement (acctname);
+		endif
+		var account_points := CINT (tempentry.GetProp ("santa_elf_points"));
+		total_points := total_points + account_points;
+
+		if (account_points)
+			WriteHTML ("<tr><td>" + acctname + "</td><td>" + account_points + "</td></tr>");
+		endif
+	endforeach
+	WriteHTML ("</table>");
+	WriteHTML ("<p>Total points: " + total_points);
+	WriteHTML ("</body></html>");
+endprogram
+
+
+

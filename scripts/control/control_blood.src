@@ -1,0 +1,9 @@
+use uo;
+use os;
+
+program control_bloodstain (blood)
+
+	sleep (600);
+	DestroyItem (blood);
+
+endprogram

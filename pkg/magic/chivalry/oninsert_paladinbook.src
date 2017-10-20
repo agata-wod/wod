@@ -1,0 +1,16 @@
+use uo;
+use os;
+
+program on_insert_mysticbook (character, spellbook, movetype, null_value, scroll, existing_stack, amt_to_add)
+	//we only need one of each spell
+	if (scroll.amount > 1)
+		if (!CreateItemInContainer (character.backpack, scroll.objtype, (scroll.amount-1)))
+			CreateItemAtLocation (character.x, character.y, character.z, scroll.objtype, (scroll.amount-1), character.realm);
+		endif
+		SubtractAmount (scroll, (scroll.amount-1));
+	endif
+	if (amt_to_add and movetype and null_value and scroll and spellbook and existing_stack)
+	endif
+
+	return 1;
+endprogram

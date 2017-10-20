@@ -1,0 +1,16 @@
+use uo;
+
+
+program textcmd_eraseglobal (who, propname )
+	var res := GetGlobalProperty (propname);
+	if (res == error)
+		SendSysMessage (who, "That property does not exist.");
+	endif
+
+	res := EraseGlobalProperty (propname);
+	if (res != error)
+		SendSysMessage (who, "Property " + propname + " erased.");
+	else
+		SendSysMessage (who, "Error erasing property: " + res.errortext);
+	endif
+endprogram

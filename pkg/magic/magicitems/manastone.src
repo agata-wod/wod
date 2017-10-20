@@ -1,0 +1,305 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/string";
+include "include/magicitems";
+include "include/utility";
+
+program use_manastone (character, stone)
+	SendSysMessage (character, "Select the magic item you want to use this on (This item will be destroyed):");
+	var magic_item := Target (character);
+	if (!magic_item)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	if (!IsMagicalItem (magic_item) )
+		SendSysMessage (character, "That's not magical!");
+		return;
+	endif
+	if (!InInventory (character.backpack, magic_item))
+		SendSysMessage (character, "Can't reach it!");
+		return;
+	endif
+	if (!ReserveItem (magic_item))
+		SendSysMessage (character, "You can't use that right now!");
+		return;
+	endif
+	if (GetObjProperty (magic_item, "ownerserial") )
+		SendSysMessage (character, "You can't use the manastone on that - it has an owner's mark!");
+		return;
+	endif
+	if (GetObjProperty (magic_item, "flavortext") or GetObjProperty (magic_item, "etherial"))
+		SendSysMessage (character, "That looks too important to mess up");
+		return;
+	endif
+	if (GetObjProperty (magic_item, "tname") or GetObjProperty (magic_item, "prefix") or GetObjProperty (magic_item, "suffix"))
+		SendSysMessage (character, "That hasn't been identified!");
+		return;
+	endif
+	if (GetObjProperty (magic_item, "manastone"))
+		SendSysMessage (character, "You've already used a manastone on that item once before.");
+		SendSysMessage (character, "Doing so again would destroy the item.");
+		return;
+	endif
+	
+
+	SendSysMessage (character, "Select the non-magic item (this item will become magical):");
+	var normal_item := Target (character);
+	if (!normal_item)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	if (IsMagicalItem (normal_item) )
+		SendSysMessage (character, "That's magical too!");
+		return;
+	endif
+	if (!InInventory (character.backpack, normal_item))
+		SendSysMessage (character, "Can't reach it!");
+		return;
+	endif
+	if (!ReserveItem (normal_item))
+		SendSysMessage (character, "You can't use that right now!");
+		return;
+	endif
+	if (GetObjProperty (normal_item, "ownerserial") )
+		SendSysMessage (character, "You can't use the manastone on that - it has an owner's mark!");
+		return;
+	endif
+
+	//Most items have to be exceptional to be transfered to, but there are some exceptions
+	if (!normal_item.desc["xceptional"])
+		case (normal_item.objtype)
+			UOBJ_CHAOS_SHIELD:
+			UOBJ_ORDER_SHIELD:
+			UOBJ_ORDER_SHIELD2:
+			UOBJ_DRUID_STAFF:
+			UOBJ_NECRO_STAFF:
+			UOBJ_BONE_ARMS:
+			UOBJ_BONE_TUNIC:
+			UOBJ_BONE_GLOVES:
+			UOBJ_BONE_HELM:
+			UOBJ_BONE_LEGS:
+			UOBJ_ORCHELM:
+			UOBJ_ORCHELM2:
+			UOBJ_G_CHAOS_SHIELD:
+			UOBJ_G_CHAOS_SHIELD2:
+			UOBJ_G_ORDER_SHIELD:
+			UOBJ_G_ORDER_SHIELD2:
+				if (character.cmdlevel)
+					SendSysMessage (character, "Bypassing strength requirements");
+				endif
+			default:
+				SendSysMessage (character, "You must use an exceptional item");
+				return;
+		endcase
+	endif
+
+	var new_item_1 := CreateItemAtLocation (5288, 1176, 0, magic_item.objtype, 1, REALM_BRITANNIA);
+	var new_item_2 := CreateItemAtLocation (5288, 1176, 0, normal_item.objtype, 1, REALM_BRITANNIA);
+	if (!new_item_1 or !new_item_2)
+		DestroyItem (new_item_1);
+		DestroyItem (new_item_2);
+		SendSysMessage (character, "Can't do it!");
+		return;
+	endif
+
+	var new_name_1 := Lower (TruncateArticle (new_item_1.desc));
+	if (new_name_1["  "])
+		repeat
+			new_name_1 ["  "] := " ";
+		until (!new_name_1["  "]);
+	endif
+
+	var new_name_2 := Lower (TruncateArticle (new_item_2.desc));
+	if (new_name_2["  "])
+		repeat
+			new_name_2 ["  "] := " ";
+		until (!new_name_2["  "]);
+	endif
+
+	DestroyItem (new_item_1);
+	DestroyItem (new_item_2);
+
+	var magic_item_desc := Lower (magic_item.desc);
+	if (magic_item_desc["  "])
+		repeat
+			magic_item_desc ["  "] := " ";
+		until (!magic_item_desc["  "]);
+	endif
+	if (!magic_item_desc[new_name_1])
+		SendSysMessage (character, "You can't transfer the magic of that item!");
+		return;
+	endif
+
+	var normal_item_desc := Lower (normal_item.desc);
+	if (normal_item_desc["  "])
+		repeat
+			normal_item_desc ["  "] := " ";
+		until (!normal_item_desc["  "]);
+	endif
+	if (!normal_item_desc[new_name_2])
+		SendSysMessage (character, "You can't transfer magic to that item!");
+		return;
+	endif
+
+	//Chaos and order shields can have magic transfered to them from any type of magic shield
+	if (normal_item.objtype == UOBJ_CHAOS_SHIELD or normal_item.objtype == UOBJ_ORDER_SHIELD or normal_item.objtype == UOBJ_ORDER_SHIELD2 or normal_item.objtype == UOBJ_G_ORDER_SHIELD or normal_item.objtype == UOBJ_G_ORDER_SHIELD2 or normal_item.objtype == UOBJ_G_CHAOS_SHIELD or normal_item.objtype == UOBJ_G_CHAOS_SHIELD2)
+		case (magic_item.objtype)
+			UOBJ_BUCKLER:
+			UOBJ_BRONZESHIELD:
+			UOBJ_METALSHIELD:
+			UOBJ_KITESHIELD:
+			UOBJ_KITESHIELD2:
+			UOBJ_HEATER:
+			UOBJ_HEATER2:
+			UOBJ_WOODEN_SHIELD:
+			UOBJ_WOODEN_KITESHIELD:
+			UOBJ_WOODEN_KITESHIELD2:
+			UOBJ_CHAOS_SHIELD:
+			UOBJ_ORDER_SHIELD:
+			UOBJ_ORDER_SHIELD2:
+			UOBJ_G_CHAOS_SHIELD:
+			UOBJ_G_CHAOS_SHIELD2:
+			UOBJ_G_ORDER_SHIELD:
+			UOBJ_G_ORDER_SHIELD2:
+				DoMagicTransfer (character, stone, magic_item, normal_item, new_name_1, new_name_2);
+			default:
+				SendSysMessage (character, "Can't transfer magic between those two items!");
+				SendSysMessage (character, "(You can only transfer shields to shields)");
+		endcase
+		return;
+	
+	//You can transfer weapon properties between weapons of the same type
+	//(basically, just change the graphic)
+	elseif (normal_item.isa (POLCLASS_WEAPON) and magic_item.isa (POLCLASS_WEAPON))
+		var itemdesc_cfg := ReadConfigFile ("::itemdesc");
+		if (!itemdesc_cfg)
+			SendSysMessage (character, "This is bad.  Very bad.");
+			return;
+		endif
+		
+		var normal_item_elem := FindConfigElem (itemdesc_cfg, normal_item.objtype);
+		var magic_item_elem := FindConfigElem (itemdesc_cfg, magic_item.objtype);
+		if (!normal_item_elem or !magic_item_elem)
+			SendSysMessage (character, "This is bad.  Very bad.");
+			return;
+		endif
+
+		if (normal_item_elem.Attribute != magic_item_elem.Attribute)
+			SendSysMessage (character, "You can only transfer between items in the same weapon class");
+			return;
+		endif
+
+		if (normal_item_elem.damage != magic_item_elem.damage)
+			SendSysMessage (character, "You can only transfer between items in the same weapon class");
+			return;
+		endif
+
+		if (normal_item_elem.speed != magic_item_elem.speed)
+			SendSysMessage (character, "You can only transfer between items in the same weapon class");
+			return;
+		endif
+
+		if (normal_item_elem.BlocksCastingIfInHand != magic_item_elem.BlocksCastingIfInHand)
+			SendSysMessage (character, "You can only transfer between items in the same weapon class");
+			return;
+		endif
+
+		DoMagicTransfer (character, stone, magic_item, normal_item, new_name_1, new_name_2);
+		return;
+
+	//You can change armor to a different type of armor if it shares a coverage area.
+	//All that's done is to change the graphic and color to match the non-magical item
+	//So the item retains all the attributes of the original armor type
+	elseif (normal_item.isa (POLCLASS_ARMOR) and magic_item.isa (POLCLASS_ARMOR))
+		var itemdesc_cfg := ReadConfigFile ("::itemdesc");
+		if (!itemdesc_cfg)
+			SendSysMessage (character, "This is bad.  Very bad.");
+			return;
+		endif
+		
+		var normal_item_elem := FindConfigElem (itemdesc_cfg, normal_item.objtype);
+		var magic_item_elem := FindConfigElem (itemdesc_cfg, magic_item.objtype);
+		if (!normal_item_elem or !magic_item_elem)
+			SendSysMessage (character, "This is bad.  Very bad.");
+			return;
+		endif
+
+		var magic_item_coverage := GetConfigStringArray (magic_item_elem, "coverage");
+		var normal_item_coverage := GetConfigStringArray (normal_item_elem, "coverage");
+		
+		var found_match := 0;
+		foreach m_cover in magic_item_coverage
+			foreach n_cover in normal_item_coverage
+				if (lower (m_cover) == lower (n_cover))
+					found_match := 1;
+				endif
+			endforeach
+		endforeach
+		
+		if (!found_match)
+			if (!IsShield (normal_item) or!IsShield (magic_item))
+				SendSysMessage (character, "Can't transfer magic between those two items!");
+				SendSysMessage (character, "(The two items must share coverage area)");
+				return;
+			endif
+		endif
+		DoMagicSpecialEffect (character);
+		magic_item.graphic := normal_item.graphic;
+		magic_item.color := normal_item.color;
+		magic_item_desc[new_name_1] := new_name_2;
+		magic_item_desc := magic_item_desc + " [" + new_name_1 + "]";
+		magic_item.name := magic_item_desc;
+		DestroyItem (normal_item);
+		SubtractAmount(stone, 1);
+		SetObjProperty (magic_item, "manastone", 1);
+		return;
+	endif
+
+	SendSysMessage (character, "Can't transfer magic between those two items!");
+	SendSysMessage (character, "(Item types don't match)");
+endprogram
+
+
+
+
+///////////////////
+//  once its been determined that its possible to transer magic, this function does it
+///////////////////
+
+function DoMagicTransfer (character, stone, magic_item, normal_item, new_name_1, new_name_2)
+	DoMagicSpecialEffect (character);
+
+	var magic_item_desc := magic_item.desc;
+	magic_item_desc[new_name_1] := new_name_2;
+	normal_item.name := magic_item_desc;
+
+	normal_item.quality := magic_item.quality;
+	normal_item.ar_mod := magic_item.ar_mod;
+	normal_item.dmg_mod := magic_item.dmg_mod;
+	normal_item.maxhp_mod := magic_item.maxhp_mod;
+	normal_item.hp := normal_item.maxhp;
+
+	foreach property in GetObjPropertyNames (magic_item)
+		var value := GetObjProperty (magic_item, property);
+		SetObjProperty (normal_item, property, value);
+	endforeach
+
+	DestroyItem (magic_item);
+	SubtractAmount (stone, 1);
+	SetObjProperty (magic_item, "manastone", 1);
+	SendSysMessage (character, "Done!");
+
+endfunction
+
+function DoMagicSpecialEffect (character)
+	PlaySoundEffect (character, 0x244);
+	sleep (5);
+	PlayLightningBoltEffect (character);
+	PlaySoundEffect (character, 0x207);
+	sleep (2);
+	PlayLightningBoltEffect (character);
+	PlaySoundEffect (character, 0x29);
+endfunction

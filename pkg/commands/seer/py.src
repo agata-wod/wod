@@ -1,0 +1,35 @@
+use uo;
+
+program move_x (character, parms)
+	var splitted := SplitWords (parms);
+	var domore := 0;
+	var howfar := 1;
+	
+	if (len (splitted) == 2)
+		howfar := CINT (splitted [1]);
+		if (splitted[2] == "many")
+			domore := 1;
+		endif
+	elseif (len (splitted) == 1)
+		if (splitted[1] == "many")
+			domore := 1;
+			howfar := 1;
+		else
+			howfar := CINT (splitted [1]);
+		endif
+	else
+		howfar := 1;
+	endif
+
+	repeat
+		var what := Target (character, TGTOPT_NOCHECK_LOS);
+		if (!what)
+			return;
+		endif
+		var lockdown := what.movable;
+		what.movable := 1;
+		MoveObjectToLocation( what, what.x, what.y + howfar, what.z, what.realm, MOVEOBJECT_FORCELOCATION );
+
+		what.movable := lockdown;	
+	until (!character or !domore);
+endprogram

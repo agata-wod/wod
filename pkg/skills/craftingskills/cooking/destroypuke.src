@@ -1,0 +1,11 @@
+use uo;
+use os;
+
+program destroypuke ( puke )
+
+	sleep(5*60);
+	if (puke)
+		DestroyItem (puke);
+	endif
+
+endprogram

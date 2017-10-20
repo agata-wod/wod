@@ -1,0 +1,207 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/eventid";
+include "include/utility";
+include "include/gumps";
+include "include/sysevent";
+include "../pkg/npcs/npc_util";
+include "../pkg/items/housing/house";
+
+var forsaleitems := array {};
+var gump_layout, gump_data;
+
+program player_merchant_sort (parms)
+	var merchant := parms[1];
+	var player := parms[2];
+	if (!merchant or !player)
+		return;
+	endif
+	
+	if (GetObjProperty (merchant, "#merchant_sort_pid"))
+		if (GetProcess (GetObjProperty (merchant, "#merchant_sort_pid")))
+			return;
+		endif
+	endif
+	SetObjProperty (merchant, "#merchant_sort_pid", GetPid());
+	SetObjProperty (merchant, "#merchant_sort_player", player.serial);
+	EraseObjProperty (merchant, "#merchant_sort_inv_change");
+
+	var storage := FindStorageArea ("Merchant Storage");
+	if (!storage)
+		SendSysMessage (player, "Critical error:  Can't open merchant storage!");
+		Syslog ("Critical error:  Can't open merchant storage!");
+		return;
+	endif
+
+	var inv_pb := find_or_create_item (storage, merchant.serial + " PB", 0xE7C);
+	var inv_fs := find_or_create_item (storage, merchant.serial + " FS", 0xE7C);
+	if (!inv_fs or !inv_pb or !inv_fs)
+		SendSysMessage (player, "Critical error:  can't find merchant forsale!");
+		Syslog ("Critical error:  can't find merchant forsale!");
+		return;
+	endif
+	
+	repeat
+		forsaleitems := array {};
+		foreach item in EnumerateItemsInContainer (inv_fs)
+			if (item.container == inv_fs)
+				forsaleitems.append (item);
+			endif
+		endforeach
+	
+		BuildGump ();
+		var gump_return := SendDialogGump (player, gump_layout, gump_data);
+		if (!gump_return or !gump_return[0])
+			SendSysMessage (player, "Finished.");
+			EraseObjProperty (merchant, "#merchant_sort_pid");
+			EraseObjProperty (merchant, "#merchant_sort_player");
+			return;
+		endif
+
+		if (GetObjProperty (merchant, "#merchant_sort_inv_change"))
+			SendSysMessage (player, "Inventory change.  Sort canceled.");
+			EraseObjProperty (merchant, "#merchant_sort_pid");
+			EraseObjProperty (merchant, "#merchant_sort_player");
+			EraseObjProperty (merchant, "#merchant_sort_inv_change");
+			return;
+		endif
+		
+		if (gump_return[0] < 1000)
+			var selected_item := forsaleitems[gump_return[0]];
+			if (selected_item)
+				if (MoveItemToContainer (selected_item, player.backpack))
+					SendSysmessage (player, "You remove the " + selected_item.desc + " from the merchant's inventory");
+				else
+					PrintTextAbovePrivate (player, "*Your backpack is full!*", player);
+					return;
+				endif
+			else
+				SendSysMessage (player, "Error:  item does not exist!");
+				return;
+			endif
+		elseif (gump_return[0] < 2000)
+			var selected_item_num := gump_return[0] - 1000;
+			if (selected_item_num < 2)
+				SendSysMessage (player, "Error: can't move that item down.");
+				return;
+			endif
+			var selected_item := forsaleitems[selected_item_num];
+			if (selected_item)
+				set_critical (1);
+					if (selected_item.container == inv_fs)
+						MoveItemToContainer (selected_item, inv_fs);
+					endif
+					
+					for i := (selected_item_num - 1) to (forsaleitems.size())
+						var item := forsaleitems[i];
+						if (item != selected_item)
+							if (item.container == inv_fs)
+								MoveItemToContainer (item, inv_fs);
+							endif
+						endif
+					endfor
+				set_critical (0);
+			endif
+		elseif (gump_return[0] < 3000)
+			set_critical (1);
+				var selected_item_num := gump_return[0] - 2000;
+				if (selected_item_num == (forsaleitems.size()))
+					SendSysMessage (player, "Error: can't move that item up.");
+					set_critical (0);
+					return;
+				endif
+
+				var selected_item := forsaleitems[selected_item_num];
+				var previous_item := forsaleitems[selected_item_num + 1];
+				if (previous_item and selected_item)
+					if (previous_item.container == inv_fs)
+						MoveItemToContainer (previous_item, inv_fs);
+					endif
+					if (selected_item.container == inv_fs)
+						MoveItemToContainer (selected_item, inv_fs);
+					endif
+					
+					for i := (selected_item_num + 1) to (forsaleitems.size())
+						var item := forsaleitems[i];
+						if (item != selected_item and item != previous_item)
+							if (item.container == inv_fs)
+								MoveItemToContainer (item, inv_fs);
+							endif
+						endif
+					endfor
+				endif
+			set_critical (0);
+		else
+			SendSysMessage (player, "Error!  Unknown gump return");
+			return;
+		endif
+	until (!player);
+	EraseObjProperty (merchant, "#merchant_sort_pid");
+	EraseObjProperty (merchant, "#merchant_sort_player");
+endprogram
+
+
+
+
+///////////////////
+//  Does the work of building the gump
+///////////////////
+
+function BuildGump ()
+	gump_layout := array {
+		"page 0",
+		"nodispose",
+		"resizepic 50 50 3500 350 500",
+		"page 1"
+	};
+	gump_data := array { "filler" };
+	
+	var current_y := 100;
+	var stringcounter := 1;
+
+	var totalitems := forsaleitems.size();
+	var page_counter := 1;
+	var item_counter := 1;
+	
+	var current_item_num;
+	for (current_item_num := (forsaleitems.size()); current_item_num >= 1; current_item_num := current_item_num - 1)
+		var item := forsaleitems[current_item_num];
+		gump_layout.append ("button " + 75 + " " + (current_y + 5) + " 3 4 1 0 " + current_item_num);
+
+		if (current_item_num == 1)
+			gump_layout.append ("button " + 100 + " " + (current_y + 5) + " 2435 2436 1 0 " + (2000 + current_item_num));
+		elseif (current_item_num == totalitems)
+			gump_layout.append ("button " + 110 + " " + (current_y + 5) + " 2437 2438 1 0 " + (1000 + current_item_num));
+		else
+			gump_layout.append ("button " + 100 + " " + (current_y + 5) + " 2435 2436 1 0 " + (2000 + current_item_num));
+			gump_layout.append ("button " + 110 + " " + (current_y + 5) + " 2437 2438 1 0 " + (1000 + current_item_num));
+		endif
+		gump_layout.append ("text " + 130 + " " + current_y + " 94 " + stringcounter);
+		gump_data.append (item.desc);
+		stringcounter := stringcounter + 1;
+		current_y := current_y + 20;
+		
+		item_counter := item_counter + 1;
+		if (item_counter > 20 and current_item_num < (forsaleitems.size()))
+			page_counter := page_counter + 1;
+
+			gump_layout.append ("button 350 70 5601 5605 0 " + page_counter);
+			gump_layout.append ("page " + page_counter);
+			gump_layout.append ("button 70 70 5603 5607 0 " + (page_counter - 1));
+
+			item_counter := 1;
+			current_y := 100;
+		endif
+	endfor
+endfunction 
+
+
+
+
+
+

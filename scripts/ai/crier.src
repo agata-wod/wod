@@ -1,0 +1,76 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/mainloop_crier";
+include "../pkg/npcs/main_ai/main/sleepmode_normal";
+include "../pkg/npcs/main_ai/combat/fightmode_smart";
+include "../pkg/npcs/main_ai/combat/closedistance_default";
+include "../pkg/npcs/main_ai/combat/gethelp_good";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/speech";
+
+const HALT_THRESHOLD := 8; // how close before he attacks?
+drop_anchor();
+
+program TownCrier()
+
+	if (!me.backpack)
+		DoOnCreationSetup ();
+	endif
+	DoStartupSetup ();
+	SetUpSpeech ();
+	WalkHome();
+
+	if (getobjproperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	if (!me.title_suffix)
+		var names := splitwords(me.name);
+		if ( names[2] == "the" )
+			me.title_suffix := " the town crier";
+			me.name := names[1];
+		endif
+	else
+		me.title_suffix := " the town crier";
+	endif
+
+    	SetWarMode( 0 );
+    	main_AI_loop();
+
+endprogram
+
+function process_combat_event(byref ev)
+	if (ev.type == EVID_DAMAGED)
+		if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/10))
+			EraseObjProperty (me, "#flees");
+			Flee (ev.source);
+		endif
+	endif
+endfunction
+
+
+function in_combat_event_loop (byref opponent)
+	if(opponent)
+	endif
+endfunction
+
+function post_combat()
+	DisableCombatEvents();
+	EnableMainEvents();
+
+	SetWarMode ( 0 );
+	sleep(1);
+	look_around();
+endfunction
+
+function prepare_for_fight (byref opponent)
+	if(opponent)
+	endif
+	DisableMainEvents();
+	EnableCombatEvents();
+endfunction

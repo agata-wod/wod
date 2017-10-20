@@ -1,0 +1,46 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 4;
+
+program cast_heal( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	var heal_amount := RandomDiceRoll ("3d6") + CINT (GetAttribute (caster, ATTRIBUTEID_MAGERY)/4);
+	HealDamage (cast_on, heal_amount);
+	PlayObjectCenteredEffect (cast_on, FX_SPARK_EFFECT, 7, 0x10);
+	PlaySoundEffect (cast_on, SFX_SPELL_HEAL );
+	PissOff (cast_on, caster);
+	SendSysMessage (caster, "You healed " + heal_amount + " damage.");
+	return 1;
+endprogram
+
+
+
+function PissOff (cast_on, caster)
+	if (caster.script["humuc"])
+		return;
+	endif
+
+	var ev := struct;
+	ev.+source := caster;
+	ev.+type := EVID_DAMAGED;
+	foreach mob in ListHostiles (cast_on, 9)
+		AddToHitList (caster, mob);
+		if (randomint(4) == 1)
+			sendevent (mob, ev);
+		endif
+	endforeach
+endfunction

@@ -1,0 +1,307 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/wodinc";
+include "include/client";
+include "include/objtype";
+include "include/dotempmods";
+include "include/spawn";
+include "include/poison";
+include "../pkg/combat/loot/loot";
+
+program pick (character, lockpick)
+
+	If (!ReserveItem (lockpick))
+		SendSysMessage (character, "You can't use that right now!");
+		return;
+	endif
+
+	SendSysMessage (character, "Pick what?");
+	var chest := Target (character);
+	if (!chest)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	If (!ReserveItem (chest))
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+
+	if (!Accessible (character, chest))
+		SendSysMessage (character, "You can't reach that!");
+		return;
+	endif
+
+	if ( Distance (character, chest) > 2 )
+		SendSysMessage (character, "You can't reach that!");
+		return;
+	endif
+
+	if (!chest.locked)
+		SendSysMessage (character, "That doesn't appear to be locked");
+		return;
+	endif
+
+	var lvl := GetObjProperty (chest, "lockpicking" );
+	if (!lvl)
+		SendSysMessage (character, "You have no chance of picking that lock!");
+		return;
+	endif
+
+	if (GetObjProperty (chest, "trap") )
+		if (!DisarmTrap (character, chest) )
+			ActivateTrap (character, chest);
+			return;
+		endif
+	endif
+
+	if ( !TryToLockpickChest (character, chest, lvl, lockpick) )
+		return;
+	endif
+
+	if (GetObjProperty (chest, "mobchest_spawntime") )
+		SpawnChestFromMobile (chest, lvl);
+		return;
+	endif
+
+	if ( GetObjProperty (chest,"spawnchest") )
+		SpawnTheChest (chest, lvl);
+	endif
+
+endprogram
+
+
+
+
+///////////////////
+//  tries to disarm a trap based on the character's lockpicking and detect hidden skill
+///////////////////
+
+function DisarmTrap (character, chest)
+
+	var previous_searchers := GetObjProperty (chest, "#searchers");
+	if (!previous_searchers)
+		previous_searchers := {};
+	endif
+
+	var previous_results := GetObjProperty (chest, "#search_results");
+	if (!previous_results)
+		previous_results := {};
+	endif
+
+	if (character.serial in previous_searchers)
+		for i := 1 to len (previous_searchers)
+			if (previous_searchers[i] == character.serial)
+				if (!previous_results[i])
+					SendSysMessage (character, "Uh-oh...");
+					return 0;
+				endif
+			endif
+		endfor
+	else
+		if (CheckSkill (character, SKILLID_DETECTHIDDEN, -1, 0) )
+			SendSysMessage (character, "Its trapped!");
+		else
+			SendSysMessage (character, "Uh-oh...");
+			return 0;
+		endif
+	endif
+
+	if (CheckSkill (character, SKILLID_LOCKPICKING, -1, 0 )
+			and CheckSkill (character, SKILLID_DETECTHIDDEN, -1, 0) )
+		SendSysMessage (character, "You disarm the trap.");
+		EraseObjProperty (chest, "trap");
+		EraseObjProperty (chest, "secondarytrapdata");
+		return 1;
+	endif
+
+	SendSysMessage (character, "Uh-oh...");
+	return 0;
+
+endfunction
+
+
+
+
+///////////////////
+//  makes the trap do whatever its going to do
+///////////////////
+
+function ActivateTrap (character, chest)
+
+	var trap_type := GetObjProperty (chest, "trap");
+	case (trap_type)
+		"explosion":
+			var explosion_center := chest;
+			while (explosion_center.container)
+				explosion_center := explosion_center.container;
+			endwhile
+
+			foreach mobile in ListMobilesNearLocationEx (explosion_center.x, explosion_center.y, explosion_center.z, 5, LISTEX_FLAG_NORMAL+LISTEX_FLAG_HIDDEN, explosion_center.realm)
+				if (!mobile.hidden or !GetObjProperty (mobile, "#specialhidden_nodamage"))
+					PlaySoundEffect (mobile, SFX_SPELL_EXPLOSION);
+					PlayObjectCenteredEffect (mobile, FX_EXPLODE_3, 7, 0x10);
+					DoDamageByType (0, mobile, RandomInt(50)+30, DAMAGETYPE_FIRE);
+				endif
+			endforeach
+
+			//sometimes destroy mob spawned chests, or in the case of static chests, unlock them
+			if (RandomInt (2))
+				if ( GetObjProperty (chest,"spawnchest") )
+					set_critical (1);
+					chest.locked := 0;
+					var allchests := GetGlobalProperty ("unlockedchests");
+					if (!allchests)
+						allchests := array;
+						allchests[1]:=chest.serial;
+					else
+						allchests.append (chest.serial);
+					endif
+					SetGlobalProperty ("unlockedchests", allchests);
+					set_critical (0);
+				else
+					DestroyItem (chest);
+				endif
+			endif
+		"safeexplosion":
+			var explosion_center := chest;
+			while (explosion_center.container)
+				explosion_center := explosion_center.container;
+			endwhile
+
+			foreach mobile in ListMobilesNearLocationEx (explosion_center.x, explosion_center.y, explosion_center.z, 5, LISTEX_FLAG_NORMAL+LISTEX_FLAG_HIDDEN, explosion_center.realm)
+				if (!mobile.hidden or !GetObjProperty (mobile, "#specialhidden_nodamage"))
+					PlaySoundEffect (mobile, SFX_SPELL_EXPLOSION);
+					PlayObjectCenteredEffect (mobile, FX_EXPLODE_3, 7, 0x10);
+					DoDamageByType (0, mobile, RandomInt(50)+30, DAMAGETYPE_FIRE);
+				endif
+			endforeach
+
+		"poison":
+			SetPoison (character, RandomInt (6) + 5, "You've been poisoned!");
+		"djinni":
+			var thenpc := SpawnNPCInArea ("djinni", character.x, character.y, 4, 20, character.realm);
+			if (thenpc)
+				SendSysMessage (character, "You've released an evil spirit!");
+			endif
+		"npcspawn":
+			var npctemplate := GetObjProperty (chest, "secondarytrapdata");
+			EraseObjProperty (chest, "secondarytrapdata");
+			var thenpc := SpawnNPCInArea (npctemplate, character.x, character.y, 4, 20, character.realm);
+			if (thenpc)
+				SendSysMessage (character, "You've released an evil creature!");
+			endif
+	endcase
+
+	EraseObjProperty (chest, "trap");
+	chest.name := "a locked chest";
+endfunction
+
+
+
+
+///////////////////
+//  tries to lockpick the given chest
+///////////////////
+
+function TryToLockpickChest (character, chest, lvl, lockpick)
+	var diff := (lvl * 10)+10;
+	if (diff > 110)
+		diff := 110;
+	endif
+
+	if (diff > GetAttribute (character, ATTRIBUTEID_LOCKPICKING) + 15)
+		SendSysMessage (character, "You have no chance of picking that lock.");
+		return 0;
+	endif
+
+	if (!chest.container)
+		PlaySoundEffect (chest, SFX_242);
+	else
+		var tempitem := chest;
+		repeat
+			tempitem := tempitem.container;
+		until (!tempitem.container);;
+		PlaySoundEffect (tempitem, SFX_242);
+	endif
+	sleep (2);
+
+	var hostiles := ListHostiles (character, 4);
+	if ( len (hostiles) )
+		SendSysMessage (character, hostiles[1].name + " breaks your concentration!");
+		return 0;
+	endif
+
+	if ( Checkskill (character, SKILLID_LOCKPICKING, diff, 0) )
+		PlaySoundEffect (chest, SFX_200);
+		PrintTextAbovePrivate (chest, "*Unlocked!*", character);
+		chest.locked := 0;
+		return 1;
+	endif
+
+	PrintTextAbovePrivate (chest, "You fail to pick the lock.", character);
+	if (diff < 10)
+		diff := 0;
+	else
+		diff := diff -10;
+	endif
+	if (!Checkskill (character, SKILLID_LOCKPICKING, diff, 0) )
+		PlaySoundEffect (chest, 0xef);
+		SendSysMessage (character, "Your pick breaks!");
+		SubtractAmount (lockpick, 1);
+	endif
+
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  for chests that are spawned by killing mobiles
+///////////////////
+
+function SpawnChestFromMobile (chest, lvl)
+
+	chest.name := "an unlocked chest";
+
+	var spawntime := GetObjProperty (chest, "mobchest_spawntime");
+	var passed_time := ReadGameClock () - spawntime;
+	var decreased_loot := CINT (passed_time / 600);
+	lvl := lvl - decreased_loot;
+	if (!lvl or lvl < 0)
+		lvl := 0;
+	endif
+
+	var lootgroup_name := "mobchest_" + CSTR (lvl);
+	MakeLootInChest (chest, lootgroup_name);
+
+endfunction
+
+
+
+
+////////////////////
+//  tries to make loot in static chest
+////////////////////
+
+function SpawnTheChest (chest, lvl)
+
+	var lootgroup := "chestspawner_" + lvl;
+	MakeLootInChest (chest, lootgroup);
+
+	set_critical (1);
+	var allchests := GetGlobalProperty ("unlockedchests");
+	if (!allchests)
+		allchests := array;
+		allchests[1]:=chest.serial;
+	else
+		allchests.append (chest.serial);
+	endif
+	SetGlobalProperty ("unlockedchests", allchests);
+	set_critical (0);
+
+endfunction

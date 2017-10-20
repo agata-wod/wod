@@ -1,0 +1,126 @@
+use uo;
+use os;
+use http;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/string";
+
+WriteHTML ("<html><head><title>Search for items by serial number</title></head>");
+WriteHTML ("<body bgcolor=\"#dcdeed\">");
+
+var itemname := Lower (QueryParam ("theitemname"));
+if (!itemname or itemname == "0")
+	WriteHTML ("Please enter the name to search for.");
+	WriteHTML ("Common names will return a LOT of searches...");
+	WriteHTML ("<form method=GET action=item_name_search.ecl>");
+	WriteHTML ("name: <input name=theitemname>");
+	WriteHTML ("<input id=submit1 name=submit1 type=submit value=Search>");
+	WriteHTML ("</body></html>");
+	return;
+endif
+
+WriteHTML ("Searching for " + itemname + "...<br>");
+
+
+var searchpid := GetGlobalProperty ("#searchitempid");
+if (searchpid)
+	if (GetProcess (searchpid))
+		WriteHTML ("There is another search already going on.  Because searching for items by serial number is ");
+		WriteHTML ("very stressing on the server, only one search can be performed at a time. ");
+		WriteHTML ("Try again in a minute.</body></html>");
+		return;
+	endif
+endif
+SetGlobalProperty ("#searchitempid", GetPid());
+
+var found := 0;
+var loweredname;
+var account, player;
+foreach acctname in ListAccounts ()
+	account := FindAccount (acctname);
+	if (account)
+		for counter := 1 to 7
+			player := account.GetCharacter (counter);
+			if (player)
+				loweredname := Lower (player.name);
+				if (loweredname[itemname])
+					WriteHTML ("Player character: " + player.name + ", ");
+					WriteHTML ("Account: " + acctname + "<br>");
+					found := found + 1;
+				endif
+				foreach item in EnumerateItemsInContainer (player.backpack)
+					loweredname := Lower (item.desc);
+					if (loweredname[itemname])
+						WriteHTML ("Found " + item.desc  + " in backpack of: " + player.name + " (acct " + acctname +")<br>");
+						found := found + 1;
+					endif
+				endforeach
+			endif
+		endfor
+		var bankbox := FindBankBox (acctname, 1);
+		if (bankbox)
+			foreach item in EnumerateItemsInContainer (bankbox)
+				loweredname := Lower (item.desc);
+				if (loweredname[itemname])
+					WriteHTML ("Found " + item.desc  + " in bankbox of: " + acctname + "<br>");
+					found := found + 1;
+				endif
+			endforeach
+		endif
+	endif
+	sleepms (1);
+endforeach
+
+var x, y;
+for (x := 6144 ; x > 64 ; x := x  - 128)
+	for( y := 64; y < 4096; y := y + 128 )
+		foreach item in ListObjectsInBox (x-64, y-64, -128, x+64, y+64, +127, REALM_BRITANNIA)
+			loweredname := Lower (item.desc);
+			if (loweredname[itemname])
+				WriteHTML ("Found a match at " + item.x + ", " + item.y + ", " + item.z + ", " + item.desc + "<br>");
+				found := found + 1;
+			endif
+
+			if (item.isa (POLCLASS_CONTAINER))
+				foreach more_item in EnumerateItemsInContainer (item)
+					loweredname := Lower (more_item.desc);
+					if (loweredname[itemname])
+						WriteHTML ("Found a match at " + item.x + ", " + item.y + ", " + item.z + ", " + more_item.desc + "<br>");
+						found := found + 1;
+					endif
+				endforeach
+			endif
+					
+			if (item.isa (POLCLASS_MOBILE))
+				foreach more_item in EnumerateItemsInContainer (item.backpack)
+					loweredname := Lower (more_item.desc);
+					if (loweredname[itemname])
+						WriteHTML ("Found a match at " + item.x + ", " + item.y + ", " + item.z + ", " + more_item.desc + "<br>");
+						found := found + 1;
+					endif
+				endforeach
+						
+				foreach more_item in ListEquippedItems (item)
+					loweredname := Lower (more_item.desc);
+					if (loweredname[itemname])
+						WriteHTML ("Found " + more_item.desc + " at " + item.x + ", " + item.y + ", " + item.z + ", " + " worn by " + item.name + "<br>");
+						found := found + 1;
+					endif
+				endforeach
+			endif
+		endforeach
+	endfor
+//	sleep (1);
+endfor
+
+
+WriteHTML ("Found " + found + "matches.</body></html>");
+
+
+
+
+
+

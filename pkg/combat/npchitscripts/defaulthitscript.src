@@ -1,0 +1,73 @@
+use uo;
+use util;
+use os;
+
+include "include/client";
+include "include/dotempmods";
+include "include/magic";
+include "include/attributes";
+include "../pkg/character/virtue/virtue";
+include "../pkg/npcs/npcinfo";
+include "include/dotempmods";
+include "include/wodinc";
+
+program mainhit (attacker, defender, weapon, armor, basedamage, rawdamage)
+	if (basedamage and armor and weapon)
+	endif
+	if (attacker.z > (defender.z + 20) or attacker.z < (defender.z - 20))
+		return;
+	endif
+	if (Distance (attacker, defender) > 20)
+		return;
+	endif
+
+	SetScriptController (attacker);
+
+	if (GetObjProperty (defender, "#reactive_armor"))
+		if (Distance (attacker, defender) <= 1)
+			var evalintskill := GetAttribute (defender, ATTRIBUTEID_INVOCATION);
+			var reactive_damage := CINT ( (evalintskill*rawdamage)/200);
+			PlaySoundEffect (attacker, SFX_SPELL_EXPLOSION);
+			PlayObjectCenteredEffect (attacker, FX_EXPLODE_3, 7, 0x10);
+			DoDamageByType (defender, attacker, reactive_damage, DAMAGETYPE_MAGIC);
+			EraseObjProperty (defender, "#reactive_armor");
+		endif
+	endif
+	
+//	Broadcast( "npchitscript ran", font := _DEFAULT_TEXT_FONT, color := _DEFAULT_TEXT_COLOR );
+	
+	if (defender.npctemplate and defender.npctemplate != "warrior")
+		rawdamage := rawdamage*2;
+	endif
+	DoDamageByType (attacker, defender, rawdamage, DAMAGETYPE_PHYSICAL);
+
+	if (GetAttribute (attacker, ATTRIBUTEID_ANATOMY))
+		var hitchance := CINT (GetAttribute (attacker, ATTRIBUTEID_ANATOMY)/10);
+		if (RandomInt (100) < hitchance)
+			SendSysMessage (attacker, "Critical hit!");
+			if (CheckSkill (attacker, SKILLID_ANATOMY, 80, 0) )
+				DoDamageByType (attacker, defender, rawdamage, DAMAGETYPE_PHYSICAL);
+			else
+				DoDamageByType (attacker, defender, CINT (rawdamage/2), DAMAGETYPE_PHYSICAL);
+			endif
+		endif
+	endif
+
+	if (GetAttribute (attacker, ATTRIBUTEID_POISONING) and Distance (attacker, defender) <= 1)
+		if (RandomInt (4) == 1)
+			if (CheckSkill (attacker, SKILLID_POISONING, 100, 0) and RandomInt (2))
+				SetPoison (defender, 10, "You have been poisoned by " + attacker.name);
+			elseif (CheckSkill (attacker, SKILLID_POISONING, 80, 0) and RandomInt (2))
+				SetPoison (defender, 8, "You have been poisoned by " + attacker.name);
+			elseif (CheckSkill (attacker, SKILLID_POISONING, 60, 0) and RandomInt (2))
+				SetPoison (defender, 6, "You have been poisoned by " + attacker.name);
+			elseif (CheckSkill (attacker, SKILLID_POISONING, 40, 0) and RandomInt (2))
+				SetPoison (defender, 4, "You have been poisoned by " + attacker.name);
+			elseif (CheckSkill (attacker, SKILLID_POISONING, 20, 0) and RandomInt (2))
+				SetPoison (defender, 2, "You have been poisoned by " + attacker.name);
+			endif
+		endif
+	endif
+
+endprogram
+

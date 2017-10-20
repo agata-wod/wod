@@ -1,0 +1,994 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/attributes";
+include "include/spawn";
+include "include/crafting";
+include "../pkg/items/treasuremap/treasuremap";
+
+Const UACTION_PICK := 0x0B;
+
+Const REGION_WORLD			:= 1;
+Const REGION_DUNGEONS		:= 2;
+
+Const GROUP_CLAY			:= 1;
+Const GROUP_SAND			:= 2;
+Const GROUP_NORMAL_ORE		:= 3;
+Const GROUP_IRON			:= 4;
+Const GROUP_BRONZE			:= 5;
+Const GROUP_DULL_COPPER		:= 6;
+Const GROUP_COPPER			:= 7;
+Const GROUP_ONYX			:= 8;
+Const GROUP_PYRITE			:= 9;
+Const GROUP_MALACHITE		:= 10;
+Const GROUP_AZURITE			:= 11;
+Const GROUP_RUBYSTEEL		:= 12;
+Const GROUP_BLUESTEEL		:= 13;
+
+var mining_type := 0;
+var region := 0;
+var bad_event_chance := 0;
+var craftingbag;
+
+program use_picktool (character, tool)
+
+	SendSysmessage (character, "Select a place to mine, or a treasure map to dig up.");
+	var mining_loc := TargetCoordinates (character);
+	if (!mining_loc)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	
+	if (mining_loc.item)
+		case (mining_loc.item.objtype)
+			UOBJ_DECODED_MAP:
+			UOBJ_LEVEL_1_MAP:
+			UOBJ_LEVEL_2_MAP:
+			UOBJ_LEVEL_3_MAP:
+			UOBJ_LEVEL_4_MAP:
+			UOBJ_LEVEL_5_MAP:
+			UOBJ_SEER_MAP:
+				TryToDigUpTreasureMap (character, mining_loc.item);
+				return;
+		endcase;
+		if (mining_loc.item.container)
+			SendSysmessage (character, "What do you plan to do with that?");
+			return;
+		endif
+	endif
+
+	var distt := coordist (character.x, character.y, mining_loc.x, mining_loc.y );
+	if ( distt > 2 )
+		SendSysmessage (character, "That is too far away");
+		return;
+	endif
+
+	var info := GetMapInfo (mining_loc.x , mining_loc.y, mining_loc.realm);
+
+	if ( IsSwampTile (info.landtile) )
+		mining_type := GROUP_CLAY;
+		bad_event_chance := 3;
+	elseif ( IsSandTile (info.landtile) ) 
+		mining_type := GROUP_SAND;
+		bad_event_chance := 3;
+	elseif (IsMinableTile ( info.landtile , mining_loc.objtype ) )
+		region := DetermineMiningRegion (mining_loc);
+		mining_type := DetermingMiningGroupType (character, tool);
+		if (!mining_type)
+			return;
+		endif
+	else
+		SendSysMessage (character, "You cannot mine on that.");
+		return;
+	endif
+
+	craftingbag := FindCraftingBag (character);
+	var sx := character.x;
+	var sy := character.y;
+
+	repeat
+		case (mining_type)
+			GROUP_CLAY: 
+				if (DigForClay (character, mining_loc, info))
+					return;
+				endif
+			GROUP_SAND:
+				if (DigForSand (character, mining_loc, info))
+					return;
+				endif
+			default:
+				if (DigForOre (character, mining_loc, info))
+					return;
+				endif
+		endcase
+
+		if ( RandomInt(100) <= CINT (bad_event_chance) )
+			if ( DoRandomEvent (character, tool) )
+				return;
+			endif
+		endif
+
+	until (character.x != sx or character.y != sy or character.hidden);
+
+endprogram
+
+
+
+///////////////////
+//  determines if the tile is one that you can mine ore on
+///////////////////
+
+function IsMinableTile ( theobj , othertype )
+
+	if(theobj >= 0xe2 and theobj <= 0xe7)
+		return 1;
+	elseif (theobj >= 0x0f3 and theobj <= 0x0f7)
+		return 1;
+	elseif (theobj >= 0x104 and theobj <= 0x107)
+		return 1;
+	elseif (theobj >= 0x110 and theobj <= 0x113)
+		return 1;
+	elseif (theobj >= 0x122 and theobj <= 0x125)
+		return 1;
+	elseif (theobj >= 0x1d3 and theobj <= 0x1da)
+		return 1;
+	elseif (theobj >= 0x21f and theobj <= 0x230)
+		return 1;
+	elseif (theobj >= 0x232 and theobj <= 0x23B)
+		return 1;
+	elseif (theobj >= 0x6cd and theobj <= 0x6d1)
+		return 1;
+	elseif (theobj >= 0x6da and theobj <= 0x6dd)
+		return 1;
+	elseif (theobj >= 0x6eb and theobj <= 0x6fe)
+		return 1;
+	elseif (theobj >= 0x70d and theobj <= 0x714)
+		return 1;
+	elseif (theobj >= 0x71d and theobj <= 0x720)
+		return 1;
+	elseif (theobj >= 0x72b and theobj <= 0x732)
+		return 1;
+	elseif (theobj >= 0x73b and theobj <= 0x73e)
+		return 1;
+	elseif (theobj >= 0x749 and theobj <= 0x750)
+		return 1;
+	elseif (theobj >= 0x759 and theobj <= 0x75c)
+		return 1;
+	elseif (theobj >= 0x240 and theobj <= 0x250)
+        return 1;
+	elseif( (othertype >= 0x053b) and (othertype <= 0x0553) and (othertype != 0x0550 ) )
+		return 1;
+	elseif( (theobj == 0xDF) or (theobj == 0x75) or (theobj == 0xDE) )
+		return 1;
+	else
+		return 0;
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  determines if the tile being mined on is one that produces clay
+///////////////////
+
+function IsSwampTile (theobjtype)
+	if (theobjtype >= 0x3d65 and theobjtype <= 0x3ef0)
+		return 1;
+	else
+		return 0;
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  determines if the tile being mined on is sand
+///////////////////
+
+function IsSandTile (theobj)
+
+	if (theobj >= 0x0016 and theobj <=  0x004b)
+		return 1;
+	elseif (theobj >= 0x011e and theobj <= 0x012d)
+		return 1;
+	elseif (theobj >= 0x0192 and theobj <= 0x01ab)
+		return 1;
+	elseif (theobj >= 0x01b9 and theobj <= 0x01d1)
+		return 1;
+	elseif (theobj >= 0x0282 and theobj <= 0x0291)
+		return 1;
+	elseif (theobj >= 0x03b7 and theobj <= 0x03ca)
+		return 1;
+	elseif (theobj >= 0x064b and theobj <= 0x0672)
+		return 1;
+	else
+		return 0;
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  tries to dig for sand at the chosen location
+///////////////////
+
+function DigForSand (character, use_on, info)
+	var tdiff := GetHarvestDifficulty ( "sand", use_on.x , use_on.y , info.landtile, use_on.realm );
+	if( !tdiff )
+		SendSysMessage (character, "There is no sand here to mine.");
+		return 1;
+	endif
+
+	for i := 1 to 3
+		PerformAction (character, UACTION_PICK);
+		sleepms (1600);
+		PlaySoundEffect (character, 0x126);
+	endfor
+
+	if ( CheckSkill (character, SKILLID_MINING, tdiff, 0 ) )
+		var check_amt := HarvestResource ( "sand", use_on.x, use_on.y, 2, 2, use_on.realm);
+		if (!check_amt)
+			SendSysMessage (character, "There is no sand here to mine.");
+			return 1;
+		endif
+		
+		var amount := RandomInt (5) + CINT (GetAttribute (character, ATTRIBUTEID_MINING)/20) + 1;
+		if (character.race == RACE_HUMAN)
+			amount := amount + RandomInt(2) + 1;
+		endif
+		var thesand := CreateItemInContainer (craftingbag, UOBJ_SAND, amount);
+		if (!thesand)
+			PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+			return 1;
+		else
+			thesand.movable := 1;
+			PrintTextAbovePrivate (character, "*" + thesand.desc + "*", character);
+		endif
+		amount := amount / 5;
+		if (amount)
+			thesand := CreateItemInContainer (craftingbag, UOBJ_SAND_STONE, amount);
+			if (!thesand)
+				PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+				return 1;
+			else
+				thesand.movable := 1;
+				PrintTextAbovePrivate (character, "*" + thesand.desc + "*", character);
+			endif
+		endif
+			
+	endif
+
+	return 0;
+
+endfunction
+
+
+
+
+///////////////////
+//  tries to dig for clay at the location specified
+///////////////////
+
+function DigForClay (character, use_on, info)
+
+	var tdiff := GetHarvestDifficulty ( "clay", use_on.x , use_on.y , info.landtile, use_on.realm );
+	if( !tdiff )
+		SendSysMessage (character, "There is no clay here to mine.");
+		return 1;
+	endif
+
+	for i := 1 to 3
+		PerformAction (character, UACTION_PICK);
+		sleepms (1600);
+		PlaySoundEffect (character, 0x126);
+	endfor
+	sleep(1);
+
+	if ( CheckSkill (character, SKILLID_MINING, tdiff, 0 ) )
+		var check_amt := HarvestResource ( "clay", use_on.x, use_on.y, 2, 2, use_on.realm);
+		if (!check_amt)
+			SendSysMessage (character, "There is no clay here to mine.");
+			return 1;
+		endif
+
+		var amount := RandomInt (5) + CInt (GetATTRIBUTE (character, ATTRIBUTEID_MINING)/20) + 1;
+		if (character.race == RACE_HUMAN)
+			amount := amount + RandomInt(2) + 1;
+		endif
+		var theclay := CreateItemInContainer (craftingbag, UOBJ_CLAY, amount);
+		if (!theclay)
+			PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+			return 1;
+		else
+			theclay.movable := 1;
+			PrintTextAbovePrivate (character, "*" + theclay.desc + "*", character);
+		endif
+	endif
+
+	return 0;
+
+endfunction
+
+
+
+
+///////////////////
+//  attempts to dig for ore in the area specified
+///////////////////
+
+
+function DigForOre (character, use_on, info)
+    
+	var mining_difficulty := GetHarvestDifficulty ( "ore", use_on.x , use_on.y , info.landtile, use_on.realm );
+	if( !mining_difficulty )
+		SendSysMessage (character, "There is no ore here to mine.");
+		return 1;
+	endif
+
+	for i := 1 to 5
+		performaction (character, UACTION_PICK);
+		sleepms (1500);
+		PlaySoundEffect (character, 0x126);
+	endfor
+	sleep(1);
+
+	//if they fail to get anything
+	if (!CheckSkill (character, SKILLID_MINING, -1, 0 ) )
+		return 0;
+	endif
+
+	var character_skill := GetAttribute (character, ATTRIBUTEID_MINING);
+	var ore_amount := RandomInt (5) + CInt ( (character_skill + 5)/20) + 1;
+	var ore_type := DetermineOreType (character, mining_type);
+
+	HarvestResource ( "ore", use_on.x, use_on.y, 1, ore_amount, use_on.realm );
+	if (character.race == RACE_HUMAN)
+		ore_amount := ore_amount + RandomInt(2) + 1;
+	endif
+	var created_ore := CreateItemInContainer (craftingbag, ore_type, ore_amount);
+	if (!created_ore)
+		PrintTextAbovePrivate (character, "*Your backpack is full*", character);
+		return 1;
+	else
+		created_ore.movable := 1;
+		PrintTextAbovePrivate (character, "*" + created_ore.desc + "*", character);
+	endif
+	ore_amount := ore_amount / 5;
+	if (ore_amount)
+		var stone_type := DetermineStoneType(character, ore_type);
+		created_ore := CreateItemInContainer (craftingbag, stone_type, ore_amount);
+		if (!created_ore)
+			PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+			return 1;
+		else
+			created_ore.movable := 1;
+			PrintTextAbovePrivate (character, "*" + created_ore.desc + "*", character);
+		endif
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  determines the which region of the world that the character is mining in
+///////////////////
+
+function DetermineMiningRegion (use_on)
+	var x := use_on.x;
+	var y := use_on.y;
+
+	if (x > 5120 and x < 6138 and y > 0 and y < 2298)
+		return REGION_DUNGEONS;
+	else
+		return REGION_WORLD;
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  figures out what mining table to use
+///////////////////
+
+function DetermingMiningGroupType (character, tool)
+	case (tool.objtype)
+		0x17091:		//iron shovel
+			bad_event_chance := 6;
+			return GROUP_IRON;
+		0x17092:		//bronze shovel
+			if (GetAttribute (character, ATTRIBUTEID_MINING) < 40)
+				SendSysMessage (character, "Your skill isn't high enough to use this item.");
+				return 0;
+			endif
+			bad_event_chance := 7;
+			return GROUP_BRONZE;
+		0x17093:		//dull copper shovel
+			if (GetAttribute (character, ATTRIBUTEID_MINING) < 50)
+				SendSysMessage (character, "Your skill isn't high enough to use this item.");
+				return 0;
+			endif
+			bad_event_chance := 7;
+			return GROUP_DULL_COPPER;
+		0x17094:		//copper shovel
+			if (GetAttribute (character, ATTRIBUTEID_MINING) < 60)
+				SendSysMessage (character, "Your skill isn't high enough to use this item.");
+				return 0;
+			endif
+			bad_event_chance := 7;
+			return GROUP_COPPER;
+		0x17095:		//onyx shovel
+			if (GetAttribute (character, ATTRIBUTEID_MINING) < 70)
+				SendSysMessage (character, "Your skill isn't high enough to use this item.");
+				return 0;
+			endif
+			bad_event_chance := 8;
+			return GROUP_ONYX;
+		0x17096:		//pyrite shovel
+			if (GetAttribute (character, ATTRIBUTEID_MINING) < 80)
+				SendSysMessage (character, "Your skill isn't high enough to use this item.");
+				return 0;
+			endif
+			bad_event_chance := 8;
+			return GROUP_PYRITE;
+		0x17097:		//malachite shovel
+			if (GetAttribute (character, ATTRIBUTEID_MINING) < 90)
+				SendSysMessage (character, "Your skill isn't high enough to use this item.");
+				return 0;
+			endif
+			bad_event_chance := 9;
+			return GROUP_MALACHITE;
+		0x17098:		//azurite shovel
+			if (GetAttribute (character, ATTRIBUTEID_MINING) < 90)
+				SendSysMessage (character, "Your skill isn't high enough to use this item.");
+				return 0;
+			endif
+
+			if (region != REGION_WORLD)
+				SendSysMessage (character, "You can't use this shovel here.");
+				return 0;
+			endif
+			bad_event_chance := 10;
+			return GROUP_AZURITE;
+		0x17099:		//rubysteel shovel
+			if (GetAttribute (character, ATTRIBUTEID_MINING) < 90)
+				SendSysMessage (character, "Your skill isn't high enough to use this item.");
+				return 0;
+			endif
+			if (region != REGION_DUNGEONS)
+				SendSysMessage (character, "You can't use this shovel here.");
+				return 0;
+			endif
+			bad_event_chance := 10;
+			return GROUP_RUBYSTEEL;
+		0x1709a:		//bluesteel shovel
+			if (GetAttribute (character, ATTRIBUTEID_MINING) < 90)
+				SendSysMessage (character, "Your skill isn't high enough to use this item.");
+				return 0;
+			endif
+			if (region != REGION_DUNGEONS)
+				SendSysMessage (character, "You can't use this shovel here.");
+				return 0;
+			endif
+			bad_event_chance := 10;
+			return GROUP_BLUESTEEL;
+		default:
+			if (region == REGION_DUNGEONS)
+				bad_event_chance := 5;
+			else
+				bad_event_chance := 3;
+			endif
+			return GROUP_NORMAL_ORE;
+	endcase
+
+endfunction
+
+
+
+
+///////////////////
+//  determines what type of ore gets mined
+///////////////////
+
+function DetermineOreType (character, mining_type)
+	var chance := RandomInt (100) + 1;
+	var racialboost := 0;
+	if (character.race == RACE_ELF)
+		racialboost := 20;
+		chance := chance - racialboost;
+	endif
+
+	case (mining_type)
+		GROUP_NORMAL_ORE:
+			if (chance < 7 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				if (region == REGION_WORLD)
+					return UOBJ_AZURITE_ORE;
+				elseif (RandomInt (2) )
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 14 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 21 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 29 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 38 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 49 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 60 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_IRON:
+			if (chance < 5 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				if (region == REGION_WORLD)
+					return UOBJ_AZURITE_ORE;
+				elseif (RandomInt (2) )
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 10 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 15 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 20 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 25 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 32 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 40 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_BRONZE:
+			if (chance < 5 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				if (region == REGION_WORLD)
+					return UOBJ_AZURITE_ORE;
+				elseif (RandomInt (2) )
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 10 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 15 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 20 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 25 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 32 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 80 and CheckSkill (character, SKILLID_MINING, 35 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_DULL_COPPER:
+			if (chance < 5 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				if (region == REGION_WORLD)
+					return UOBJ_AZURITE_ORE;
+				elseif (RandomInt (2) )
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 10 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 15 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 20 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 25 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 60 and CheckSkill (character, SKILLID_MINING, 45 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 70 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_COPPER:
+			if (chance < 5 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				if (region == REGION_WORLD)
+					return UOBJ_AZURITE_ORE;
+				elseif (RandomInt (2) )
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 10 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 15 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 20 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 55 and CheckSkill (character, SKILLID_MINING, 55 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 62 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 70 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_ONYX:
+			if (chance < 5 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				if (region == REGION_WORLD)
+					return UOBJ_AZURITE_ORE;
+				elseif (RandomInt (2) )
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 10 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 15 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 45 and CheckSkill (character, SKILLID_MINING, 65 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 52 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 60 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 70 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_PYRITE:
+			if (chance < 5 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				if (region == REGION_WORLD)
+					return UOBJ_AZURITE_ORE;
+				elseif (RandomInt (2) )
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 10 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 40 and CheckSkill (character, SKILLID_MINING, 75 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 45 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 50 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 60 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 70 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_MALACHITE:
+			if (chance < 5 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				if (region == REGION_WORLD)
+					return UOBJ_AZURITE_ORE;
+				elseif (RandomInt (2) )
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 30 and CheckSkill (character, SKILLID_MINING, 85 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 35 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 40 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 48 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 54 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 65 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_AZURITE:
+			if (chance < 22 and CheckSkill (character, SKILLID_MINING, 85 - racialboost, 0 ))
+				return UOBJ_AZURITE_ORE;
+			elseif (chance < 27 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 32 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 37 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 42 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 50 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 60 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_BLUESTEEL:
+			if (chance < 25 and CheckSkill (character, SKILLID_MINING, 85 - racialboost, 0 ))
+				if (RandomInt (8) == 0)
+					return UOBJ_RUBYSTEEL_ORE;
+				else
+					return UOBJ_BLUESTEEL_ORE;
+				endif
+			elseif (chance < 30 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 35 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 40 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 48 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 55 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 65 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_RUBYSTEEL:
+			if (chance < 25 and CheckSkill (character, SKILLID_MINING, 85 - racialboost, 0 ))
+				if (RandomInt (8) == 0)
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 30 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 35 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 40 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 48 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 55 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 65 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+	endcase
+endfunction
+
+function DetermineStoneType (character, ore_type)
+	var racialboost := 0;
+	if (character.race == RACE_ELF)
+		racialboost := 10;
+	endif
+	if (RandomInt(100) < (10 + racialboost))
+		ore_type := 0;
+	endif
+	case (ore_type)
+		UOBJ_BLUESTEEL_ORE:
+			return UOBJ_BLUESTEEL_STONE;
+		UOBJ_RUBYSTEEL_ORE:
+			return UOBJ_RUBYSTEEL_STONE;
+		UOBJ_MALACHITE_ORE:
+			return UOBJ_MALACHITE_STONE;
+		UOBJ_PYRITE_ORE:
+			return UOBJ_PYRITE_STONE;
+		UOBJ_ONYX_ORE:
+			return UOBJ_ONYX_STONE;
+		UOBJ_COPPER_ORE:
+			return UOBJ_COPPER_STONE;
+		UOBJ_DULLCOPPER_ORE:
+			return UOBJ_DULLCOPPER_STONE;
+		UOBJ_BRONZE_ORE:
+			return UOBJ_BRONZE_STONE;
+		UOBJ_IRON_ORE:
+			return UOBJ_GRANITE_STONE;
+		default:
+			return UOBJ_MARBLE_STONE;
+	endcase
+endfunction
+
+
+///////////////////
+//  randomly does something, such as break a tool
+///////////////////
+
+function DoRandomEvent (me, tool)
+
+	var it;
+	if ( mining_type == GROUP_SAND or mining_type == GROUP_CLAY or mining_type == GROUP_NORMAL_ORE )
+		case (RandomInt (8))
+			0:
+			1:
+			2:
+				it := SpawnNPCInArea ("slime", me.x, me.y, 4, 20, me.realm);
+				if (it)
+					SendSysmessage(me, "A slime oozes over to see what you're doing");
+					return 1;
+				endif
+				return 0;
+			3:
+				if ( CheckSkill(me, SKILLID_MINING, 90,0) and RandomInt (2) )
+					var maptype := 0x16003;
+					if ( randomint(5) == 1 )
+						maptype := 0x16004;
+					endif
+					CreateIteminContainer (craftingbag, maptype, 1);
+					SendSysMessage (me, "You discover a tattered old map!");
+					return 0;
+				endif
+			4:
+			5:
+			  	if ( CheckSkill(me, SKILLID_MINING, 70,0) )
+					CreateIteminContainer (craftingbag, 0x0F25, 1);
+					sendsysmessage (me, "You find a chunk of fossilized sap!");
+					return 0;
+				endif
+			6:
+				if ( randomint(4) == 1 )
+					sendsysmessage(me, "Oh no your tool breaks!");
+					DestroyItem (tool);
+					return 1;
+				endif
+			7:
+				if (mining_type == GROUP_SAND)
+					it := SpawnNPCInArea ("sandelemental", me.x, me.y, 4, 20, me.realm);
+					if (it)
+						SendSysmessage(me, "Oh no!  A sand elemental!");
+						return 1;
+					endif
+					return 0;
+				else
+					it := SpawnNPCInArea ("earthelemental", me.x, me.y, 4, 20, me.realm);
+					if (it)
+						SendSysmessage(me, "Oh no!  An earth elemental!");
+						return 1;
+					endif
+					return 0;
+				endif
+			default:
+				return 0;
+		endcase
+	elseif (mining_type == GROUP_BLUESTEEL or mining_type == GROUP_RUBYSTEEL or mining_type == GROUP_AZURITE)
+		case (RandomInt (12))
+			0:
+			1:
+				it := SpawnNPCInArea ("slime", me.x, me.y, 4, 20, me.realm);
+				if (it)
+					SendSysmessage(me, "A slime oozes over to see what you're doing");
+					return 1;
+				endif
+				return 0;
+			2:
+				if ( CheckSkill(me, SKILLID_MINING, 90,0) and RandomInt (2) )
+					var maptype := 0x16005;
+					if ( randomint(5) == 1 )
+						maptype := 0x16006;
+					endif
+					CreateIteminContainer (craftingbag, maptype, 1);
+					SendSysMessage (me, "You discover a tattered old map!");
+					return 0;
+				endif
+			3:
+				CreateItemInContainer (craftingbag, UOBJ_GEM_RUBY, 1);
+				SendSysMessage (me, "You find a ruby!");
+			4:
+				CreateItemInContainer (craftingbag, UOBJ_GEM_EMERALD, 1);
+				SendSysMessage (me, "You find an emerald!");
+			5:
+				if (RandomInt (2) )
+					CreateItemInContainer (craftingbag, UOBJ_GEM_DIAMOND, 1);
+					SendSysMessage (me, "You find a diamond!");
+				endif
+			6:
+				sendsysmessage(me, "Oh no your tool breaks!");
+				DestroyItem (tool);
+				return 1;
+			7:
+			8:
+				it := SpawnNPCInArea ("giantslime", me.x, me.y, 4, 20, me.realm);
+				if (it)
+					SendSysmessage(me, "A slime oozes over to see what you're doing.");
+					return 1;
+				endif
+				return 0;
+			9:
+			10:
+				it := SpawnNPCInArea ("graniteelemental", me.x, me.y, 4, 20, me.realm);
+				if (it)
+					SendSysmessage(me, "Oh no!  A granite elemental!");
+					return 1;
+				endif
+				return 0;
+			11:
+				for i := 1 to 4
+					SpawnNPCInArea ("earthelemental", me.x, me.y, 4, 20, me.realm);
+				endfor
+			default:
+				return 0;
+		endcase
+	else
+		case (RandomInt (10))
+			0:
+			1:
+			2:
+				it := SpawnNPCInArea ("slime", me.x, me.y, 4, 20, me.realm);
+				if (it)
+					SendSysmessage(me, "A slime oozes over to see what you're doing");
+					return 1;
+				endif
+				return 0;
+			3:
+				if ( CheckSkill(me, SKILLID_MINING, 90,0) and RandomInt (2) )
+					var maptype := 0x16004;
+					if ( randomint(5) == 1 )
+						maptype := 0x16005;
+					endif
+					CreateIteminContainer (craftingbag, maptype, 1);
+					SendSysMessage (me, "You discover a tattered old map!");
+					return 0;
+				endif
+			4:
+				CreateIteminContainer (craftingbag, UOBJ_GEM_SAPPHIRE, 1);
+				sendsysmessage (me, "You find a sapphire!");
+				return 0;
+			5:
+				CreateIteminContainer (craftingbag, UOBJ_GEM_STAR_SAPPHIRE, 1);
+				sendsysmessage (me, "You find a star sapphire!");
+				return 0;
+			6:
+				sendsysmessage(me, "Oh no your tool breaks!");
+				DestroyItem (tool);
+				return 1;
+			7:
+			8:
+				it := SpawnNPCInArea ("earthelemental", me.x, me.y, 4, 20, me.realm);
+				if (it)
+					SendSysmessage(me, "Oh no!  An earth elemental!");
+					return 1;
+				else
+					return 0;
+				endif
+			9:
+				if ( randomint(2) )
+					it := SpawnNPCInArea ("graniteelemental", me.x, me.y, 4, 20, me.realm);
+					if (it)
+						SendSysmessage(me, "Oh no!  A granite elemental!");
+						return 1;
+					else
+						return 0;
+					endif
+				endif
+			default:
+				return 0;
+		endcase
+
+	endif
+
+	return 0;
+
+endfunction

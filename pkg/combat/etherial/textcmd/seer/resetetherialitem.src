@@ -1,0 +1,25 @@
+use uo;
+use os;
+
+include "include/string";
+
+program reset_etherial_item (character)
+	SendSysMessage (character, "Target an item to make etherial:");
+	var targetted := Target (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	SendSysMessage (character, "The item's timer has been reset.");
+	SetObjProperty (targetted, "etherial", 1);
+	SetObjProperty (targetted, "questitem", 1);
+	SetObjProperty (targetted, "returntime", ReadGameClock() + 604800);
+
+	SetObjProperty (targetted, "tname", GetObjProperty (targetted, "etherialname"));
+	var newitem := CreateItemAtLocation (1, 1, 1, targetted.objtype, 1, REALM_BRITANNIA);
+	if (newitem)
+		targetted.name := CSTR ("a magic " + TruncateArticle (newitem.desc));
+		DestroyItem (newitem);
+	endif
+endprogram

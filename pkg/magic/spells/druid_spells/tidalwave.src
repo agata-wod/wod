@@ -1,0 +1,148 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 7;
+
+//this the the non-saveonext bloodstain
+Const UOBJ_TEMP_ITEM := 0x122d;
+
+program tidal_wave ( parms )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+
+	if (caster != "nocaster")
+		if (!CheckSkill (caster, SKILLID_ANIMALLORE, 80, 0))
+			SendSysMessage (caster, "The elements do not heed your call");
+			EraseObjProperty (caster, "#castingdruidspell");
+			Fizzle (caster);
+			return 0;
+		endif
+	endif
+
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+
+	//allow them to cast another spell now
+	EraseObjProperty (caster, "#castingdruidspell");
+	detach ();
+	
+	//calculate spell damage
+	var dmg := RandomDiceRoll ("14d3");
+	if (caster and caster != "nocaster")
+		var caster_skill := GetAttribute (caster, ATTRIBUTEID_ANIMALLORE) + GetAttribute (caster, ATTRIBUTEID_MAGERY);
+		var magerybonus := randomint(cint(caster_skill/20));
+		if (magerybonus)
+			dmg := dmg + magerybonus;
+		endif
+	else
+		dmg := dmg + 5;
+	endif
+
+	cast_on := CheckMagicReflection (caster, cast_on);
+	if (!cast_on)
+		return;
+	endif
+
+	PlaySoundEffect (cast_on, SFX_SPELL_SUMMON_ELEMENTAL);
+
+	//save the target's location so that the wave doesn't go wacky if they move
+	var targettedx := cast_on.x;
+	var targettedy := cast_on.y;
+	var targettedz := cast_on.z;
+	var targettedr := cast_on.realm;
+
+	//create the curved wave top
+	var wavetop1 := CreateItemAtLocation (targettedx, targettedy, targettedz+110, 0x122d, 1, targettedr);
+	wavetop1.graphic := 0x350b;
+	wavetop1.movable := 0;
+	var wavetop2 := CreateItemAtLocation (targettedx, targettedy, targettedz+110, 0x122d, 1, targettedr);
+	wavetop2.graphic := 0x34ed;
+	wavetop2.movable := 0;
+
+
+	var i;
+	var waterfall_array := array{};
+	var waterfall_tile;
+
+	//create all of the waterfall effect and store them in waterfall_array
+	for(i := 10; i >= 0; i := i - 1)
+		waterfall_tile := CreateItemAtLocation (targettedx, targettedy, targettedz+i*10, 0x122d, 1, targettedr);
+		waterfall_tile.graphic := 0x3517;
+		waterfall_tile.movable := 0;
+		waterfall_array.append (waterfall_tile);
+		waterfall_tile := CreateItemAtLocation (targettedx, targettedy, targettedz+i*10, 0x122d, 1, targettedr);
+		waterfall_tile.graphic := 0x34f9;
+		waterfall_tile.movable := 0;
+		waterfall_array.append (waterfall_tile);
+		sleepms (50);
+	endfor
+
+	//make the round puddle at the bottom
+	var waterfall_base1 := CreateItemAtLocation (targettedx,   targettedy+1, targettedz, 0x122d, 1, targettedr);
+	waterfall_base1.graphic := 0x17a1;
+	waterfall_base1.movable := 0;
+	var waterfall_base2 := CreateItemAtLocation (targettedx+1, targettedy,   targettedz, 0x122d, 1, targettedr);
+	waterfall_base2.graphic := 0x179d;
+	waterfall_base2.movable := 0;
+	var waterfall_base3 := CreateItemAtLocation (targettedx,   targettedy-1, targettedz, 0x122d, 1, targettedr);
+	waterfall_base3.graphic := 0x179f;
+	waterfall_base3.movable := 0;
+	var waterfall_base4 := CreateItemAtLocation (targettedx-1, targettedy,   targettedz, 0x122d, 1, targettedr);
+	waterfall_base4.graphic := 0x17a3;
+	waterfall_base4.movable := 0;
+	var waterfall_base5 := CreateItemAtLocation (targettedx+1, targettedy+1, targettedz, 0x122d, 1, targettedr);
+	waterfall_base5.graphic := 0x17a7;
+	waterfall_base5.movable := 0;
+	var waterfall_base6 := CreateItemAtLocation (targettedx-1, targettedy+1, targettedz, 0x122d, 1, targettedr);
+	waterfall_base6.graphic := 0x17a8;
+	waterfall_base6.movable := 0;
+	var waterfall_base7 := CreateItemAtLocation (targettedx+1, targettedy-1, targettedz, 0x122d, 1, targettedr);
+	waterfall_base7.graphic := 0x17a5;
+	waterfall_base7.movable := 0;
+	var waterfall_base8 := CreateItemAtLocation (targettedx-1, targettedy-1, targettedz, 0x122d, 1, targettedr);
+	waterfall_base8.graphic := 0x17a6;
+	waterfall_base8.movable := 0;
+	var waterfall_base9 := CreateItemAtLocation (targettedx,   targettedy,   targettedz, 0x122d, 1, targettedr);
+	waterfall_base9.graphic := 0x1797;
+	waterfall_base9.movable := 0;
+
+	dmg := DruidResist (caster, cast_on, dmg);
+	DoDamageByType (caster, cast_on, dmg, DAMAGETYPE_COLD);
+
+	//water sound effect and short sleep
+	PlaySoundEffect(cast_on, 0x11);
+	sleep (5);
+
+	//destroy the waterfall
+	DestroyItem (wavetop1);
+	DestroyItem (wavetop2);
+	foreach waterfall_tile in waterfall_array
+		DestroyItem (waterfall_tile);
+		sleepms(25);
+	endforeach
+
+	//sleep longer before destroying the puddle
+	sleep(45);
+	DestroyItem (waterfall_base1);
+	DestroyItem (waterfall_base2);
+	DestroyItem (waterfall_base3);
+	DestroyItem (waterfall_base4);
+	DestroyItem (waterfall_base5);
+	DestroyItem (waterfall_base6);
+	DestroyItem (waterfall_base7);
+	DestroyItem (waterfall_base8);
+	DestroyItem (waterfall_base9);
+
+	return 1;
+endprogram

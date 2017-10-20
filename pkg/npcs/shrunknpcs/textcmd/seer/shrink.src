@@ -1,0 +1,155 @@
+use os;
+use uo;
+use cfgfile;
+
+include "include/gumps";
+include "include/client";
+include "include/wodinc";
+include "include/objtype";
+include "include/utility";
+include "include/attributes";
+include "../pkg/npcs/shrunknpcs/shrunknpcs";
+
+program textcmd_shrink (character, text)
+	text := Lower (text);
+	if (text)
+		if (text == "help")
+			var themessage := "SHRINK:";
+			themessage := themessage + "<p>Turns the selected NPC into a totem that can later ";
+			themessage := themessage + "be used to recreate the original.  All properties and items worn and ";
+			themessage := themessage + "carried by the NPC are retained.  ";
+			themessage := themessage + "<p>Warning:  do not copy NPCs carrying etherial items";
+
+			themessage := themessage + "<p><p><b>Other options</b>";
+			themessage := themessage + "<p>'shrink evilclone' - Use on a player to create a shrunken evil NPC clone of that player.  ";
+			themessage := themessage + "(the clone's equipment is automatically newbied)";
+			
+			SendStringAsHtmlWindow (character, themessage, "Help");
+		elseif (text == "evilclone")
+			var totem := CreateEvilPlayerClone (character);
+			if (totem == error)
+				SendSysMessage (character, "Error: " + totem.errortext);
+			endif
+			return;
+		else
+			SendSysMessage (character, "Error:  Unknown option.  Type '.shrink help'");
+			return;
+		endif
+		return;
+	endif
+
+	SendSysMessage (character, "Shrink what?");
+	var mobile := Target (character);
+	if (!mobile)
+		SendSysMessage (character, "Canceled.");
+		return;
+	elseif (!mobile.npctemplate)
+		SendSysMessage (character, "This can only be used on NPCs.");
+		return;
+	endif
+
+	var totem := ShrinkNPC (mobile, character.backpack);
+	if (totem == error)
+		SendSysMessage (character, "Error: " + totem.errortext);
+	endif
+
+	SendSysMessage (character, "Done!");
+endprogram
+
+
+
+
+///////////////////
+//  Creates an evil NPC clone of the player
+///////////////////
+
+function CreateEvilPlayerClone (character)
+	SendSysMessage (character, "Select a player to make an evil clone of:");
+	var mobile := Target (character);
+	if (!mobile)
+		SendSysMessage (character, "Canceled.");
+		return;
+	elseif (!mobile.acctname)
+		SendSysMessage (character, "This can only be used on players.");
+		return;
+	endif
+
+	var totem := CreateItemInContainer (character.backpack, 0x170bc, 1);
+	if (!totem)
+		return CreateError ("Could not create totem - full pack");
+	endif
+
+	//This property lets us insert items into the totem.  Prevents problems
+	SetObjProperty (totem, "#addingitems", 1);
+
+	SetObjProperty (totem, "npctemplate", ":evilhumans:piratecaptain");
+	SetObjProperty (totem, "script", ":evilhumans:ai_killpcs_smart_default");
+	SetObjProperty (totem, "graphic", mobile.graphic);
+	totem.color := mobile.color;
+	totem.name := mobile.name;
+	totem.newbie := 1;
+
+	var trackingcfg := ReadConfigFile (":tracking:tracking");
+	var elem := FindConfigElem (trackingcfg, mobile.graphic);
+	if (elem)
+		totem.graphic := elem.tile;
+	else
+		totem.graphic := 0x3a;
+	endif
+
+	foreach property in GetObjPropertyNames (mobile)
+		var value := GetObjProperty (mobile, property);
+		SetObjProperty (totem, property, value);
+	endforeach
+
+	var equippack := CreateItemInContainer (totem, UOBJ_BACKPACK, 1);
+	SetObjProperty (totem, "equippack", equippack.serial);
+	foreach item in ListEquippedItems (mobile)
+		if (item != mobile.backpack)
+			var newitem := CopyItemInContainer (item, equippack);
+			newitem.newbie := 1;
+		endif
+	endforeach
+
+	var lootbag := CreateItemInContainer (totem, UOBJ_BACKPACK, 1);
+	SetObjProperty (totem, "lootbag", lootbag.serial);
+
+	SetObjProperty (totem, "str", CINT (GetAttributeBaseValue (mobile, "Strength")/10));
+	SetObjProperty (totem, "int", CINT (GetAttributeBaseValue (mobile, "Intelligence")/10));
+	SetObjProperty (totem, "dex", CINT (GetAttributeBaseValue (mobile, "Dexterity")/10));
+
+	SetObjProperty (totem, "str_mod", CINT (GetAttributeTemporaryMod (mobile, "Strength")/10));
+	SetObjProperty (totem, "int_mod", CINT (GetAttributeTemporaryMod (mobile, "Intelligence")/10));
+	SetObjProperty (totem, "dex_mod", CINT (GetAttributeTemporaryMod (mobile, "Dexterity")/10));
+	SetObjProperty (totem, "ar_mod", mobile.ar_mod);
+
+	var skills := array{};
+	for i := 0 to 57
+		skills[i] := GetAttribute (mobile, GetAttributeIDBySkillID (i));
+	endfor
+
+	SetObjProperty (totem, "skills", skills);
+	SetObjProperty (totem, "gender", mobile.gender);
+	
+	if (mobile.title_prefix)
+		SetObjProperty (totem, "title_prefix", mobile.title_prefix);
+	endif
+	if (mobile.title_suffix)
+		SetObjProperty (totem, "title_suffix", mobile.title_suffix);
+	endif
+	if (mobile.title_race)
+		SetObjProperty (totem, "title_race", mobile.title_race);
+	endif
+	if (mobile.title_guild)
+		SetObjProperty (totem, "title_guild", mobile.title_guild);
+	endif
+
+	//prevent more items from being added to the totem
+	EraseObjProperty (totem, "#addingitems");
+	return totem;
+endfunction
+
+
+
+
+

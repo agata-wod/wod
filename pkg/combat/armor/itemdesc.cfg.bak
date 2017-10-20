@@ -1,0 +1,3263 @@
+/////////////////////////////////////////////////////////////////////////////
+//
+// see pol/config/armrdesc.cfg for descriptions of armor entry formats
+//
+/////////////////////////////////////////////////////////////////////////////
+// pkg/combat/armor directory
+///////////////////
+// LEATHER
+///////////////////
+
+Armor 0x13C7
+{
+	Name			LeatherGorget
+	AR			12
+	Coverage		Neck
+	VendorSellsFor	36
+	VendorBuysFor	10
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13C5
+{
+	Name			LeatherSleeves
+	AR			12
+	Coverage		Arms
+	VendorSellsFor	72
+	VendorBuysFor	24
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13CD
+{
+	Name			LeatherSleeves2
+	AR			12
+	Coverage		Arms
+	VendorSellsFor	72
+	VendorBuysFor	24
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13C6
+{
+	Name			LeatherGloves
+	AR			12
+	Coverage		Hands
+	VendorSellsFor	36
+	VendorBuysFor	12
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1DB9
+{
+	Name			LeatherCap
+	AR			12
+	Coverage		Head
+	VendorSellsFor	48
+	VendorBuysFor	16
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13CB
+{
+	Name			LeatherLeggings
+	AR			12
+	Coverage		Legs/feet
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13CC
+{
+	Name			LeatherTunic
+	AR			12
+	Coverage		Body
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13D3
+{
+	Name			LeatherTunic2
+	AR			12
+	Coverage		Body
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1C06
+{
+	Name			FemaleLeather
+	AR			12
+	Coverage		Body
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1C08
+{
+	Name			LeatherSkirt
+	AR			12
+	Coverage		Legs/feet
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1C0A
+{
+	Name			LeatherBustier
+	AR			12
+	Coverage		Body
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1C00
+{
+	Name			LeatherShorts
+	AR			12
+	Coverage		Legs/feet
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+
+
+///////////////////
+// STUDDED LEATHER
+///////////////////
+
+Armor 0x708b
+{
+	Name			StuddedCap
+	Desc			studded cap
+	Graphic		0x1DB9
+	AR			14
+	Coverage		Head
+	VendorSellsFor	72
+	VendorBuysFor	24
+	MaxHP		104
+	blockcircle	7
+	strrequired	53
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13D6
+{
+	Name			StuddedGorget
+	AR			14
+	Coverage		Neck
+	VendorSellsFor	48
+	VendorBuysFor	16
+	MaxHP		128
+	blockcircle	6
+	strrequired	53
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13D5
+{
+	Name			StuddedGloves
+	AR			14
+	Coverage		Hands
+	VendorSellsFor	48
+	VendorBuysFor	16
+	MaxHP		128
+	blockcircle	6
+	strrequired	55
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13D4
+{
+	Name			StuddedSleeves
+	AR			14
+	Coverage		Arms
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		128
+	blockcircle	6
+	strrequired	58
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13DC
+{
+	Name			StuddedSleeves2
+	AR			14
+	Coverage		Arms
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		128
+	blockcircle	6
+	strrequired	58
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13DA
+{
+	Name			StuddedLeggings
+	AR			14
+	Coverage		Legs/feet
+	VendorSellsFor	192
+	VendorBuysFor	64
+	MaxHP		128
+	blockcircle	6
+	strrequired	60
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13DB
+{
+	Name			StuddedTunic
+	AR			14
+	Coverage		Body
+	VendorSellsFor	192
+	VendorBuysFor	64
+	MaxHP		128
+	blockcircle	6
+	strrequired	60
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1C02
+{
+	Name			FemaleStudded
+	AR			14
+	Coverage		Body
+	VendorSellsFor	192
+	VendorBuysFor	64
+	MaxHP		128
+	blockcircle	6
+	strrequired	60
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1C0C
+{
+	Name			StuddedBustier
+	AR			14
+	Coverage		Body
+	MaxHP		128
+	VendorSellsFor	192
+	VendorBuysFor	64
+	blockcircle	6
+	strrequired	60
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+
+
+///////////////////
+//  RINGMAIL
+///////////////////
+
+Armor 0x708c
+{
+	Name			RingmailCoif
+	Desc			ringmail coif
+	Graphic		0x13BB
+	Color		1802
+	AR			17
+	Coverage		Head
+	Coverage		Neck
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		170
+	blockcircle	2
+	strrequired	65
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13ec
+{
+	Name			RingmailTunic
+	AR			17
+	Coverage		Body
+	VendorSellsFor	240
+	VendorBuysFor	80
+	MaxHP		160
+	blockcircle	3
+	strrequired	70
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13ed
+{
+	Name			RingmailTunic2
+	AR			17
+	Coverage		Body
+	VendorSellsFor	240
+	VendorBuysFor	80
+	MaxHP		160
+	blockcircle	3
+	strrequired	70
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13ee
+{
+	Name			RingmailSleeves
+	AR			17
+	Coverage		Arms
+	VendorSellsFor	180
+	VendorBuysFor	60
+	MaxHP		160
+	blockcircle	3
+	strrequired	65
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13ef
+{
+	Name			RingmailSleeves2
+	AR			17
+	Coverage		Arms
+	VendorSellsFor	180
+	VendorBuysFor	60
+	MaxHP		160
+	blockcircle	3
+	strrequired	65
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13f0
+{
+	Name			RingmailLeggings
+	AR			17
+	Coverage		Legs/feet
+	VendorSellsFor	220
+	VendorBuysFor	70
+	MaxHP		160
+	blockcircle	3
+	strrequired	70
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13f1
+{
+	Name			RingmailLeggings2
+	AR			17
+	Coverage		Legs/feet
+	VendorSellsFor	220
+	VendorBuysFor	70
+	MaxHP		160
+	blockcircle	3
+	strrequired	70
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13f2
+{
+	Name			RingmailGloves
+	AR			17
+	Coverage		Hands
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		160
+	blockcircle	3
+	strrequired	63
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13eb
+{
+	Name			RingmailGloves2
+	AR			17
+	Coverage		Hands
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		160
+	blockcircle	3
+	strrequired	63
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+
+
+///////////////////
+// CHAIN MAIL
+///////////////////
+
+Armor 0x7066
+{
+	Name			ChainmailGloves
+	Desc			chainmail gloves
+	Color		906
+	AR			21
+	Graphic		0x13C6
+	Color		906
+	Coverage		Hands
+	VendorSellsFor	160
+	VendorBuysFor	50
+	MaxHP		180
+	blockcircle	2
+	strrequired	73
+	DexPenalty	1
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+Armor 0x13BB
+{
+	Name			ChainmailCoif
+	Desc			chainmail coif
+	AR			21
+	Coverage		Head
+	Coverage		Neck
+	VendorSellsFor	160
+	VendorBuysFor	50
+	MaxHP		180
+	blockcircle	2
+	strrequired	75
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13C0
+{
+	Name			ChainmailCoif2
+	AR			21
+	Coverage		Head
+	Coverage		Neck
+	MaxHP		180
+	blockcircle	2
+	strrequired	75
+	VendorSellsFor	160
+	VendorBuysFor	50
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+Armor 0x13BE
+{
+	Name			ChainmailLeggings
+	AR			21
+	Coverage		Legs/feet
+	MaxHP		180
+	blockcircle	2
+	strrequired	80
+	VendorSellsFor	350
+	VendorBuysFor	110
+	DexPenalty	3
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13C3
+{
+	Name			ChainmailLeggings2
+	AR			21
+	Coverage		Legs/feet
+	MaxHP		180
+	blockcircle	2
+	strrequired	80
+	VendorSellsFor	320
+	VendorBuysFor	110
+	DexPenalty	3
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13BF
+{
+	Name			ChainmailTunic
+	AR			21
+	Coverage		Arms
+	Coverage		Body
+	MaxHP		180
+	blockcircle	2
+	strrequired	80
+	VendorSellsFor	350
+	VendorBuysFor	120
+	DexPenalty	5
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x13C4
+{
+	Name			ChainmailTunic2
+	AR			21
+	Coverage		Arms
+	Coverage		Body
+	MaxHP		180
+	blockcircle	2
+	strrequired	80
+	VendorSellsFor	350
+	VendorBuysFor	120
+	DexPenalty	5
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+
+
+///////////////////
+//  PLATE
+///////////////////
+
+Armor 0x1c04
+{
+	Name			FemalePlate
+	AR			25
+	Coverage		Body
+	VendorSellsFor	500
+	VendorBuysFor	150
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	DexPenalty	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1c05
+{
+	Name			FemalePlate2
+	AR			25
+	Coverage		Body
+	VendorSellsFor	500
+	VendorBuysFor	150
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	DexPenalty	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+ 
+Armor 0x1415
+{
+	Name			PlatemailBreastplate
+	AR			25
+	Coverage		Body
+	VendorSellsFor	500
+	VendorBuysFor	150
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	DexPenalty	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1416
+{
+	Name			PlatemailBreastplate2
+	AR			25
+	Coverage		Body
+	VendorSellsFor	500
+	VendorBuysFor	150
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	DexPenalty	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1410
+{
+	Name			PlatemailArms
+	AR			25
+	Coverage		Arms
+	VendorSellsFor	300
+	VendorBuysFor	90
+	MaxHP		240
+	blockcircle	1
+	strrequired	87
+	DexPenalty	3
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1417
+{
+	Name			PlatemailArms2
+	AR			25
+	Coverage		Arms
+	skill		85
+	VendorSellsFor	300
+	VendorBuysFor	90
+	MaxHP		240
+	blockcircle	1
+	strrequired	87
+	DexPenalty	3
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1411
+{
+	Name			PlatemailLegs
+	AR			25
+	Coverage		Legs/feet
+	VendorSellsFor	400
+	VendorBuysFor	120
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	DexPenalty	5
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x141A
+{
+	Name			PlatemailLegs2
+	AR			25
+	Coverage		Legs/feet
+	VendorSellsFor	400
+	VendorBuysFor	120
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	DexPenalty	5
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1414
+{
+	Name			PlatemailGloves
+	AR			25
+	Coverage		Hands
+	VendorSellsFor	220
+	VendorBuysFor	70
+	MaxHP		240
+	blockcircle	1
+	strrequired	85
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1418
+{
+	Name			PlatemailGloves2
+	AR			25
+	Coverage		Hands
+	VendorSellsFor	220
+	VendorBuysFor	70
+	MaxHP		240
+	blockcircle	1
+	strrequired	85
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+ 
+Armor 0x1413
+{
+	Name			PlatemailGorget
+	AR			25
+	Coverage		Neck
+	VendorSellsFor	220
+	VendorBuysFor	70
+	MaxHP		240
+	blockcircle	1
+	strrequired	83
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1412
+{ 
+	Name			PlateHelm
+	AR			25
+	Coverage		Head
+	VendorSellsFor	250
+	VendorBuysFor	100
+	MaxHP		240
+	blockcircle	3
+	strrequired	90
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1419
+{ 
+	Name			PlateHelm2
+	AR			25
+	Coverage		Head
+	VendorSellsFor	250
+	VendorBuysFor	100
+	MaxHP		240
+	blockcircle	3
+	strrequired	90
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+
+
+///////////////////
+//  BONE ARMOR
+///////////////////
+
+Armor 0x144e
+{
+	Name			Bonearms
+	AR			15
+	Coverage		Arms
+	MaxHP		90
+	VendorSellsFor	65
+	VendorBuysFor	26
+	blockcircle	6
+	strrequired	48
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x144f
+{
+	Name			Bonetunic
+	AR			15
+	Coverage		Body
+	MaxHP		90
+	blockcircle	6
+	strrequired	50
+	VendorSellsFor	105
+	VendorBuysFor	42
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1450
+{
+	Name			Bonegloves
+	AR			15
+	Coverage		Hands
+	MaxHP		90
+	blockcircle	6
+	strrequired	42
+	VendorSellsFor	42
+	VendorBuysFor	17
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1451
+{
+	Name			Bonehelm
+	AR			15
+	Coverage		Head
+	MaxHP		90
+	blockcircle	6
+	strrequired	44
+	VendorSellsFor	30
+	VendorBuysFor	10
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1452
+{
+	Name			Bonelegs
+	AR			15
+	Coverage		Legs/feet
+	MaxHP		90
+	blockcircle	6
+	strrequired	50
+	VendorSellsFor	85
+	VendorBuysFor	34
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+
+
+///////////////////
+// ASSORTED HELMS
+///////////////////
+
+Armor 0x1f0b
+{
+	Name			Orchelm
+	AR			12
+	Coverage		Head
+	MaxHP		90
+	blockcircle	3
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1408
+{
+	Name			CloseHelm
+	AR			20
+	Coverage		Head
+	VendorSellsFor	225
+	VendorBuysFor	80
+	MaxHP		184
+	blockcircle	3
+	strrequired	70
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1409
+{
+	Name			CloseHelm2
+	AR			20
+	Coverage		Head
+	VendorSellsFor	225
+	VendorBuysFor	80
+	MaxHP		184
+	blockcircle	3
+	strrequired	70
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x140A
+{
+	Name			Helmet
+	AR			18
+	Coverage		Head
+	VendorSellsFor	160
+	VendorBuysFor	50
+	MaxHP		144
+	blockcircle	3
+	strrequired	60
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x140B
+{
+	Name			Helmet2
+	AR			18
+	Coverage		Head
+	VendorSellsFor	160
+	VendorBuysFor	50
+	MaxHP		144
+	blockcircle	3
+	strrequired	60
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+ 
+Armor 0x140C
+{
+	Name			Bascinet
+	AR			20
+	Coverage		Head
+	VendorSellsFor	225
+	VendorBuysFor	75
+	MaxHP		160
+	blockcircle	3
+	strrequired	70
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x140D
+{
+	Name			Bascinet2
+	AR			20
+	Coverage		Head
+	VendorSellsFor	225
+	VendorBuysFor	75
+	MaxHP		160
+	blockcircle	3
+	strrequired	70
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x140E
+{
+	Name			NoseHelm
+	AR			20
+	Coverage		Head
+	VendorSellsFor	225
+	VendorBuysFor	80
+	MaxHP		184
+	blockcircle	3
+	strrequired	70
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x140F
+{
+	Name			NoseHelm2
+	AR			20
+	Coverage		Head
+	VendorSellsFor	225
+	VendorBuysFor	80
+	MaxHP		184
+	blockcircle	3
+	strrequired	70
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+
+
+///////////////////
+// SHIELDS
+///////////////////
+
+Armor 0x1B7A
+{
+	Name			WoodenShield
+	AR			12
+	VendorSellsFor	30
+	VendorBuysFor	10
+	MaxHP		104
+	blockcircle	1
+	Weight		2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1B73
+{
+	Name			Buckler
+	AR			12
+	VendorSellsFor	130
+	VendorBuysFor	45
+	MaxHP		104
+	blockcircle	1
+	Weight		2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+Armor 0x1B72
+{
+	Name			BronzeShield
+	AR			18
+	VendorSellsFor	200
+	VendorBuysFor	67
+	MaxHP		160
+	blockcircle	1
+	strrequired	60
+	Weight		3
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1B7B
+{
+	Name			MetalShield
+	AR			18
+	VendorSellsFor	200
+	VendorBuysFor	67
+	MaxHP		160
+	blockcircle	1
+	strrequired	60
+	Weight		4
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1B78
+{
+	Name			KiteShieldB1
+	AR			18
+	VendorSellsFor	70
+	VendorBuysFor	23
+	MaxHP		128
+	blockcircle	1
+	strrequired	60
+	Weight		3
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1B79
+{
+	Name			KiteShieldB2
+	AR			18
+	VendorSellsFor	70
+	VendorBuysFor	23
+	MaxHP		128
+	blockcircle	1
+	strrequired	60
+	Weight		3
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+Armor 0x1B74
+{
+	Name			KiteShield
+	AR			25
+	VendorSellsFor	260
+	VendorBuysFor	100
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	Weight		5
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1B75
+{
+	Name			KiteShield2
+	AR			25
+	VendorSellsFor	260
+	VendorBuysFor	100
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	Weight		5
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1B76
+{
+	Name			HeaterShield
+	AR			25
+	VendorSellsFor	260
+	VendorBuysFor	100
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	Weight		5
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1B77
+{
+	Name			HeaterShield2
+	AR			25
+	VendorSellsFor	260
+	VendorBuysFor	100
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	Weight		5
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1bc4
+{
+	Name			Ordershield
+	AR			25
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	Weight		5
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+	script		:virtue:virtueshield
+	blockcircle	1
+}
+
+Armor 0x1bc3
+{
+	Name			Chaosshield
+	AR			25
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	Weight		5
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+	script		:virtue:virtueshield
+	blockcircle	1
+}
+
+
+
+
+///////////////////
+//  CLOTHING
+///////////////////
+
+Armor 0x1F03
+{
+	Name			Robe
+	AR			4
+	Coverage		Body
+	Coverage		Legs/feet
+	Coverage		Arms
+	VendorSellsFor	45
+	VendorBuysFor	15
+	maxhp		100
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x3173
+{
+	Name			MaleElvenRobe
+	AR			4
+	Coverage		Body
+	Coverage		Legs/feet
+	Coverage		Arms
+	Coverage		Head
+	Coverage		Neck
+	VendorSellsFor	45
+	VendorBuysFor	15
+	maxhp		100
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x3174
+{
+	Name			FemaleElvenRobe
+	AR			4
+	Coverage		Body
+	Coverage		Legs/feet
+	Coverage		Arms
+	VendorSellsFor	45
+	VendorBuysFor	15
+	maxhp		100
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x204E
+{
+	Name			Shroud
+	desc			death robe
+	AR			1
+	Coverage		Body
+	Coverage		Legs/feet
+	Coverage		Arms
+	Coverage		Head
+	Coverage		Neck
+	VendorSellsFor	77
+	maxhp		100
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x153B
+{
+	Name			HalfApron
+	Coverage		Legs/feet
+	AR			2
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	22
+	VendorBuysFor	4
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x50d8
+{
+	Name			GargoyleHalfApron
+	Desc			gargoyle half apron
+	Coverage		Legs/feet
+	AR			2
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	22
+	VendorBuysFor	4
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x450d
+{
+	Name			GargoyleBelt
+	Desc			gargoyle belt
+	Coverage		Legs/feet
+	AR			2
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	22
+	VendorBuysFor	4
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27eb
+{
+	Name			Obi
+	Coverage		Legs/feet
+	AR			2
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	22
+	VendorBuysFor	4
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x315f
+{
+	Name			WoodlandBelt
+	Coverage		Legs/feet
+	AR			2
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	22
+	VendorBuysFor	4
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x153D
+{
+	Name			FullApron
+	Coverage		Body
+	AR			4
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	45
+	VendorBuysFor	8
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1541
+{
+	Name			BodySash
+	Coverage		Body
+	AR			1
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	16
+	VendorBuysFor	3
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x46aa
+{
+	Name			GargoyleFemaleSash
+	Coverage		Body
+	AR			1
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	16
+	VendorBuysFor	3
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x46b4
+{
+	Name			GargoyleMaleSash
+	Coverage		Body
+	AR			1
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	16
+	VendorBuysFor	3
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1EFD
+{
+	Name			FancyShirt
+	Coverage		Body
+	Coverage		Arms
+	AR			4
+	MaxHP		75
+	blockcircle	9
+	VendorSellsFor	32
+	VendorBuysFor	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x3176
+{
+	Name			FancyElvenShirt
+	Coverage		Body
+	Coverage		Arms
+	AR			4
+	MaxHP		75
+	blockcircle	9
+	VendorSellsFor	32
+	VendorBuysFor	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x3175
+{
+	Name			ElvenShirt
+	Coverage		Body
+	Coverage		Arms
+	AR			4
+	MaxHP		75
+	blockcircle	9
+	VendorSellsFor	32
+	VendorBuysFor	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1EFF
+{
+	Name			FancyDress
+	Coverage		Body
+	Coverage		Legs/feet
+	AR			4
+	MaxHP		75
+	blockcircle	9
+	VendorSellsFor	55
+	VendorBuysFor	11
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x230d
+{
+	Name			GildedDress
+	Coverage		Body
+	Coverage		Legs/feet
+	Coverage		Arms
+	AR			4
+	MaxHP		75
+	blockcircle	9
+	VendorSellsFor	55
+	VendorBuysFor	11
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27ce
+{
+	Name			FemaleKimono
+	Coverage		Body
+	Coverage		Legs/feet
+	Coverage		Arms
+	AR			4
+	MaxHP		75
+	blockcircle	9
+	VendorSellsFor	55
+	VendorBuysFor	11
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27cd
+{
+	Name			MaleKimono
+	Coverage		Body
+	Coverage		Legs/feet
+	Coverage		Arms
+	AR			4
+	MaxHP		75
+	blockcircle	9
+	VendorSellsFor	55
+	VendorBuysFor	11
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27e7
+{
+	Name			HakamaShita
+	Coverage		Body
+	Coverage		Arms
+	AR			4
+	MaxHP		75
+	blockcircle	9
+	VendorSellsFor	55
+	VendorBuysFor	11
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27e4
+{
+	Name			Kamishimo
+	Coverage		Body
+	Coverage		Legs/feet
+	Coverage		Arms
+	AR			4
+	MaxHP		75
+	blockcircle	9
+	VendorSellsFor	55
+	VendorBuysFor	11
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1F01
+{
+	Name			PlainDress
+	Coverage		Body
+	Coverage		Legs/feet
+	AR			4
+	MaxHP		75
+	blockcircle	9
+	VendorSellsFor	45
+	VendorBuysFor	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1F7B
+{
+	Name			Doublet
+	Coverage		Body
+	AR			6
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	32
+	VendorBuysFor	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1F9F
+{
+	Name			JestersSuit
+	Coverage		Body
+	Coverage		Arms
+	AR			4
+	MaxHP		75
+	blockcircle	9
+	VendorSellsFor	67
+	VendorBuysFor	12
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1FA1
+{
+	Name			Tunic
+	Coverage		Body
+	Coverage		Arms
+	AR			4
+	MaxHP		75
+	blockcircle	9
+	VendorSellsFor	55
+	VendorBuysFor	10
+	weight		2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x230f
+{
+	Name			FormalShirt
+	Coverage		Body
+	Coverage		Arms
+	AR			4
+	MaxHP		75
+	blockcircle	9
+	VendorSellsFor	55
+	VendorBuysFor	10
+	weight		2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27ec
+{
+	Name			JinBaori
+	Coverage		Body
+	AR			4
+	MaxHP		75
+	blockcircle	9
+	VendorSellsFor	55
+	VendorBuysFor	10
+	weight		2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1FFD
+{
+	Name			Surcoat
+	Coverage		Body
+	AR			4
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	45
+	VendorBuysFor	8
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1515
+{
+	Name			Cloak
+	Coverage		Body
+	AR			2
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	65
+	VendorBuysFor	12
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2309
+{
+	Name			FurCape
+	Coverage		Body
+	AR			2
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	65
+	VendorBuysFor	12
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x45a4
+{
+	Name			ClothWingArmor
+	Desc			cloth wing armor
+	Coverage		Body
+	AR			2
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	65
+	VendorBuysFor	12
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x457e
+{
+	Name			LeatherWingArmor
+	Desc			leather wing armor
+	Coverage		Body
+	AR			2
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	65
+	VendorBuysFor	12
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1517
+{
+	Name			Shirt
+	Coverage		Body
+	AR			4
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	32
+	VendorBuysFor	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x153A
+{
+	Name			LongPants
+	Coverage		Legs/feet
+	AR			4
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	32
+	VendorBuysFor	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27e6
+{
+	Name			TattsukeHakama
+	Coverage		Legs/feet
+	AR			4
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	32
+	VendorBuysFor	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x3179
+{
+	Name			ElvenPants
+	Coverage		Legs/feet
+	AR			4
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	32
+	VendorBuysFor	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1516
+{
+	Name			Skirt
+	Coverage		Legs/feet
+	AR			4
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	42
+	VendorBuysFor	8
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x230b
+{
+	Name			FurSarong
+	Desc			fur sarong
+	Coverage		Legs/feet
+	AR			4
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	42
+	VendorBuysFor	8
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27e5
+{
+	Name			Hakama
+	Coverage		Legs/feet
+	AR			4
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	42
+	VendorBuysFor	8
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x152E
+{
+	Name			ShortPants
+	Coverage		Legs/feet
+	AR			3
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	22
+	VendorBuysFor	4
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1537
+{
+	Name			Kilt
+	Coverage		Legs/feet
+	AR			3
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	35
+	VendorBuysFor	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1539
+{
+	Name			LongPants2
+	AR			4
+	MaxHP		50
+	blockcircle	9
+	Coverage		Legs/feet
+	VendorSellsFor	32
+	VendorBuysFor	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+
+
+///////////////////
+//  FOOTWEAR
+///////////////////
+
+Armor 0x170D
+{
+	Name			Sandals
+	Coverage		Legs/feet
+	AR			1
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	28
+	VendorBuysFor	8
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27e1
+{
+	Name			WarajiAndTabi
+	Desc			waraji and tabi
+	Coverage		Legs/feet
+	AR			1
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	28
+	VendorBuysFor	8
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x170F
+{
+	Name			Shoes
+	Coverage		Legs/feet
+	AR			2
+	MaxHP		50
+	blockcircle	9
+	VendorSellsFor	40
+	VendorBuysFor	12
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+	ControlScript	:armor:control_shoes
+}
+
+Armor 0x170B
+{
+	Name			LeatherBoots
+	AR			3
+	Coverage		Legs/feet
+	VendorSellsFor	60
+	VendorBuysFor	18
+	MaxHP		60
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x317a
+{
+	Name			ElvenBoots
+	AR			3
+	Coverage		Legs/feet
+	VendorSellsFor	60
+	VendorBuysFor	18
+	MaxHP		60
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27e2
+{
+	Name			NinjaTabi
+	AR			3
+	Coverage		Legs/feet
+	VendorSellsFor	60
+	VendorBuysFor	18
+	MaxHP		60
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2307
+{
+	Name			FurBoots
+	AR			3
+	Coverage		Legs/feet
+	VendorSellsFor	60
+	VendorBuysFor	18
+	MaxHP		60
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x41d8
+{
+	Name			LeatherTalons
+	Desc			leather talons
+	AR			3
+	Coverage		Legs/feet
+	VendorSellsFor	60
+	VendorBuysFor	18
+	MaxHP		60
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x42de
+{
+	Name			PlateTalons
+	Desc			plate talons
+	AR			4
+	Coverage		Legs/feet
+	VendorSellsFor	60
+	VendorBuysFor	18
+	MaxHP		60
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1711
+{
+	Name			ThighBoots
+	AR			5
+	Coverage		Legs/feet
+	VendorSellsFor	64
+	VendorBuysFor	20
+	MaxHP		75
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+
+
+///////////////////
+//  HATS
+///////////////////
+
+Armor 0x153F
+{
+	Name			Bandana
+	AR			4
+	Coverage		Head
+	VendorSellsFor	5
+	VendorBuysFor	1
+	MaxHP		50
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2305
+{
+	Name			FlowerGarland
+	AR			4
+	Coverage		Head
+	VendorSellsFor	5
+	VendorBuysFor	1
+	MaxHP		50
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1543
+{
+	Name			Skullcap
+	AR			4
+	Coverage		Head
+	VendorSellsFor	5
+	VendorBuysFor	1
+	MaxHP		50
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1713
+{
+	Name			FloppyHat
+	VendorSellsFor	10
+	VendorBuysFor	2
+	AR			4
+	Coverage		Head
+	MaxHP		50
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1714
+{
+	Name			WideBrimHat
+	VendorSellsFor	12
+	VendorBuysFor	2
+	AR			4
+	Coverage		Head
+	MaxHP		50
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1715
+{
+	Name			Cap
+	VendorSellsFor	10
+	VendorBuysFor	2
+	AR			4
+	Coverage		Head
+	MaxHP		50
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1716
+{
+	Name			TallStrawHat
+	VendorSellsFor	10
+	VendorBuysFor	2
+	AR			4
+	Coverage		Head
+	MaxHP		50
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27da
+{
+	Name			ClothNinjaHood
+	VendorSellsFor	10
+	VendorBuysFor	2
+	AR			4
+	Coverage		Head
+	MaxHP		50
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27e3
+{
+	Name			Kasa
+	VendorSellsFor	10
+	VendorBuysFor	2
+	AR			4
+	Coverage		Head
+	MaxHP		50
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1717
+{
+	Name			StrawHat
+	VendorSellsFor	10
+	VendorBuysFor	2
+	AR			4
+	Coverage		Head
+	MaxHP		50
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1718
+{
+	Name			wizardhat
+	vendorbuysfor	5
+	vendorsellsfor	27
+	AR			4
+	Coverage		Head
+	MaxHP		50
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1719
+{
+	Name			Bonnet
+	VendorSellsFor	10
+	VendorBuysFor	2
+	AR			4
+	Coverage		Head
+	MaxHP		50
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x171A
+{ 
+	Name			FeatheredHat
+	VendorSellsFor	10
+	VendorBuysFor	2
+	AR			4
+	Coverage		Head
+	MaxHP		50
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x171B
+{
+	Name			TricorneHat
+	VendorSellsFor	15
+	VendorBuysFor	3
+	AR			4
+	Coverage		Head
+	MaxHP		50
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x171C
+{
+	Name			Jesterhat
+	VendorSellsFor	15
+	VendorBuysFor	3
+	AR			4
+	Coverage		Head
+	MaxHP		50
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x141b
+{
+	Name			OrcMask
+	AR			4
+	Coverage		Head
+	MaxHP		120
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1545
+{
+	Name			BearMask
+	AR			4
+	Coverage		Head
+	MaxHP		120
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1547
+{
+	Name			DeerMask
+	AR			4
+	Coverage		Head
+	MaxHP		120
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x1549
+{
+	Name			TribalMask1
+	AR			4
+	Coverage		Head
+	MaxHP		120
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x154b
+{
+	Name			TribalMask2
+	AR			4
+	Coverage		Head
+	MaxHP		120
+	blockcircle	9
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+
+// Samurai Empire Armors
+///////////////////
+// LEATHER
+///////////////////
+
+
+Armor 0x27C5
+{
+	Name			LeatherMempo
+	AR			12
+	Coverage		Neck
+	VendorSellsFor	36
+	VendorBuysFor	10
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27C9
+{
+	Name			LeatherHiroSode
+	Desc			leather hiro sode
+	AR			12
+	Coverage		Arms
+	VendorSellsFor	72
+	VendorBuysFor	24
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27DD
+{
+	Name			LeatherNinjaMitts
+	AR			12
+	Coverage		Hands
+	VendorSellsFor	36
+	VendorBuysFor	12
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27C3
+{
+	Name			LeatherKabuto
+	Desc			leather kabuto
+	AR			12
+	Coverage		Head
+	VendorSellsFor	48
+	VendorBuysFor	16
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27C1
+{
+	Name			LeatherJingasa
+	AR			12
+	Coverage		Head
+	VendorSellsFor	48
+	VendorBuysFor	16
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27D9
+{
+	Name			LeatherNinjaHood
+	Desc			leather ninja hood
+	AR			12
+	Coverage		Head
+	VendorSellsFor	48
+	VendorBuysFor	16
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27D1
+{
+	Name			LeatherSuneate
+	AR			12
+	Coverage		Legs/feet
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27C6
+{
+	Name			LeatherDo
+	AR			12
+	Coverage		Body
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27DE
+{
+	Name			LeatherNinjaJacket
+	AR			12
+	Coverage		Body
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27D5
+{
+	Name			LeatherHaidate
+	AR			12
+	Coverage		Legs/feet
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+///////////////////
+// STUDDED LEATHER
+///////////////////
+
+Armor 0x27D4
+{
+	Name			StuddedKabuto
+	Desc			studded kabuto
+	AR			14
+	Coverage		Head
+	VendorSellsFor	72
+	VendorBuysFor	24
+	MaxHP		104
+	blockcircle	7
+	strrequired	53
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27CF
+{
+	Name			StuddedJingasa
+	Desc			studded jingasa
+	AR			14
+	Coverage		Head
+	VendorSellsFor	72
+	VendorBuysFor	24
+	MaxHP		104
+	blockcircle	7
+	strrequired	53
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27E8
+{
+	Name			StuddedMempo
+	AR			14
+	Coverage		Neck
+	VendorSellsFor	48
+	VendorBuysFor	16
+	MaxHP		128
+	blockcircle	6
+	strrequired	53
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27CA
+{
+	Name			StuddedHiroSode
+	Desc			studded hiro sode
+	AR			14
+	Coverage		Arms
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		128
+	blockcircle	6
+	strrequired	58
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27D2
+{
+	Name			StuddedSuneate
+	AR			14
+	Coverage		Legs/feet
+	VendorSellsFor	192
+	VendorBuysFor	64
+	MaxHP		128
+	blockcircle	6
+	strrequired	60
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27C7
+{
+	Name			StuddedDo
+	AR			14
+	Coverage		Body
+	VendorSellsFor	192
+	VendorBuysFor	64
+	MaxHP		128
+	blockcircle	6
+	strrequired	60
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27D6
+{
+	Name			StuddedHaidate
+	AR			14
+	Coverage		Legs/feet
+	VendorSellsFor	192
+	VendorBuysFor	64
+	MaxHP		128
+	blockcircle	6
+	strrequired	60
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+///////////////////
+//  PLATE
+///////////////////
+
+Armor 0x27C8
+{
+	Name			PlateDo
+	AR			25
+	Coverage		Body
+	VendorSellsFor	500
+	VendorBuysFor	150
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	DexPenalty	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27CB
+{
+	Name			PlateHiroSode
+	Desc			plate hiro sode
+	AR			25
+	Coverage		Arms
+	VendorSellsFor	300
+	VendorBuysFor	90
+	MaxHP		240
+	blockcircle	1
+	strrequired	87
+	DexPenalty	3
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27D3
+{
+	Name			PlateSuneate
+	AR			25
+	Coverage		Legs/feet
+	VendorSellsFor	400
+	VendorBuysFor	120
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	DexPenalty	5
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27D8
+{
+	Name			PlateHaidate
+	AR			25
+	Coverage		Legs/feet
+	VendorSellsFor	400
+	VendorBuysFor	120
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	DexPenalty	5
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+ 
+Armor 0x27C4
+{
+	Name			PlateMempo
+	AR			25
+	Coverage		Neck
+	VendorSellsFor	220
+	VendorBuysFor	70
+	MaxHP		240
+	blockcircle	1
+	strrequired	83
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27D0
+{ 
+	Name			PlateKabuto
+	AR			25
+	Coverage		Head
+	VendorSellsFor	250
+	VendorBuysFor	100
+	MaxHP		240
+	blockcircle	3
+	strrequired	90
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27CC
+{ 
+	Name			PlateJingasa
+	AR			25
+	Coverage		Head
+	VendorSellsFor	250
+	VendorBuysFor	100
+	MaxHP		240
+	blockcircle	3
+	strrequired	90
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2777
+{ 
+	Name			PlateJingasa2
+	AR			25
+	Coverage		Head
+	VendorSellsFor	250
+	VendorBuysFor	100
+	MaxHP		240
+	blockcircle	3
+	strrequired	90
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27BF
+{
+	Name			MailHatsuburi
+	AR			21
+	Coverage		Head
+	Coverage		Neck
+	VendorSellsFor	160
+	VendorBuysFor	50
+	MaxHP		180
+	blockcircle	2
+	strrequired	75
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x27C0
+{
+	Name			PlateHatsuburi
+	AR			25
+	Coverage		Head
+	Coverage		Neck
+	VendorSellsFor	250
+	VendorBuysFor	100
+	MaxHP		240
+	blockcircle	3
+	strrequired	90
+	DexPenalty	4
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+/////////////////////////
+// Misc new armor
+//
+// Winged helmet: 0x2689 - 0x268a
+// Dragon armor: 0x2641 - 0x2648, 0x2657 - 0x2658
+// 
+
+///////////////////
+//  HELMET
+///////////////////
+
+Armor 0x2689
+{ 
+	Name			WingedHelmet
+	AR			25
+	Coverage		Head
+	VendorSellsFor	250
+	VendorBuysFor	100
+	MaxHP		240
+	blockcircle	3
+	strrequired	90
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+///////////////////
+//  DRAGON
+///////////////////
+
+Armor 0x2641
+{
+	Name			DragonBreastplate
+	AR			25
+	Coverage		Body
+	VendorSellsFor	500
+	VendorBuysFor	150
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	DexPenalty	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2657
+{
+	Name			DragonSleeves
+	AR			25
+	Coverage		Arms
+	VendorSellsFor	300
+	VendorBuysFor	90
+	MaxHP		240
+	blockcircle	1
+	strrequired	87
+	DexPenalty	3
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2647
+{
+	Name			DragonLeggings
+	AR			25
+	Coverage		Legs/feet
+	VendorSellsFor	400
+	VendorBuysFor	120
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	DexPenalty	5
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2643
+{
+	Name			DragonGloves
+	AR			25
+	Coverage		Hands
+	VendorSellsFor	220
+	VendorBuysFor	70
+	MaxHP		240
+	blockcircle	1
+	strrequired	85
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2645
+{ 
+	Name			DragonHelm
+	AR			25
+	Coverage		Head
+	VendorSellsFor	250
+	VendorBuysFor	100
+	MaxHP		240
+	blockcircle	3
+	strrequired	90
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+
+/////////////////////////
+// Elven armor:
+//
+// Woodland: 0x2b67 - 0x2b6d
+// Circlets and helmets: 0x2b6e - 0x2b73
+// Glasses: 0x2fb8
+// Hide: 0x2b74 - 0x2b79
+// Leaf: 0x2fc5 - 0x2fcb
+////////////////////////////
+
+///////////////////
+// LEAF
+///////////////////
+
+Armor 0x2fC7
+{
+	Name			LeafGorget
+	Desc			a leaf gorget
+	AR			12
+	Coverage		Neck
+	VendorSellsFor	36
+	VendorBuysFor	10
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2fc8
+{
+	Name			LeafArms
+	Desc			leaf arms
+	AR			12
+	Coverage		Arms
+	VendorSellsFor	72
+	VendorBuysFor	24
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+Armor 0x2fc6
+{
+	Name			LeafGloves
+	Desc			leaf gloves
+	AR			12
+	Coverage		Hands
+	VendorSellsFor	36
+	VendorBuysFor	12
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+Armor 0x2fc9
+{
+	Name			LeafLeggings
+	Desc			leaf leggings
+	AR			12
+	Coverage		Legs/feet
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2fc5
+{
+	Name			LeafTunic
+	Desc			a leaf tunic
+	AR			12
+	Coverage		Body
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2fcb
+{
+	Name			FemaleLeafTunic
+	Desc			a female leaf tunic
+	AR			12
+	Coverage		Body
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2fca
+{
+	Name			LeafTonlet
+	Desc			a leaf tonlet
+	AR			12
+	Coverage		Legs/feet
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+///////////////////
+//  HIDE
+///////////////////
+
+Armor 0x2b76
+{
+	Name			HideGorget
+	Desc			hide gorget
+	AR			17
+	Coverage		Neck
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		170
+	blockcircle	2
+	strrequired	65
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2b74
+{
+	Name			HideTunic
+	Desc			a hide tunic
+	AR			17
+	Coverage		Body
+	VendorSellsFor	240
+	VendorBuysFor	80
+	MaxHP		160
+	blockcircle	3
+	strrequired	70
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2b79
+{
+	Name			FemaleHideTunic
+	Desc			a female hide tunic
+	AR			17
+	Coverage		Body
+	VendorSellsFor	240
+	VendorBuysFor	80
+	MaxHP		160
+	blockcircle	3
+	strrequired	70
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2b77
+{
+	Name			HidePauldrons
+	Desc			hide pauldrons
+	AR			17
+	Coverage		Arms
+	VendorSellsFor	180
+	VendorBuysFor	60
+	MaxHP		160
+	blockcircle	3
+	strrequired	65
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2b78
+{
+	Name			HideLeggings
+	Desc			hide leggings
+	AR			17
+	Coverage		Legs/feet
+	VendorSellsFor	220
+	VendorBuysFor	70
+	MaxHP		160
+	blockcircle	3
+	strrequired	70
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2b75
+{
+	Name			HideGloves
+	Desc			hide gloves
+	AR			17
+	Coverage		Hands
+	VendorSellsFor	120
+	VendorBuysFor	40
+	MaxHP		160
+	blockcircle	3
+	strrequired	63
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+///////////////////
+//  WOODLAND
+///////////////////
+
+Armor 0x2b6d
+{
+	Name			FemaleWoodlandChest
+	Desc			a female woodland chest
+	AR			25
+	Coverage		Body
+	VendorSellsFor	500
+	VendorBuysFor	150
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	DexPenalty	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2b67
+{
+	Name			WoodlandChest
+	Desc			a woodland chest
+	AR			25
+	Coverage		Body
+	VendorSellsFor	500
+	VendorBuysFor	150
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	DexPenalty	6
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2b6c
+{
+	Name			WoodlandArms
+	Desc			woodland arms
+	AR			25
+	Coverage		Arms
+	VendorSellsFor	300
+	VendorBuysFor	90
+	MaxHP		240
+	blockcircle	1
+	strrequired	87
+	DexPenalty	3
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2b6b
+{
+	Name			WoodlandLeggings
+	Desc			woodland leggings
+	AR			25
+	Coverage		Legs/feet
+	VendorSellsFor	400
+	VendorBuysFor	120
+	MaxHP		240
+	blockcircle	1
+	strrequired	90
+	DexPenalty	5
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2b6a
+{
+	Name			WoodlandGauntlets
+	Desc			woodland gauntlets
+	AR			25
+	Coverage		Hands
+	VendorSellsFor	220
+	VendorBuysFor	70
+	MaxHP		240
+	blockcircle	1
+	strrequired	85
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2b69
+{
+	Name			WoodlandGorget
+	Desc			a woodland gorget
+	AR			25
+	Coverage		Neck
+	VendorSellsFor	220
+	VendorBuysFor	70
+	MaxHP		240
+	blockcircle	1
+	strrequired	83
+	DexPenalty	2
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+
+
+
+///////////////////
+//  ELVEN HELMS
+///////////////////
+
+Armor 0x2b6e
+{
+	Name			Circlet
+	AR			15
+	Coverage		Head
+	MaxHP		90
+	blockcircle	7
+	VendorSellsFor	30
+	VendorBuysFor	10
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+ 
+Armor 0x2b6f
+{
+	Name			RoyalCirclet
+	AR			15
+	Coverage		Head
+	MaxHP		90
+	blockcircle	7
+	VendorSellsFor	30
+	VendorBuysFor	10
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2b70
+{
+	Name			GemmedCirclet
+	AR			15
+	Coverage		Head
+	MaxHP		90
+	blockcircle	7
+	VendorSellsFor	30
+	VendorBuysFor	10
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2b71
+{
+	Name			RavenHelm
+	AR			20
+	Coverage		Head
+	VendorSellsFor	225
+	VendorBuysFor	80
+	MaxHP		184
+	blockcircle	3
+	strrequired	70
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2b72
+{
+	Name			VultureHelm
+	AR			20
+	Coverage		Head
+	VendorSellsFor	225
+	VendorBuysFor	80
+	MaxHP		184
+	blockcircle	3
+	strrequired	70
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2b73
+{
+	Name			WingedHelm
+	AR			20
+	Coverage		Head
+	VendorSellsFor	225
+	VendorBuysFor	80
+	MaxHP		184
+	blockcircle	3
+	strrequired	70
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+
+Armor 0x2fb8
+{
+	Name			ElvenGlasses
+	AR			12
+	Coverage		Head
+	VendorSellsFor	48
+	VendorBuysFor	16
+	MaxHP		104
+	blockcircle	7
+	script		:combat:equipitem
+	equipscript	:combat:item_equip
+	unequipscript	:combat:item_unequip
+}
+

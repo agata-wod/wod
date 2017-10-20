@@ -1,0 +1,28 @@
+use uo;
+use os;
+use http;
+use datafile;
+
+include "include/clock";
+include "include/accounts";
+
+program testds (character, text)
+	if (character and text)
+	endif
+	var this_month_string := GetCurrentPlaytimeMonth ();
+	var total_monthly := 0;
+	foreach theacctname in ListAccounts ()
+		var old_monthly_play_time := GetAccountProperty (theacctname, this_month_string);
+		if (old_monthly_play_time)
+			total_monthly := total_monthly + old_monthly_play_time;
+		endif
+	endforeach
+
+	var total_monthly_string := "total_" + this_month_string;
+	SetGlobalProperty (total_monthly_string, total_monthly);
+endprogram
+
+
+
+
+

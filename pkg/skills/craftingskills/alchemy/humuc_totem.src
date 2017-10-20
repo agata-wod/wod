@@ -1,0 +1,197 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/poison";
+include "include/wodinc";
+include "include/dotempmods";
+include "include/eventid";
+include "include/itemtypes";
+
+program use_product (character, potion)
+	if (!ReserveItem (potion) or !potion.movable)
+		SendSysMessage (character, "You can't use that right now!");
+		return;
+	endif
+	
+	//hardcoded lower limit
+	if (GetAttribute (character, ATTRIBUTEID_ALCHEMY) < 91)
+		SendSysMessage (character, "You're not skilled enough to do that.");
+		return;
+	endif
+
+	if (GetObjProperty(character, "humuc") )
+		if (SystemFindObjectBySerial (cint(GetObjProperty (character, "humuc"))) )
+			SendSysMessage (character,"You already have a pet!");
+			return;
+		endif
+	endif
+
+	//the humuc requires two parts:  find the other one
+	var lookfor := 0xdc2b;
+	if (potion.objtype == 0xdc2b)
+		lookfor := 0xdc2a;
+	endif
+
+	var otherpotion;
+	foreach item in EnumerateitemsinContainer (character.backpack)
+		if (item.objtype == lookfor)
+			if (ReserveItem (potion))
+				otherpotion := item;
+				break;
+			endif
+		endif
+	endforeach
+
+	if (!otherpotion)
+		SendSysMessage (character,"You don't have all the ingredients!");
+		return;
+	endif
+	
+	SubtractAmount (potion, 1);
+	SubtractAmount (otherpotion, 1);
+
+	//skillcheck
+	if (!CheckSkill (character, SKILLID_ALCHEMY, 100, 0))
+		DoBadThingTo (character, RandomInt (20));
+		return;
+	endif
+
+	var thegem;
+	SendSysMessage (character, "Drop a gem in the potion?");
+	SendSysMessage (character, "(Press Esc. to cancel.)");
+	thegem := Target (character); 
+
+	var thecolor := 746;
+	if (thegem)
+		if (!ReserveItem (thegem))
+			SendSysMessage (character, "Oops, you can't use that right now.");
+		elseif (!IsAGem (thegem.objtype))
+			SendSysMessage (character, "That is not a gem!");
+		elseif (!Accessible (character, thegem))
+			SendSysmessage (character, "You can't reach that!");
+		else
+			case (thegem.objtype) 
+				UOBJ_GEM_TOURMALINE:	thecolor := 0; 
+				UOBJ_GEM_SAPPHIRE:		thecolor := 1328; 
+				UOBJ_GEM_EMERALD:		thecolor := 1422; 
+				UOBJ_GEM_DIAMOND:		thecolor := 2007; 
+				UOBJ_GEM_AMETHYST:		thecolor := 1248; 
+				UOBJ_GEM_RUBY:			thecolor := 1212; 
+				UOBJ_GEM_STAR_SAPPHIRE:	thecolor := 1349; 
+				UOBJ_GEM_CITRINE:		thecolor := 1222; 
+				UOBJ_GEM_AMBER:		thecolor := 543;
+				default:				thecolor := 746;
+			endcase 
+			if (!SubtractAmount (thegem, 1))
+				SendSysMessage (character, "Oops, you can't use that right now.");
+				thecolor := 746;
+			endif
+		endif
+ 	endif
+
+	//play some assorted effects
+	PlaySoundEffect (character, 0x1fe);
+	PerformAction (character, 0x0014);
+	PlayObjectCenteredEffect (character, 0x3728, 10, 10);
+
+	set_critical (1);
+	detach ();
+	var parms := struct {};
+	parms.+ script := "humuc";
+
+	var thecritter := CreateNPCfromTemplate ("humuc", cint(character.x - 1), character.y, character.z, parms, character.realm);
+	if (!thecritter)
+		thecritter := CreateNPCfromTemplate ("humuc", character.x, cint(character.y - 1), character.z, parms, character.realm);
+		if (!thecritter)
+			return 0;
+		endif
+	endif
+
+	SetObjProperty (thecritter, "master", character.serial);
+	SetObjProperty (thecritter, "script", thecritter.script);
+	SetObjProperty (character, "humuc", CINT(thecritter.serial));
+   	thecritter.setmaster (character);
+	thecritter.script := "humuc";
+	thecritter.name := character.name;
+	RestartScript (thecritter);
+	
+	thecritter.color := thecolor;
+	SetObjProperty (thecritter, "color", thecolor);
+	set_critical (0);
+	return;
+endprogram
+
+
+
+
+///////////////////
+//  Bad effects for unskilled alchemists
+///////////////////
+
+function DoBadThingTo (character, HowBad)
+	Detach ();
+	if (HowBad < 5)
+		PrintTextAbovePrivate(character,"Gah!  Your hair falls out!",character);
+		DestroyItem(GetEquipmentByLayer (character, LAYER_HAIR));
+		DestroyItem(GetEquipmentByLayer (character, LAYER_BEARD));
+	elseif (HowBad < 8)
+		PrintTextAbovePrivate(character,"Ugh... You don't feel so well...",character);
+		DoTempMod (character, "call", RandomInt(10)+5, 300+RandomInt(600), "Bad Alchemy Effect");
+	elseif (HowBad < 10)
+		PrintTextAbovePrivate(character,"Doh!",character);
+		DoPersistedMod(character,"color",RandomInt(47)+1301,character.color,1200+RandomInt(1200), "Bad Alchemy Effect");
+	elseif (HowBad < 12)
+		PrintTextAbovePrivate(character, "Ooh.. what's this?", character);
+		var newgender := 0;
+		var newgraphic := 400;
+		var duration := 1200 + RandomInt(1200);
+		if (character.gender == 0)
+			newgender := 1;
+			newgraphic := 401;
+		endif
+		DoPersistedMod(character, "gender", newgender, character.gender, duration, "Bad Alchemy Effect");
+
+		DoPersistedMod(character, "graphic", newgraphic, character.graphic, duration, "Bad Alchemy Effect");
+	elseif (HowBad < 14)
+		PrintTextAbove (character, "*Doesn't feel well*");
+		sleep (7);
+		PrintTextAbove (character, "*Doesn't look well*");
+		sleep (7);
+		PlaySoundEffect (character, 0x208);
+		PlayObjectCenteredEffect (character, 0x36b0, 10, 10);
+		DoPersistedMod (character, "graphic", 0x32, character.graphic, 300, "Bad Alchemy Effect");
+		PlayObjectCenteredEffect (character, 0x36b0, 10, 10);
+
+	else
+		var x := cint(HowBad/2);
+		SetPoison(character, x, "Gack! You've been poisoned!");
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Returns if its a gem or not
+///////////////////
+
+function IsAGem (gemobjtype)
+	case (gemobjtype)
+		UOBJ_GEM_DIAMOND:
+		UOBJ_GEM_SAPPHIRE:
+		UOBJ_GEM_STAR_SAPPHIRE:
+		UOBJ_GEM_EMERALD:
+		UOBJ_GEM_RUBY:
+		UOBJ_GEM_AMETHYST:
+		UOBJ_GEM_CITRINE:
+		UOBJ_GEM_TOURMALINE:
+		UOBJ_GEM_AMBER:
+			return 1;
+		default:
+			return 0;
+	endcase
+endfunction

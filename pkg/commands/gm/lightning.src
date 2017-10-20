@@ -1,0 +1,31 @@
+use uo;
+use os;
+program lightning (person)
+
+broadcast("A lightning storm rages");
+
+foreach who in EnumerateOnlineCharacters()
+
+
+SetRegionLightLevel( "Background", 15 );
+MoveObjectToLocation( person, who.x, who.y + 1, who.z, who.realm, MOVEOBJECT_FORCELOCATION );
+PlayLightningBoltEffect(person);
+sleep(1);
+setregionlightlevel("Background", 0);
+sleep(1);
+SetRegionLightLevel( "Background", 15 );
+MoveObjectToLocation( person, who.x - 1, who.y + 2, who.z, who.realm, MOVEOBJECT_FORCELOCATION );
+sleep(1);
+SetRegionLightLevel( "Background", 15 );
+PlayLightningBoltEffect( person);
+sleep(1);
+setregionlightlevel("Background", 0);
+sleep(1);
+SetRegionLightLevel( "Background", 15 );
+MoveObjectToLocation( person, who.x + 1, who.y - 2, who.z, who.realm, MOVEOBJECT_FORCELOCATION );
+sleep(1);
+PlayLightningBoltEffect( who );
+sleep(1);
+setregionlightlevel("Background", 0);
+endforeach
+endprogram

@@ -1,0 +1,42 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 2;
+
+program cast_commune (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	if (!cast_on.acctname)
+		SendSysMessage (caster, "This can only be cast on players.");
+		return;
+	endif
+
+	if (cast_on.dead)
+		SendSysMessage (caster, "This can only be cast on the living.");
+		return;
+	endif
+
+	if (!CheckSkill (caster, SKILLID_NECROMANCY, -1, 0))
+		SendSysMessage (caster, "You fail to contact the nether realm");
+		return;
+	endif
+
+	PlaySoundEffect (cast_on, SFX_SKILL_SPIRITSPEAK);
+	GrantPrivilege (cast_on, "hearghosts");
+	cast_on.enable ("hearghosts");
+	GrantPrivilege (cast_on, "seeghosts");
+	cast_on.enable ("seeghosts");
+	return 1;
+endprogram

@@ -1,0 +1,87 @@
+use uo;
+use os;
+
+include "include/eventid";
+
+program textcmd_news (character, text)
+	text := Lower (text);
+	case (text)
+		"delete":
+			EraseGlobalProperty ("news");
+			SendSysMessage (character, "News deleted!");
+		"read":
+			ReadNews (character);
+		"write":
+			WriteNews (character);
+		"spout":
+			SpoutNews (character);
+		default:
+			SendSysMessage (character, "Usage: [read] [write] [spout] or [delete]");
+			return;
+	endcase
+endprogram
+
+function WriteNews(me)
+
+	var news := array{ };
+	var newsline := "";
+
+	newsline := SendTextEntryGump( me, "NEWS: ", 
+				TE_CANCEL_DISABLE,TE_STYLE_NORMAL, 40);
+	var prompt := newsline;
+	if (!prompt)
+		SendSysMessage(me,"Canceled");
+		return;
+	endif
+
+	news[ 1 ] := newsline;
+	repeat
+		newsline := SendTextEntryGump( me, "Line: "+len(news)+" "+prompt, 
+				TE_CANCEL_DISABLE,TE_STYLE_NORMAL, 40);
+		if(newsline)
+			news[ len(news)+1 ] := newsline;
+			prompt := newsline;
+		endif
+	until (!newsline);
+	SetGlobalProperty("news",news);
+	SendSysMessage(me,"News written!");
+	ReadNews(me);
+
+endfunction
+
+function ReadNews(me)
+
+	var news := GetGlobalProperty("news");
+	if (!news)
+		SendSysMessage(me,"No news is good news.");
+		return;
+	endif
+
+	var i;
+	for (i := 1; i <= len(news); i := i + 1)
+		SendSysMessage(me,news[i]);
+		sleepms(250);
+	endfor
+endfunction
+
+function SpoutNews (character)
+	SendSysMessage (character, "Select a towncrier to force to spout the news:");
+	var targetted := Target (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	elseif (!targetted.script["crier"])
+		SendSysMessage (character, "Invalid target.  Only towncriers can spout the news");
+		return;
+	endif
+	
+	var ev := struct;
+	ev.+type := EVID_SPEECH;
+	ev.+text := "news";
+	
+	SendEvent (targetted, ev);
+endfunction
+
+
+
+

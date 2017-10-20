@@ -1,0 +1,961 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/packets";
+include "../pkg/combat/weapons/combat_attack_script";
+include "include/newperformaction";
+
+var attacker, defender;
+var weaponcfgfile := ReadConfigFile (":weapons:itemdesc");
+var armorcfgfile := ReadConfigFile (":armor:itemdesc");
+var attacker_npcdesc_elem, defender_npcdesc_elem;
+var attacker_weapon_elem;
+var attacker_weapon, defender_armor, defender_weapon;
+var ammo_objtype;
+
+program combat_attack_script (parms)
+	attacker := parms [1];
+	defender := parms [2];
+	if (!attacker or !defender)
+		SendSysMessage (attacker, "No defender!");
+		SendSysMessage (defender, "No attacker!");
+		return 0;
+	endif
+
+	if (attacker.z > (defender.z + 20) or attacker.z < (defender.z - 20))
+		return 1;
+	endif
+	if (distance (attacker, defender) < 2)
+		if (attacker.npctemplate and attacker.npctemplate != ":guards:warrior")
+			start_script (":npchitscripts:combat_attack_script_npc", array{attacker, defender});
+		else
+			start_script (":weapons:combat_attack_script_wrestling", array{attacker, defender});
+		endif
+		return 1;
+	endif
+
+	if (!CheckLoSAt(attacker, defender.x, defender.y, defender.z) and !CheckLoSAt(attacker, defender.x, defender.y, defender.z + defender.height))
+		return 1;
+	endif
+	//Make sure that these files exist
+	if (!weaponcfgfile or !armorcfgfile)
+		SendSysMessage (attacker, "Unable to load itemdesc.cfg file(s)!");
+		SendSysMessage (defender, "Unable to load itemdesc.cfg file(s)!");
+		SendSysMessage (attacker, "Please notify a GM so that this problem can be fixed.");
+		SendSysMessage (defender, "Please notify a GM so that this problem can be fixed.");
+		return 0;
+	endif
+
+	//Load the NPCdesc elems for any parties to this combat that are NPCs
+	if (attacker.npctemplate)
+		attacker_npcdesc_elem := GetNpcTemplateElem (attacker.npctemplate);
+	endif
+	if (defender.npctemplate)
+		defender_npcdesc_elem := GetNpcTemplateElem (defender.npctemplate);
+	endif
+
+	//Load the itemdesc entries for the attacker's weapon, if they have one
+	if (attacker.weapon)
+		attacker_weapon := attacker.weapon;
+		if (attacker_weapon.objtype != UOBJ_FIST)
+			attacker_weapon_elem := FindConfigElem (weaponcfgfile, attacker_weapon.objtype);
+			if (Distance (attacker, defender) > attacker_weapon_elem.MaxRange)
+				return 1;
+			endif
+			if (attacker_weapon.hp or attacker_weapon.hp == 0)
+				//Do some damage to the weapon
+				if (RandomInt (100) == 1)
+					if (DoDamageToEquipment (attacker_weapon, 1))
+						if (attacker_weapon.desc)
+							SendSysMessage (attacker, "Your " + attacker_weapon.desc + " breaks!");
+						endif
+						DestroyItem (attacker_weapon);
+					endif
+				endif
+			endif
+		endif
+	endif
+
+	if (defender.weapon)
+		defender_weapon := defender.weapon;
+	endif
+	//Properly credit the attacker for anything that happens, but not in the arena
+	if (attacker.x >= 1385 and attacker.x <= 1414 and attacker.y >= 3729 and attacker.y <= 3758)
+		SetScriptController (0);
+	else
+		SetScriptController (attacker);
+	endif
+
+	//Make sure they have ammo if they're using a bow and perform the attack animation.
+	//henchmen use a special function
+	if (attacker.npctemplate and attacker.npctemplate == ":guards:warrior")
+		if (!HenchmanCheckForAmmo ())
+			return 1;
+		endif
+	elseif (!CheckForAmmo ())
+		SendSysMessage (attacker, "You're out of ammo!");
+		return 1;
+	endif
+	PerformAttackAnimation ();
+	sleepms (100);
+	PerformArrowAttackAnim ();
+
+	//Calc chance to hit and check for success
+	var chance_to_hit := CalculateToHitChance ();
+	if (RandomInt (100) > chance_to_hit)
+		PlayMissSoundEffect ();
+		return 1;
+	endif
+	
+	//Hit! Figure out how much raw damage the attack did, then modify it be tactics and strength
+	//Also add bonus for those with high hiding, stealth and tracking
+	var raw_damage := CalculateAttackDamage ();
+	var specialparms := 0;
+	if (attacker_weapon.attribute == ATTRIBUTEID_ARCHERY)
+		specialparms := WeaponSpecial (GetObjProperty (attacker, "#weaponability"), attacker, defender, raw_damage);
+	else
+		specialparms := ThrowingSpecial (GetObjProperty (attacker, "#weaponability"), attacker, defender, raw_damage, attacker_weapon.objtype);
+	endif
+	// specialparms[1] = bypasses parry?
+	// specialparms[2] = bypasses reactive armor?
+	// specialparms[3] = bypasses armor?
+	// specialparms[4] = bypasses critical hit?
+	// specialparms[5] = overrides damage dealing? If -1, no damage, if 0, normal damage, if higher than 1, overrides damage
+	if (specialparms[5] > 0)
+		raw_damage := specialparms[5];
+	endif
+	var rangerbonus := 0;
+	if (GetAttribute (attacker, ATTRIBUTEID_HIDING) > 75)
+		rangerbonus := GetAttribute (attacker, ATTRIBUTEID_HIDING);
+	endif
+	if (GetAttribute (attacker, ATTRIBUTEID_STEALTH) > 75)
+		rangerbonus := rangerbonus + GetAttribute (attacker, ATTRIBUTEID_STEALTH);
+	endif
+	if (GetAttribute (attacker, ATTRIBUTEID_TRACKING) > 75)
+		rangerbonus := rangerbonus + GetAttribute (attacker, ATTRIBUTEID_TRACKING);
+	endif
+	rangerbonus := rangerbonus / 6;
+	
+	var modified_damage := CINT ((raw_damage * (GetAttribute (attacker, ATTRIBUTEID_TACTICS) + rangerbonus + 50 + CINT (GetAttribute (attacker, ATTRIBUTEID_STRENGTH)/5)))/100);
+
+	//Now check parry, if the defender has a shield
+	var shield := GetEquipmentByLayer (defender, LAYER_HAND2);
+	if (!specialparms[1] and shield and IsShield (shield))
+		var defender_parry_skill := GetAttribute (defender, ATTRIBUTEID_PARRY);
+		if (RandomInt (300) < defender_parry_skill)
+			//Successful parry, reduce damage
+			modified_damage := modified_damage - shield.ar;
+			SendSysMessage (defender, "You parry the attack!");
+			QuickAwardRawAttributePoints (defender, ATTRIBUTEID_PARRY, 30);
+			NewPerformAction(defender, 1+RandomInt(2), 0, 0);
+			PlaySoundEffect (defender, 0x143);
+
+			//Do some damage to the shield
+			if (shield.hp or shield.hp == 0)
+				if (RandomInt (100) == 1)
+					if (DoDamageToEquipment (shield, 1))
+						SendSysMessage (defender, "Your shield breaks!");
+						DestroyItem (shield);
+					endif
+				endif
+			endif
+
+			//if no damage left, quit now
+			if (modified_damage <= 0)
+				return 1;
+			endif
+		else	//On unsuccesfull parry, play hit sound effect
+			PlayHitSoundEffect ();
+		endif
+	else	//On unsuccesfull parry, play hit sound effect
+		PlayHitSoundEffect ();
+	endif
+
+	//Players and henchmen take 1/2 damage
+	if (defender.acctname or defender.npctemplate == ":guards:warrior")
+		modified_damage := CINT (modified_damage/2);
+	endif
+
+	//Combat advancement for weapon skills
+	var weaponattributeid := attacker_weapon.attribute;
+	if (!attacker_weapon or !weaponattributeid)
+		weaponattributeid := ATTRIBUTEID_WRESTLING;
+	endif
+
+	QuickAwardRawAttributePoints (attacker, weaponattributeid, 30);
+	QuickAwardRawAttributePoints (attacker, ATTRIBUTEID_TACTICS, 15);
+	QuickAwardRawAttributePoints (defender, ATTRIBUTEID_TACTICS, 15);
+	
+	//Get the defender's AR rating and reduce the damage by 50-100% of that value
+	var defender_ar := CINT (GetDefendersAR (defender));
+	if (!specialparms[3] and defender_ar > 0)
+		modified_damage := CINT (modified_damage*(100 - defender_ar)/100);
+	endif
+
+	//Always do at least 1 damage
+	if (modified_damage < 1)
+		modified_damage := 1;
+	endif
+
+
+	//fake hitscript stuff
+	//different arrows do different damage types
+	if (specialparms[5] >= 0)
+		case (ammo_objtype)
+			0x16051:	//firearrow
+			0x16053:	//firebolt
+			0x16055:	//firedart
+			0x16057:	//fireshuriken
+				var half_damage := CINT (modified_damage/2);
+				DoDamageByType (attacker, defender, (half_damage+1), DAMAGETYPE_PHYSICAL);
+				DoDamageByType (attacker, defender, (half_damage+3), DAMAGETYPE_FIRE);
+			0x16052:	//frostarrow
+			0x16054:	//frostbolt
+			0x16056:	//frostdart
+			0x16058:	//frostshuriken
+				var half_damage := CINT (modified_damage/2);
+				DoDamageByType (attacker, defender, (half_damage+1), DAMAGETYPE_PHYSICAL);
+				DoDamageByType (attacker, defender, (half_damage+3), DAMAGETYPE_COLD);
+			default:	//normal arrows and bolts
+				DoDamageByType (attacker, defender, modified_damage, DAMAGETYPE_PHYSICAL);
+		endcase
+	else
+		return 1;
+	endif
+
+	if (!specialparms[4] and GetAttribute (attacker, ATTRIBUTEID_ANATOMY))
+		var critical_multiplier := 1 + attacker_weapon_elem.HeavyCritical;
+		if (!critical_multiplier)
+			critical_multiplier := 1;
+		endif
+		var critical_chance := CINT (GetAttribute (attacker, ATTRIBUTEID_ANATOMY) * critical_multiplier);
+		if (RandomInt (1000) < critical_chance)
+			SendSysMessage (attacker, "Critical hit!");
+			if (CheckSkill (attacker, SKILLID_ANATOMY, 80, 0) )
+				DoDamageByType (attacker, defender, CINT (modified_damage * critical_multiplier), DAMAGETYPE_PHYSICAL);
+			else
+				DoDamageByType (attacker, defender, CINT ((modified_damage * critical_multiplier)/2), DAMAGETYPE_PHYSICAL);
+			endif
+		endif
+	endif
+
+	if (GetObjProperty (attacker_weapon, "silver") ) 
+		DoSilverHit (attacker, defender, modified_damage);
+	endif
+
+	if (GetObjProperty (attacker_weapon, "specialweaponeffect") ) 
+		DoEtherialEffect (attacker, defender, attacker_weapon, modified_damage);
+	endif
+
+	DoHitSpell (attacker, defender, attacker_weapon);
+
+	return 1;
+endprogram
+
+
+
+
+///////////////////
+//  Perform the attack animation for both players and NPCs.  If the graphic of the attacker isn't
+//  a normal human, different animations need to be used
+///////////////////
+
+function PerformAttackAnimation ()
+	//If they're not human, use different attack animations based on their graphic
+	if (attacker.graphic != 400 and attacker.graphic != 401 and attacker.graphic != 605 and attacker.graphic != 606 and attacker.graphic != 666 and attacker.graphic != 667 and attacker.graphic != 744 and attacker.graphic != 745)
+		case (attacker.graphic)
+			CID_ALLIGATOR:
+			CID_PIG:
+			CID_BROWN_BEAR:
+			CID_GRIZZLY_BEAR:
+			CID_POLAR_BEAR:
+			CID_BOAR:
+			CID_BUNNY:
+			CID_CAT:
+			CID_DOG:
+			CID_WOLF:
+			CID_COW:
+			CID_COW2:
+			CID_BULL:
+			CID_BULL2:
+			CID_CHICKEN:
+			CID_GOAT:
+			CID_RAT:
+			CID_GIANT_RAT:
+			CID_PANTHER:
+				PerformAction (attacker, (RandomInt (3) + 5));
+			CID_EAGLE:
+				PerformAction (attacker, 4);
+			default:
+				PerformAction (attacker, (RandomInt (3) + 4));
+		endcase
+	
+		return;
+	endif
+
+	//If the player is mounted, use special mount animations, if they're defined in
+	//the weapon's itemdesc.cfg entry, or a default animation if not
+//	if (GetEquipmentByLayer (attacker, LAYER_MOUNT))
+//		var anim := CINT (attacker_weapon_elem.MountedAnim);
+//		if (anim)
+//			PerformAction (attacker, anim);
+//			return;
+//		endif
+//
+//		PerformAction (attacker, 0x1A);
+//		return;
+//	endif
+	
+	//Otherwise, if they're not mounted, use the animation defined in the itemdesc.cfg file
+	//or a default animation if one isn't defined
+	var anim := attacker_weapon_elem.Anim;
+//	if (anim)
+//		PerformAction (attacker, anim, 7);
+//		return;
+//	endif
+//	PerformAction (attacker, 0x09, 7);
+	case (anim)
+		0xb:  NewPerformAction(attacker, 0, 3, 1);
+		0x12: NewPerformAction(attacker, 0, 1, 0);
+		0x13: NewPerformAction(attacker, 0, 2, 0);
+		default: NewPerformAction(attacker, 0, 0, 0);
+	endcase
+	return;
+endfunction
+
+
+
+
+///////////////////
+//  Makes sure that there's ammo for the bow, and uses one of them up
+///////////////////
+
+function CheckForAmmo ()
+	//try to read the set ammo from the item
+	ammo_objtype := GetObjProperty (attacker_weapon, "archery_ammo");
+	
+	//find the default ammo
+	var default_ammotype := CINT (attacker_weapon_elem.ProjectileType);
+	if (!default_ammotype)
+		return 0;
+	endif
+	
+	//if we don't have ammo set, use the default ammo
+	if (!ammo_objtype)
+		ammo_objtype := default_ammotype;
+	endif
+	var quiver := GetEquipmentByLayer (attacker, LAYER_CAPE);
+	//Now search for the ammo
+	if (!quiver or !quiver.isa (POLCLASS_CONTAINER))
+		quiver := attacker.backpack;
+	endif
+	foreach item in EnumerateItemsInContainer (quiver)
+		if (item.objtype == ammo_objtype)
+			if (SubtractAmount (item, 1))
+				//sometimes the ammo shows up on the monster (reclaimed on corpse)
+				if (defender.npctemplate and !GetObjProperty (defender, "master"))
+					if (RandomInt (2))
+						CreateItemInContainer (defender.backpack, ammo_objtype, 1);
+					endif
+				endif
+				return 1;
+			endif
+		endif
+	endforeach
+	
+	//Ok, we didn't find any ammo.  If they were using special ammo, try switching back to normal ammo
+	if (ammo_objtype == default_ammotype)
+		return 0;
+	endif
+	
+	ammo_objtype := default_ammotype;
+	EraseObjProperty (attacker_weapon, "archery_ammo");
+
+	//Now search for the ammo AGAIN
+	foreach item in EnumerateItemsInContainer (quiver)
+		if (item.objtype == ammo_objtype)
+			if (SubtractAmount (item, 1))
+				//sometimes the ammo shows up on the monster (reclaimed on corpse)
+				if (defender.npctemplate and !GetObjProperty (defender, "master"))
+					if (RandomInt (2))
+						CreateItemInContainer (defender.backpack, ammo_objtype, 1);
+					endif
+				endif
+				return 1;
+			endif
+		endif
+	endforeach	
+
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  The ammo check function for henchmen.  They automatically use special ammo (if they have it)
+//  against appropriate enemy types
+///////////////////
+
+function HenchmanCheckForAmmo ()
+	//find the default ammo
+	var default_ammotype := CINT (attacker_weapon_elem.ProjectileType);
+	if (!default_ammotype)
+		return 0;
+	endif
+
+	ammo_objtype := default_ammotype;
+
+	//figure out if the opponent is vulnerable to fire or ice, then check to see if
+	//we have the right type of ammo for that
+	if (defender_npcdesc_elem)
+		if (defender_npcdesc_elem.fire and defender_npcdesc_elem.fire == "weak")
+			if (ammo_objtype == UOBJ_ARROW)
+				ammo_objtype := UOBJ_FIRE_ARROW;
+			elseif (ammo_objtype == UOBJ_BOLT)
+				ammo_objtype := UOBJ_FIRE_BOLT;
+			elseif (ammo_objtype == UOBJ_DART)
+				ammo_objtype := UOBJ_FIRE_DART;
+			elseif (ammo_objtype == UOBJ_SHURIKEN)
+				ammo_objtype := UOBJ_FIRE_SHURIKEN;
+			else
+				ammo_objtype := UOBJ_FIRE_THROWINGAXE;			
+			endif
+		elseif (defender_npcdesc_elem.cold and defender_npcdesc_elem.cold == "weak")
+			if (ammo_objtype == UOBJ_ARROW)
+				ammo_objtype := UOBJ_FROST_ARROW;
+			elseif (ammo_objtype == UOBJ_BOLT)
+				ammo_objtype := UOBJ_FROST_BOLT;
+			elseif (ammo_objtype == UOBJ_DART)
+				ammo_objtype := UOBJ_FROST_DART;
+			elseif (ammo_objtype == UOBJ_SHURIKEN)
+				ammo_objtype := UOBJ_FROST_SHURIKEN;
+			else
+				ammo_objtype := UOBJ_FROST_THROWINGAXE;
+			endif
+		endif
+	endif
+
+	//Now search for the ammo
+	foreach item in EnumerateItemsInContainer (attacker.backpack)
+		if (item.objtype == ammo_objtype)
+			if (SubtractAmount (item, 1))
+				//sometimes the ammo shows up on the monster (reclaimed on corpse)
+				if (defender.npctemplate and !GetObjProperty (defender, "master"))
+					if (RandomInt (2))
+						CreateItemInContainer (defender.backpack, ammo_objtype, 1);
+					endif
+				endif
+				return 1;
+			endif
+		endif
+	endforeach
+	
+	//Ok, we didn't find any ammo.  If they were using special ammo, try switching back to normal ammo
+	if (ammo_objtype == default_ammotype)
+		return 0;
+	endif
+	
+	ammo_objtype := default_ammotype;
+	EraseObjProperty (attacker_weapon, "archery_ammo");
+
+	//Now search for the ammo AGAIN
+	foreach item in EnumerateItemsInContainer (attacker.backpack)
+		if (item.objtype == ammo_objtype)
+			if (SubtractAmount (item, 1))
+				//sometimes the ammo shows up on the monster (reclaimed on corpse)
+				if (defender.npctemplate and !GetObjProperty (defender, "master"))
+					if (RandomInt (2))
+						CreateItemInContainer (defender.backpack, ammo_objtype, 1);
+					endif
+				endif
+				return 1;
+			endif
+		endif
+	endforeach	
+
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Display the arrow (or bolt) flying to target animation
+///////////////////
+
+function PerformArrowAttackAnim ()
+	//try to figure out the anim based on the ammo used
+	if (ammo_objtype)
+		case (ammo_objtype)
+			0x16051:	//firearrow
+			0x16053:	//firebolt
+			0x16055:	//firedart
+			0x16057:	//fireshuriken
+			0x16059:	//firethrowingaxe
+				sleepms (500);
+				PlayMovingEffect (attacker, defender, 0x36D4, 0xa, 0x1e);
+				PlaySoundEffect (attacker, 0x15F);
+				sleepms (40*Distance(attacker,defender));
+				return;
+			0x16052:	//frostarrow
+			0x16054:	//frostbolt
+			0x16056:	//frostdart
+			0x16058:	//frostshuriken
+			0x1605a:	//frostthrowingaxe
+				sleepms (500);
+				PlayMovingEffect (attacker, defender, 0x46e9, 0xa, 0x1e);
+				PlaySoundEffect (attacker, 0x2b3);
+				sleepms (40*Distance(attacker,defender));
+				return;
+		endcase;
+	endif
+
+	//Ok, we're doing something else.  Try to load the defaults
+	var animtype := CINT (attacker_weapon_elem.ProjectileAnim);
+	if (!animtype)
+		animtype := 0xf42;
+	endif
+
+	var bowsoundfx := CINT (attacker_weapon_elem.ProjectileSound);
+	if (!bowsoundfx)
+		bowsoundfx := 0x235;
+	endif
+
+	sleepms (500);
+	PlayMovingEffect (attacker, defender, animtype, 0xa, 0x1e);
+	PlaySoundEffect (attacker, bowsoundfx);
+	sleepms (40*Distance(attacker,defender));
+endfunction
+
+
+
+
+///////////////////
+//  Calculate the odds of a successful attack
+//////////////////
+
+function CalculateToHitChance ()
+	//First calculate the weaponskills for the attacker and defender
+	var attacker_weaponskill := 0;
+	if (attacker.acctname)
+		if (attacker_weapon)
+			attacker_weaponskill := GetAttribute (attacker, (attacker_weapon.attribute));
+		else
+			attacker_weaponskill := GetAttribute (attacker, ATTRIBUTEID_WRESTLING);
+		endif
+
+		//Increased chance to hit for players
+		if (attacker_weaponskill > 95)
+			attacker_weaponskill := CINT (attacker_weaponskill * 1.4);
+		elseif (attacker_weaponskill > 75)
+			attacker_weaponskill := CINT (attacker_weaponskill * 1.25);
+		endif
+	else
+		if (attacker_weapon)
+			attacker_weaponskill := GetAttribute (attacker, (attacker_weapon.attribute));
+		else
+			attacker_weaponskill := GetAttribute (attacker, attacker_npcdesc_elem.AttackAttribute);
+		endif
+		if (!attacker_weaponskill)
+			attacker_weaponskill := GetAttribute (attacker, ATTRIBUTEID_WRESTLING);
+		endif
+	endif
+
+//	var defender_weaponskill := CINT (GetAttribute (defender, "Dexterity")/2);
+//	if (defender.acctname)
+//		defender_weaponskill := CINT (defender_weaponskill * 1.2);
+//	endif
+	var defender_weaponskill := 0;
+	if (defender.acctname)
+		if (defender_weapon)
+			defender_weaponskill := GetAttribute (defender, (defender_weapon.attribute));
+		else
+			defender_weaponskill := GetAttribute (defender, ATTRIBUTEID_WRESTLING);
+		endif
+
+		//Increased chance of being missed for players
+		if (defender_weaponskill > 70)
+			defender_weaponskill := CINT (defender_weaponskill * 1.20);
+		endif
+	else
+		if (defender_weapon)
+			defender_weaponskill := GetAttribute (defender, (defender_weapon.attribute));
+		else
+			defender_weaponskill := GetAttribute (defender, defender_npcdesc_elem.AttackAttribute);
+		endif
+		if (!defender_weaponskill)
+			defender_weaponskill := GetAttribute (defender, ATTRIBUTEID_WRESTLING);
+		endif
+	endif
+
+
+	var chance_to_hit := CINT (((attacker_weaponskill + 50)*50)/(defender_weaponskill + 50));
+
+	//There's always a small chance to hit
+	if (!chance_to_hit)
+		chance_to_hit := 5;
+	endif
+
+	//Player made exceptional items have a slightly higher chance to hit
+	if (attacker_weapon)
+		var l_name := Lower (attacker_weapon.desc);
+		if (l_name ["xceptional"])
+			chance_to_hit := chance_to_hit + 5;
+		endif
+	endif
+
+	//Silver weapons give bonus to hit against undead
+	if (GetObjProperty (attacker_weapon, "silver") ) 
+		if (IsAnUndeadCreature (defender.npctemplate))
+			chance_to_hit := chance_to_hit + 5;
+		endif
+	endif
+
+	//Special bonus to hit from some spells.  Set up as an array - {amount, endtime, name (for .status)}
+	if (GetObjProperty (attacker, "#combat_to_hit_bonus"))
+		var bonus_to_hit := GetObjProperty (attacker, "#combat_to_hit_bonus");
+		var endtime := bonus_to_hit[2];
+		if (endtime and endtime < ReadGameClock())
+			EraseObjProperty (attacker, "#combat_to_hit_bonus");
+		else
+			chance_to_hit := chance_to_hit + bonus_to_hit[1];
+		endif
+	endif
+
+	return chance_to_hit;
+endfunction
+
+
+
+
+///////////////////
+//  Figures out the raw weapon damage, unmodified by tactics, armor, etc
+///////////////////
+
+function CalculateAttackDamage ()
+	var raw_damage := 0;
+	if (attacker_weapon and (attacker_weapon.objtype != UOBJ_FIST or attacker.acctname))
+		if (len (attacker_weapon_elem.Damage))
+			raw_damage := RandomDiceRoll ((attacker_weapon_elem.Damage));
+		else
+			SendSysMessage (attacker, "Unable to find itemdesc damage entry for your weapon!");
+			raw_damage := RandomDiceRoll ("4d6+3");
+		endif
+		if (attacker_weapon.dmg_mod)
+			raw_damage := raw_damage + attacker_weapon.dmg_mod;
+		endif
+
+		//Now modify for weapon quality
+		if (attacker_weapon.quality)
+			raw_damage := CINT (raw_damage * attacker_weapon.quality);
+		endif
+		
+		//And then for the weapon's HP
+		if (attacker_weapon.hp)
+			raw_damage := CINT (raw_damage * attacker_weapon.hp / attacker_weapon.maxhp);
+		endif
+	elseif (attacker.npctemplate)
+		if (len (attacker_npcdesc_elem.AttackDamage))
+			raw_damage := RandomDiceRoll ((attacker_npcdesc_elem.AttackDamage));
+		else
+			raw_damage := RandomDiceRoll ("4d6+3");
+		endif
+	else //This shouldn't happen, but deal with it anyway
+		Syslog ("ERROR - unable to figure out damage for " + attacker.name);
+		raw_damage := RandomDiceRoll ("3d6+3");
+	endif
+	return raw_damage;
+endfunction
+
+
+
+
+///////////////////
+//  Miss!  Play a swoosh-type sound effect
+///////////////////
+
+function PlayMissSoundEffect ()
+	if (attacker_weapon)
+		var sound_effect := attacker_weapon_elem.MissSound;
+		if (!sound_effect)
+			sound_effect := 0x239;
+		endif
+		PlaySoundEffect (attacker, sound_effect);
+	elseif (attacker.npctemplate)
+		var sound_effect := attacker_npcdesc_elem.AttackMissSound;
+		if (!sound_effect)
+			sound_effect := 0x239;
+		endif
+		PlaySoundEffect (attacker, sound_effect);
+	else
+		PlaySoundEffect (attacker, 0x239);
+	endif
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  Hit!  Play the hit sound effect
+///////////////////
+
+function PlayHitSoundEffect ()
+	PlaySoundEffect (defender, 0x3a3 + RandomInt (22));
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  Called when the weapon being used is silver
+///////////////////
+
+function DoSilverHit (byref attacker, byref defender, byref rawdamage);
+	if (!IsAnUndeadCreature (defender.npctemplate))
+		return;
+	endif
+
+	PlayObjectCenteredEffect (defender, FX_GLOW, 7, 7);
+	DoDamageByType (attacker, defender, CINT (rawdamage/2)+1, DAMAGETYPE_PHYSICAL);
+
+	if (GetObjProperty (defender, "summoned"))
+		PlaySoundEffect (attacker, SFX_SPELL_MANA_VAMPIRE);
+		if (!checkskill (defender, SKILLID_MAGICRESISTANCE, -1, 0))
+			PlayStationaryEffect (defender.x, defender.y, defender.z, FX_SMOKE, 0xA, 0xA, 0, defender.realm );
+			KillNPC (defender);
+		endif
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Special kewl effects for etherial items
+///////////////////
+
+function DoEtherialEffect (attacker, defender, weapon, rawdamage)
+	case (GetObjProperty (weapon, "specialweaponeffect"))
+		"lightning":
+			if (RandomInt (10) == 1)
+				var spellparms := array { };
+				spellparms[1] := "#SPECIALNONE";
+				spellparms[2] := defender;
+				start_script (":damage_spells:lightning", spellparms);		
+			endif
+		
+		"vampire":
+			var bonushp := GetVital (attacker, "Life") + rawdamage*10;
+			if (bonushp > GetVitalMaximumValue (attacker, "Life"))
+				bonushp := GetVitalMaximumValue (attacker, "Life");
+			endif
+			SetVital (attacker, "Life", bonushp);
+			PlayObjectCenteredEffect (defender, FX_SPARK_EFFECT, 7, 0x10);
+		
+		"dragonslaying":
+			var package := FindNPCPackage (defender.npctemplate);
+			if (package and package == "dragons")
+				PlayObjectCenteredEffect (defender, FX_GLOW, 7, 7);
+				DoDamageByType (attacker, defender, CINT (rawdamage/2), DAMAGETYPE_MAGIC);
+			endif
+
+		"orcslaying":
+			var package := FindNPCPackage (defender.npctemplate);
+			if (package and package == "orcs")
+				PlayObjectCenteredEffect (defender, FX_GLOW, 7, 7);
+				DoDamageByType (attacker, defender, CINT (rawdamage/2), DAMAGETYPE_MAGIC);
+			endif
+
+		"trollslaying":
+			var package := FindNPCPackage (defender.npctemplate);
+			if (package and package == "trolls")
+				PlayObjectCenteredEffect (defender, FX_GLOW, 7, 7);
+				DoDamageByType (attacker, defender, CINT (rawdamage/2), DAMAGETYPE_MAGIC);
+			endif
+
+		"ratmanslaying":
+			var package := FindNPCPackage (defender.npctemplate);
+			if (package and package == "ratmen")
+				PlayObjectCenteredEffect (defender, FX_GLOW, 7, 7);
+				DoDamageByType (attacker, defender, CINT (rawdamage/2), DAMAGETYPE_MAGIC);
+			endif
+			
+		"ophidianslaying":
+			var package := FindNPCPackage (defender.npctemplate);
+			if (package and package == "ophidians")
+				PlayObjectCenteredEffect (defender, FX_GLOW, 7, 7);
+				DoDamageByType (attacker, defender, CINT (rawdamage/2), DAMAGETYPE_MAGIC);
+			endif
+				
+		"terathanslaying":
+			var package := FindNPCPackage (defender.npctemplate);
+			if (package and package == "terathans")
+				PlayObjectCenteredEffect (defender, FX_GLOW, 7, 7);
+				DoDamageByType (attacker, defender, CINT (rawdamage/2), DAMAGETYPE_MAGIC);
+			endif	
+
+		"lizardmanslaying":
+			var package := FindNPCPackage (defender.npctemplate);
+			if (package and package == "lizardmen")
+				PlayObjectCenteredEffect (defender, FX_GLOW, 7, 7);
+				DoDamageByType (attacker, defender, CINT (rawdamage/2), DAMAGETYPE_MAGIC);
+			endif
+			
+		"vampireslaying":
+			var package := FindNPCPackage (defender.npctemplate);
+			if (package and package == "vampires")
+				PlayObjectCenteredEffect (defender, FX_GLOW, 7, 7);
+				DoDamageByType (attacker, defender, CINT (rawdamage/2), DAMAGETYPE_MAGIC);
+			endif
+			
+				
+	endcase
+endfunction
+
+
+
+
+
+function DoHitSpell (byref attacker, byref defender, byref weapon)
+	var spellname := getobjproperty(weapon,"hitspell");
+	if (!spellname)
+		return;
+	endif
+
+	//tempcode to fix old hitspell names:
+	if (!spellname[":"])
+		spellname := GetNewSpellName (spellname);
+		setobjproperty (weapon, "hitspell", spellname);
+	endif
+
+	if (spellname["feeblemind"])
+		if (!CanMod(defender,"cint") )
+			return;
+		endif
+	elseif (spellname["clumsy"])
+		if (!CanMod(defender,"cdex") )
+			return;
+		endif
+	elseif (spellname["weaken"])
+		if (!CanMod(defender,"cstr") )
+			return;
+		endif
+	elseif (spellname["curse"])
+		if (!CanMod(defender,"call") )
+			return;
+		endif
+	endif
+
+	if (GetObjProperty (weapon, "charges") )
+		var charges := GetObjProperty (weapon, "charges");
+		charges := charges - 1;
+		if (!charges or charges < 1)
+			EraseObjProperty (weapon, "charges");
+			EraseObjProperty (weapon, "hitspell");
+			var spellname := GetObjProperty (weapon, "itemspellname");
+			if (spellname)
+				var itemname := weapon.desc;
+				if (itemname[CSTR ("of " + spellname)])
+					itemname[CSTR ("of " + spellname)] := "";
+				else
+					itemname[CSTR ("and " + spellname)] := "";
+				endif
+				weapon.name := itemname;
+			endif
+			if (GetObjProperty (weapon, "oldname") )
+				var itemname := GetObjProperty (weapon, "oldname");
+				if (itemname[CSTR ("of " + spellname)])
+					itemname[CSTR ("of " + spellname)] := "";
+				else
+					itemname[CSTR ("and " + spellname)] := "";
+				endif
+				SetObjProperty (weapon, "oldname", itemname);
+			endif
+		else
+			SetObjProperty (weapon, "charges", charges);
+		endif
+	endif
+
+	var spellparms := array { };
+	spellparms[1] := "#MOB";
+	spellparms[2] := attacker;
+	spellparms[3] := defender;
+	start_script (spellname, spellparms);
+endfunction
+
+function GetNewSpellName( spellname )
+
+	case (spellname)
+	"heal":
+	"nightsight":
+	"gheal":
+	"manadrain":
+	"reflect":
+	"invisibility":
+	"reveal":
+	"manavamp":
+	"resurrect":
+		return (":misc_spells:"+spellname);
+	"magicarrow":
+	"harm":
+	"fireball":
+	"lightning":
+	"mindblast":
+	"ebolt":
+	"explosion":
+	"chain_lightning":
+	"fstrike":
+	"meteor_swarm":
+	"earthquake":
+		return (":damage_spells:"+spellname);
+	"polymorph":
+	"masscurse":
+	"paralyze":
+	"clumsy":
+	"feeblemind":
+	"reactivearmor":
+	"weaken":
+	"agility":
+	"cunning":
+	"protection":
+	"strength":
+	"bless":
+	"archprot":
+	"curse":
+		return (":statmod_spells:"+spellname);
+	"cure":
+	"poison":
+	"archcure":
+		return (":poison_spells:"+spellname);
+	"teleport":
+	"recall":
+	"gate":
+		return (":travel_spells:"+spellname);
+	"wallofstone":
+	"firefield":
+	"dispel_field":
+	"poisonfield":
+	"parafield":
+	"energy_field":
+		return (":field_spells:"+spellname);
+	"blade_spirit":
+	"summon_creature":
+	"dispel":
+	"massdispel":
+	"vortex":
+	"summon_air":
+	"summon_daemon":
+	"summon_earth":
+	"summon_fire":
+	"summon_water":
+		return (":summoning_spells:"+spellname);
+	endcase
+
+endfunction
+
+

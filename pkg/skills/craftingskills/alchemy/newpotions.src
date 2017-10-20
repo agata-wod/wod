@@ -1,0 +1,71 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/poison";
+include "include/wodinc";
+include "include/dotempmods";
+include "include/eventid";
+include "include/itemtypes";
+
+program use_product (character, potion)
+	if (!ReserveItem (potion) or !potion.movable)
+		SendSysMessage (character, "You can't use that right now!");
+		return;
+	endif
+
+	//we're going to replace the old potions with new ones when double-clicked
+	var itemtype := CINT(GetObjProperty (potion, "itemtype"));
+	if (!itemtype)
+		SendSysMessage (character, "I don't know what to do with that.");
+		return;
+	endif
+	
+	case (itemtype)
+		23:	if (CreateIteminContainer (character.backpack, 0xdc20, 1))
+				DestroyItem (potion);
+			endif
+		24:	if (CreateIteminContainer (character.backpack, 0xdc21, 1))
+				DestroyItem (potion);
+			endif
+		25:	if (CreateIteminContainer (character.backpack, 0xdc22, 1))
+				DestroyItem (potion);
+			endif
+		26:	if (CreateIteminContainer (character.backpack, 0xdc22, 1))
+				DestroyItem (potion);
+			endif
+		27:	if (CreateIteminContainer (character.backpack, 0xdc23, 1))
+				DestroyItem (potion);
+			endif
+		28:	if (CreateIteminContainer (character.backpack, 0xdc24, 1))
+				DestroyItem (potion);
+			endif
+		29:	if (CreateIteminContainer (character.backpack, 0xdc24, 1))
+				DestroyItem (potion);
+			endif
+		31:	if (CreateIteminContainer (character.backpack, 0xdc25, 1))
+				DestroyItem (potion);
+			endif
+		32:	if (CreateIteminContainer (character.backpack, 0xdc26, 1))
+				DestroyItem (potion);
+			endif
+		33:	if (CreateIteminContainer (character.backpack, 0xdc27, 1))
+				DestroyItem (potion);
+			endif
+		34:	if (CreateIteminContainer (character.backpack, 0xdc28, 1))
+				DestroyItem (potion);
+			endif
+		35:	if (CreateIteminContainer (character.backpack, 0xdc29, 1))
+				DestroyItem (potion);
+			endif
+		36:	if (CreateIteminContainer (character.backpack, 0xdc2a, 1))
+				DestroyItem (potion);
+			endif
+		37:	if (CreateIteminContainer (character.backpack, 0xdc2b, 1))
+				DestroyItem (potion);
+			endif	
+	endcase
+endprogram

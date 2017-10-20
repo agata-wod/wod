@@ -1,0 +1,40 @@
+use uo;
+use os;
+use uo;
+use vitals;
+use cliloc;
+use polsys;  
+
+include "include/client";
+include ":weapons:abilityIcons";
+include ":weaponabilities:focus";
+
+
+program ability(parms)
+	// parms[1] = attacker
+	// parms[2] = defender
+	// parms[3] = damage
+	var result := array {};		
+	var weapon := GetEquipmentByLayer (parms[2], LAYER_HAND1);
+	if (!weapon or !weapon.isa (POLCLASS_WEAPON))
+		weapon := GetEquipmentByLayer (parms[2], LAYER_HAND2);
+	endif
+	if (!weapon or !weapon.isa (POLCLASS_WEAPON))
+		SendSysMessageCL (parms[1], 1060849);
+		ResetWeaponAbilities (parms[1]);
+	elseif (ConsumeVital(parms[1], "Mana", GetFocusManaReduction (parms[1], 2000)))
+		SendSysMessageCL (parms[1], 1060092);
+		SendSysMessageCL (parms[2], 1060093);
+		PlaySoundEffect (parms[2], 0x3ba);
+		PlayObjectCenteredEffectEx (parms[2], 0x37be, 232, 25, 0, 0, 2, 9948);
+		set_critical(1);
+		if (!MoveItemToContainer (weapon, parms[2].backpack))
+			MoveObjectToLocation (weapon, parms[2].x, parms[2].y, parms[2].z, parms[2].realm, MOVEOBJECT_FORCELOCATION);
+		endif
+		SetObjProperty (parms[2], "#disarmed", ReadGameClock() + 5);
+		set_critical(0);
+		result[5] := -1;
+		ResetWeaponAbilities (parms[1]);
+	endif
+	return result;
+endprogram

@@ -1,0 +1,60 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/string";
+include "include/utility";
+include "include/wodinc";
+
+program check_etherial_items ()
+	//make sure we're not already running from the last time
+	if (GetGlobalProperty ("#etherialitemchecker"))
+		SendGMErrorMessage (" etherial item checker is still running from last invocation", 1);
+		return;
+	endif
+	SetGlobalProperty ("#etherialitemchecker", 1);
+
+	var etherialbankbox := FindBankBox ("etherial");
+	var allserials := GetGlobalProperty ("etherialitems");
+	if (!allserials)
+		allserials := dictionary;
+	endif
+
+	foreach serial in (allserials.keys())
+		var theitem := SystemFindObjectBySerial (serial);
+		if (!theitem)
+			theitem := SystemFindObjectBySerial (serial, SYSFIND_SEARCH_OFFLINE_MOBILES + SYSFIND_SEARCH_STORAGE_AREAS);
+		endif
+		
+		if (theitem)
+			var itemcontainer := theitem;
+			while (itemcontainer.container)
+				itemcontainer := itemcontainer.container;
+			endwhile
+			if (itemcontainer != etherialbankbox)
+				theitem.quality := 1.2;
+				theitem.hp := theitem.maxhp;
+				EraseObjProperty (theitem, "total_damage");
+
+				var returntime := GetObjProperty (theitem, "returntime");
+				if (!returntime or returntime < ReadGameClock() )
+					//its time to go home
+					MoveItemToContainer (theitem, etherialbankbox);
+					SetObjProperty (theitem, "tname", GetObjProperty (theitem, "etherialname"));
+					var newitem := CreateItemAtLocation (1, 1, 1, theitem.objtype, 1, REALM_BRITANNIA);
+					if (newitem)
+						theitem.name := CSTR ("a magic " + TruncateArticle (newitem.desc));
+						DestroyItem (newitem);
+					endif
+				endif
+			endif
+		else
+			SendGMErrorMessage ("Can't find etherial item of serial number " + serial, 1);
+			allserials.erase (serial);
+			SetGlobalProperty ("etherialitems", allserials);
+		endif
+	endforeach
+	EraseGlobalProperty ("#etherialitemchecker");
+endprogram

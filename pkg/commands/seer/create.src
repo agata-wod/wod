@@ -1,0 +1,328 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/objtype";
+include "include/gumps";
+
+program textcmd_create( who, text )
+	if (!text)
+		SendSysMessage (who, "Usage: .create [objtype] [amount]");
+		return;
+	elseif (lower(text) == "special")
+		DoMakeSpecialItems (who);
+		return;
+	endif
+
+	var params := SplitWords (text);
+	var objtype := CInt (params[1]);
+	var amount := CInt (params[2]);
+
+	if (!objtype)
+		objtype := GetObjtypeByName (params[1]);
+		if (!objtype)
+			SendSysMessage (who, "No such item!");
+			return;
+		endif
+	endif
+
+	if (!amount)
+		amount := 1;
+	endif
+
+	var item := CreateItemInContainer (who.backpack, objtype, amount);
+	if (item)
+		item.movable := 1;
+		return;
+	endif
+
+	if (amount > 20)
+		amount := 20;
+	endif
+
+	for i := 1 to amount
+		item := CreateIteminContainer (who.backpack, objtype, 1);
+		if (!item)
+			SendSysMessage (who, "Your backpack is full!");
+			return;
+		else
+			item.movable := 1;
+		endif
+	endfor
+
+	syslog (who.name + " made " + amount + " of " + item.desc);
+endprogram
+
+
+
+
+///////////////////
+//  called when someone does a '.create special'
+///////////////////
+
+function DoMakeSpecialItems (character)
+	var itemmenu := CreateMenu ("Select an item to make:");
+	AddMenuItem (itemmenu, 0x0efa, "Magic Stuff");
+	AddMenuItem (itemmenu, 0x14F0, "House Deeds");
+	AddMenuItem (itemmenu, 0x0FF0, "Books and Notes");
+	AddMenuItem (itemmenu, 0x06E5, "Doors");
+	var selection := SelectMenuItem2 (character, itemmenu);
+
+	if (!selection.index)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	case (selection.index)
+		1:
+			CreateSpecialMagicStuff (character);
+		2:
+			CreateSpecialHouseDeeds (character);
+		3:
+			CreateSpecialBooks (character);
+		4:
+			CreateSpecialDoors (character);
+		default:
+			SendSysMessage (character, "Error.");
+			return;
+
+	endcase
+	SendSysMessage (character, "Done.");
+
+endfunction
+
+
+
+
+///////////////////
+//  if they selected magic stuff from the .create special menu
+///////////////////
+
+function CreateSpecialMagicStuff (character)
+
+	var itemmenu := CreateMenu ("Select an item to make:");
+	AddMenuItem (itemmenu, 0x0efa, "spellbook");
+	AddMenuItem (itemmenu, 0x1c13, "Codex Damnorum");
+	AddMenuItem (itemmenu, 0x0e76, "bag of reagents");
+	var selection := SelectMenuItem2 (character, itemmenu);
+
+	if (!selection.index)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	case (selection.index)
+		1:
+			var book := CreateItemInBackpack (character, 0x0efa, 1);
+			for i := 0x1f2d to 0x1f6c
+				CreateItemInContainer (book, i, 1);
+			endfor;
+		2:
+			var book := CreateItemInBackpack (character, 0xa100, 1);
+			book.newbie := 1;
+			SetObjProperty (book, "Lesser", 255);
+			SetObjProperty (book, "Greater", 255);
+		3:
+			var bag := CreateItemInBackpack (character, 0xe76, 1);
+			bag.newbie := 1;
+			CreateItemInContainer (bag, UOBJ_BLACK_PEARL, 100);
+			CreateItemInContainer (bag, UOBJ_BLOOD_MOSS, 100);
+			CreateItemInContainer (bag, UOBJ_GARLIC, 100);
+			CreateItemInContainer (bag, UOBJ_GINSENG, 100);
+			CreateItemInContainer (bag, UOBJ_MANDRAKE_ROOT, 100);
+			CreateItemInContainer (bag, UOBJ_NIGHTSHADE, 100);
+			CreateItemInContainer (bag, UOBJ_SULFUROUS_ASH, 100);
+			CreateItemInContainer (bag, UOBJ_SPIDER_SILK, 100);
+		default:
+			SendSysMessage (character, "Error.");
+			return;
+	endcase
+
+endfunction
+
+
+
+
+///////////////////
+//  if they selected magic stuff from the .create special menu
+///////////////////
+
+function CreateSpecialHouseDeeds (character)
+
+	var itemmenu := CreateMenu ("Select an item to make:");
+	AddMenuItem (itemmenu, 0x6019, "small stone and plaster house");
+	AddMenuItem (itemmenu, 0x601A, "small stone house");
+	AddMenuItem (itemmenu, 0x601B, "small wooden house");
+	AddMenuItem (itemmenu, 0x601C, "small plaster house");
+	AddMenuItem (itemmenu, 0x601D, "small wood and straw house");
+	AddMenuItem (itemmenu, 0x6020, "large brick house");
+	AddMenuItem (itemmenu, 0x6021, "two story wood and plaster house");
+	AddMenuItem (itemmenu, 0x6022, "two story stone and plaster house");
+	AddMenuItem (itemmenu, 0x6023, "tower deed");
+	AddMenuItem (itemmenu, 0x6024, "keep deed");
+	AddMenuItem (itemmenu, 0x6025, "castle deed");
+	AddMenuItem (itemmenu, 0x6026, "large patio house");
+	AddMenuItem (itemmenu, 0x6227, "small stone shop");
+	AddMenuItem (itemmenu, 0x6228, "small marble shop");
+	AddMenuItem (itemmenu, 0x6229, "small tower");
+	AddMenuItem (itemmenu, 0x622A, "sandstone patio house");
+	AddMenuItem (itemmenu, 0x622B, "two story log cabin");
+	AddMenuItem (itemmenu, 0x622C, "two story villa");
+	AddMenuItem (itemmenu, 0x622D, "large marble patio house");
+	AddMenuItem (itemmenu, 0x622E, "ranch house");
+	var selection := SelectMenuItem2 (character, itemmenu);
+
+	if (!selection.index)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	CreateItemInBackpack (character, selection.objtype, 1);
+endfunction
+
+
+
+
+///////////////////
+//  if they selected magic stuff from the .create special menu
+///////////////////
+
+function CreateSpecialBooks (character)
+
+	var itemmenu := CreateMenu ("Select an item to make:");
+	AddMenuItem (itemmenu, 0x14f0, "note");
+	AddMenuItem (itemmenu, 0x099f, "MiB");
+	AddMenuItem (itemmenu, 0x7020, "book");
+	AddMenuItem (itemmenu, 0x7021, "book");
+	AddMenuItem (itemmenu, 0x7022, "book");
+	AddMenuItem (itemmenu, 0x7023, "book");
+	var selection := SelectMenuItem2 (character, itemmenu);
+
+	if (!selection.index)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	case (selection.index)
+		1:
+			var note := CreateItemInBackpack (character, 0x14f0, 1);
+			var booktext := array{ };
+			var pagetext := "";
+			var prompt := pagetext;
+			repeat
+				pagetext:= SendTextEntryGump (character, "Line: "+len(booktext)+" "+prompt,
+						TE_CANCEL_DISABLE,TE_STYLE_NORMAL, 22);
+				if(pagetext)
+					booktext.append (pagetext);
+					prompt := pagetext;
+				endif
+			until ( (!pagetext) or ( len(booktext) > 10) );
+			SetObjProperty (note, "note", booktext);
+			note.usescript := ":fishing:readnote";
+			note.name := "a note";
+		2:
+			var it := CreateItemInBackpack (character, 0x99f, 1);
+			set_critical(1);
+     		it.name := "a message in a bottle";
+			it.usescript := ":fishing:readnote";
+     		it.buyprice := -1;
+			SetObjProperty (it, "questitem", 1);
+
+          	var cfg := ReadConfigFile(":fishing:treasure");
+			var elem := FindConfigElem(cfg,"locations");
+			var coords := GetConfigStringArray(elem,"location");
+			var coord := coords[ RandomInt(len(coords))+1 ];
+
+			var textgroup := RandomInt(4)+1;
+     		elem := FindConfigElem(cfg,textgroup);
+			var textlines := GetConfigStringArray(elem,"text");
+			var note := array{};
+			foreach line in textlines
+				note[ len(note)+1 ] := line;
+			endforeach
+			var coordinates := splitwords(coord);
+			note[ len(textlines)+1 ] := "Last coordinates:";
+			note[ len(textlines)+2 ] := "     " + coordinates[1] + ", " + coordinates[2];
+			setobjproperty(it,"note",note);
+			setobjproperty(it,"treasurex",cint(coordinates[1]));
+			setobjproperty(it,"treasurey",cint(coordinates[2]));
+			set_critical(0);
+		default:
+			CreateItemInBackpack (character, selection.objtype, 1);
+	endcase
+
+endfunction
+
+
+
+
+///////////////////
+//  if they selected doors from the .create special menu
+///////////////////
+
+function CreateSpecialDoors (character)
+	var itemmenu := CreateMenu ("Select the door to create:");
+	AddMenuItem (itemmenu, 0x6D5, "Light Wooden Doors");
+	AddMenuItem (itemmenu, 0x6B5, "Light Wooden Doors");
+	AddMenuItem (itemmenu, 0x6E5, "Dark Wooden Doors");
+	AddMenuItem (itemmenu, 0x6A5, "Dark Wooden Doors");
+	AddMenuItem (itemmenu, 0x344, "Secret Wooden Doors");
+	AddMenuItem (itemmenu, 0x334, "Secret Wooden Doors");
+	AddMenuItem (itemmenu, 0x675, "Short Steel Doors");
+	AddMenuItem (itemmenu, 0x6C5, "Tall Steel Doors");
+	AddMenuItem (itemmenu, 0x839, "Light Wooden Gate");
+	AddMenuItem (itemmenu, 0x866, "Dark Wooden Gate");
+	AddMenuItem (itemmenu, 0x84C, "Short Iron Gate");
+	AddMenuItem (itemmenu, 0x824, "Tall Iron Gate");
+	AddMenuItem (itemmenu, 0x1FED, "Short Barred Doors");
+	AddMenuItem (itemmenu, 0x685, "Tall Barred Doors");
+	AddMenuItem (itemmenu, 0x6A5, "Normal Wooden Doors");
+	AddMenuItem (itemmenu, 0x695, "Rattan Doors");
+	AddMenuItem (itemmenu, 0xE8, "Secret Stone Doors");
+	AddMenuItem (itemmenu, 0x324, "Secret Stone Doors");
+	AddMenuItem (itemmenu, 0x354, "Secret Stone Doors");
+	AddMenuItem (itemmenu, 0x314, "Secret Dungeon Doors");
+
+	var selection := SelectMenuItem2 (character, itemmenu);
+	if (!selection.objtype)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	itemmenu := CreateMenu ("Select a door to Create:");
+	AddMenuItem (itemmenu, (selection.objtype),      "[West Door] Opens Out");
+	AddMenuItem (itemmenu, (selection.objtype + 2),  "[East Door] Opens Out");
+	AddMenuItem (itemmenu, (selection.objtype + 4),  "[West Door] Opens In");
+	AddMenuItem (itemmenu, (selection.objtype + 6),  "[East Door] Opens In");
+	AddMenuItem (itemmenu, (selection.objtype + 8),  "[South Door] Opens Out");
+	AddMenuItem (itemmenu, (selection.objtype + 10), "[North Door] Opens Out");
+	AddMenuItem (itemmenu, (selection.objtype + 12), "[South Door] Opens In");
+	AddMenuItem (itemmenu, (selection.objtype + 14), "[North Door] Opens In");
+	selection := SelectMenuItem2 (character, itemmenu);
+	if (!selection.objtype)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	
+	SendSysMessage (character, "Where?");
+	var place := TargetCoordinates (character);
+	if (!place)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+	
+	var item := CreateItemAtLocation (place.x, place.y, place.z, selection.objtype, 1, place.realm);
+	var create := YesNo (character, "Create here?");
+	if (!create)
+		SendSysMessage (character, "Canceled.");
+		destroyitem (item);
+		return;
+	endif
+endfunction
+
+
+
+
+
+

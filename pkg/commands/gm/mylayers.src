@@ -1,0 +1,79 @@
+use uo;
+use os;
+
+include "include/client";
+
+program mylayers(who, action)
+
+// Create an array of layers using the current client.inc
+var layers := 	array{
+		LAYER_HAND1,
+		LAYER_HAND2,
+		LAYER_SHOES,
+		LAYER_PANTS,
+		LAYER_SHIRT,
+		LAYER_HELM,
+		LAYER_GLOVES,
+		LAYER_RING,
+		LAYER_UNUSED9,
+		LAYER_NECK,
+		LAYER_HAIR,
+		LAYER_WAIST,
+		LAYER_CHEST,
+		LAYER_WRIST,
+		LAYER_PACK2,
+		LAYER_BEARD,
+		LAYER_TUNIC,
+		LAYER_EARS,
+		LAYER_ARMS,
+		LAYER_CAPE,
+		LAYER_PACK,
+		LAYER_ROBE,
+		LAYER_SKIRT,
+		LAYER_LEGS,
+		LAYER_MOUNT,
+		LAYER_BANKBOX};
+SendSysMessage( who, "You are wearing the following:", font := _DEFAULT_TEXT_FONT, color := 40 );
+foreach layer in ( layers )
+	var results := GetEquipmentByLayer( who, layer );
+	if ( results )
+		SendSysMessage( who, "Item: " + results.objtype + " " + results.desc , font := _DEFAULT_TEXT_FONT, color := 40 );
+	endif
+endforeach
+
+SendSysMessage( who, "Second Look:", font := _DEFAULT_TEXT_FONT, color := 40 );
+var anothertest := ListEquippedItems( who );
+foreach item in ( anothertest )
+	if ( item.objtype == 0x1f021 )
+		SendSysMessage( who, "A mount was found!", font := _DEFAULT_TEXT_FONT, color := 40 );
+	endif
+endforeach
+
+if (action)
+	if ( action == "remove" )
+		var results := GetEquipmentByLayer( who, LAYER_MOUNT );
+
+		var success := MoveObjectToLocation( results,who.x,who.y,who.z,who.realm,MOVEOBJECT_FORCELOCATION );
+
+		if ( success )
+			SendSysMessage( who, "Item: " + results.desc + " successfully removed." , font := _DEFAULT_TEXT_FONT, color := 40 );
+		else
+			SendSysMessage( who, "Item: " + results.desc + " unsuccessfully removed." , font := _DEFAULT_TEXT_FONT, color := 40 );
+		endif
+	elseif ( action == "horse" )
+		var results := GetEquipmentByLayer( who, LAYER_MOUNT );
+		if ( !results )
+
+			var item := CreateItemInBackpack( who, 0x1f021, amount := 1 );
+
+			var success := EquipItem( who, item );
+			if ( success )
+			SendSysMessage( who, "Item: " + item.desc + " successfully equiped" , font := _DEFAULT_TEXT_FONT, color := 40 );
+			else
+			SendSysMessage( who, "Item: " + item.desc + " unsuccessfully equiped" , font := _DEFAULT_TEXT_FONT, color := 40 );
+			endif
+		endif
+	endif
+endif
+
+endprogram 

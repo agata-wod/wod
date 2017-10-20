@@ -1,0 +1,43 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/itemtypes";
+include "include/utility";
+include "../pkg/npcs/npcinfo";
+include "../pkg/combat/loot/loot";
+
+program carve_corpse (parms)
+	var character := parms[1];
+	var corpse := parms[2];
+	var container := parms[3];
+
+	if (!GetObjProperty (character, "grabautocarve") )
+		return;
+	endif
+
+	if (GetObjProperty (corpse, "skinned"))
+		return;
+	endif
+	SetObjProperty (corpse, "skinned", 1);
+
+	CheckBlood (corpse);
+	
+	var rawtemplate := GetObjProperty (corpse,"npctemplate");
+	if (GetObjProperty (corpse, "override_lootgroup"))
+		rawtemplate := GetObjProperty (corpse, "override_lootgroup");
+	endif
+
+	var npctemplate := TrimTemplate (rawtemplate);
+	MakeLootOnCorpse (container, "carve_"+npctemplate);
+endprogram
+
+function CheckBlood (corpse)
+	foreach item in ListItemsNearLocationOfType (corpse.x, corpse.y, corpse.z, 0, UOBJ_BLOOD, corpse.realm)
+		item.graphic := 0x122a;
+		return;
+	endforeach
+	var item := CreateItemAtLocation (corpse.x, corpse.y, corpse.z, UOBJ_BLOOD, 1, corpse.realm);
+	item.graphic := 0x122a;
+endfunction

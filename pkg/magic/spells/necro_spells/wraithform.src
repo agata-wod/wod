@@ -1,0 +1,57 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 6;
+
+Const WraithGraphic := 0x1a;
+Const WraithColor := 0x482;
+
+program cast_wraithform (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		return 0;
+	endif
+
+	set_critical (1);
+	var caster_skill := cint(GetAttribute(caster, ATTRIBUTEID_MAGERY)+ GetAttribute(caster, ATTRIBUTEID_NECROMANCY)/2);
+	var Duration := Cint(caster_skill / 5);
+	var Range := Cint (caster_skill / 25);
+	var PowerLevel := Cint(caster_skill /10);
+	var DamageDie := "2d" + PowerLevel;
+
+	PlayObjectCenteredEffect (caster, FX_FLAMESTRIKE, 1, 0x10);
+	PlaySoundEffect (caster, SFX_SPELL_POLYMORPH);
+
+	DoPersistedMod (caster, "color", WraithColor, caster.color, duration, "Wraithform");
+	DoPersistedMod (caster, "graphic", WraithGraphic, caster.graphic, duration, "Wraithform");
+
+	set_critical(0);
+	Detach();
+
+	While ( (Duration > 0) and (caster) and (!caster.dead) and (caster.graphic == WraithGraphic) )
+		foreach mobile in ListMobilesNearLocation (caster.x, caster.y, caster.z, Range, caster.realm)
+			if (mobile != caster and !mobile.dead and mobile.npctemplate
+					and !mobile.script["tamed"] and !mobile.script["humuc"])
+				var dmg := RandomDiceRoll (DamageDie);
+				PlayObjectCenteredEffect (mobile, FX_CURSE_EFFECT, 7, 0x10);
+				PlaySoundEffect (mobile, SFX_SPELL_MANA_VAMPIRE);
+				DoDamageByType (caster, mobile, dmg, DAMAGETYPE_MAGIC);
+				SetVital (caster, "Mana", GetVital (caster, "Mana") + RandomInt (CINT (dmg/2))*100);
+				if (GetVital (caster, "Mana") > GetVitalMaximumValue (Caster, "Mana"))
+					SetVital (caster, "Mana", GetVitalMaximumValue (caster, "Mana"));
+				endif
+			endif
+		endforeach
+		Duration := Duration - 1;
+		Sleep (5);
+	endwhile
+
+	PlayObjectCenteredEffect (caster, FX_FLAMESTRIKE, 1, 0x10);
+	PlaySoundEffect (caster, SFX_SPELL_POLYMORPH);
+	return 1;
+endprogram

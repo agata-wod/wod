@@ -1,0 +1,348 @@
+use uo;
+use os;
+
+include "include/gumps";
+include "include/utility";
+include "include/itemtypes";
+
+var deliverto_npc;
+
+program dotcommand_questitem (player, text)
+	text := Lower (text);
+	if (text)
+		if (text == "help")
+			SendSysMessage (player, "QUESTITEM:  provides assorted options for creating quest items");
+			SendSysMessage (player, "Options:");
+			SendSysMessage (player, "[MARK] - mark an item so that it's name shows up in .grab");
+			return;
+		elseif (text == "mark")
+			MarkItemAsQuestItem (player);
+			return;
+		else
+			SendSysMessage (player, "Unknown option.  Try '.questitem help' for more information.");
+			return;
+		endif	
+	endif
+	
+	SendSysMessage (player, "Select an item:");
+	var item := Target (player);
+	if (!item)
+		SendSysMessage (player, "Canceled.");
+		return;
+	endif
+
+	if (IsStackableItem (item))
+		SendSysMessage (player, "You can't mark stackable items.  Put them in a bag or something.");
+		return;
+	endif
+
+	if (item.isa (POLCLASS_MOBILE))
+		SendSysMessage (player, "This only works on items");
+		return;
+	endif
+
+	var done := 0;
+	repeat
+		var gump_layout := array {
+			"page 0",    
+			"nodispose", 
+			"resizepic 40 40 5054 300 400",
+	
+			"button 72 65 2103 2104 1 0 1",
+			"text 90 60 0 0",
+			"button 72 85 2103 2104 1 0 2",
+			"text 90 80 0 1"
+		};
+		
+		var gump_data := array {
+			"Mark as Quest Item",
+			"Assign Deliver-to",
+			"Set Delivery speech",
+			"(none)",
+			"Set Delivery payment (gold)",
+			"Set Delivery payment (virtue)",
+			"Set Delivery payment (item)",
+			"Nuke keywords? (off)"
+		};
+		
+		if (GetObjProperty (item, "questitem"))
+			gump_data[1] := "Unmark as quest item";
+		endif
+
+		if (GetObjProperty (item, "deliverto"))
+			deliverto_npc := SystemFindObjectBySerial (GetObjproperty (item, "deliverto"));
+			if (deliverto_npc)
+				gump_data[2] := "Deliver to: " + deliverto_npc.name;
+				gump_layout.append ("button 72 105 2103 2104 1 0 3");
+				gump_layout.append ("text 90 100 0 2");
+
+				if (GetObjProperty (item, "delivery_speech"))
+					var speech_lines := GetObjProperty (item, "delivery_speech");
+					var tempstring := "";
+					foreach line in speech_lines
+						tempstring := tempstring + "<br>" + line;
+					endforeach
+					gump_data[4] := tempstring;
+				endif
+				gump_layout.append ("htmlgump 52 130 276 148 3 1 1");
+	
+				if (GetObjProperty (item, "delivery_payment"))
+					var amount := GetObjProperty (item, "delivery_payment");
+					gump_data[5] := "Gold payment: " + amount;
+				endif
+				gump_layout.append ("button 72 305 2103 2104 1 0 4");
+				gump_layout.append ("text 90 300 0 4");
+
+				if (GetObjProperty (item, "delivery_virtue"))
+					var amount := GetObjProperty (item, "delivery_virtue");
+					gump_data[6] := "Virtue payment: " + amount;
+				endif
+				gump_layout.append ("button 72 325 2103 2104 1 0 5");
+				gump_layout.append ("text 90 320 0 5");
+				
+				if (GetObjProperty (item, "delivery_returnitem"))
+					var delivery_item_serials := GetObjProperty (item, "delivery_returnitem");
+					var delivery_item_serial := delivery_item_serials[1];
+					if (delivery_item_serial)
+						var tempstring := "Delivery_item: ";
+						foreach item in ListRootItemsInContainer (deliverto_npc.backpack)
+							if (item.serial == delivery_item_serial)
+								tempstring := tempstring + item.desc;
+							endif
+						endforeach
+						gump_data[7] := tempstring;
+					endif
+				endif
+				
+				gump_layout.append ("button 72 345 2103 2104 1 0 6");
+				gump_layout.append ("text 90 340 0 6");
+				
+				if (GetObjProperty (item, "delivery_nukekeywords"))
+					gump_data[8] := "Nuke keywords? (on)";
+				endif
+
+				gump_layout.append ("button 72 365 2103 2104 1 0 7");
+				gump_layout.append ("text 90 360 0 7");
+			endif
+		endif
+	
+		var gump_return := SendDialogGump (player, gump_layout, gump_data);
+		if (gump_return[0] == error)
+			SendSysMessage (player, "Gump error!  Try closing other gumps first.");
+			return;
+		elseif (gump_return[0] == 0)
+			SendSysMessage (player, "Finished");
+			return;
+		endif
+	
+		case (gump_return[0])
+			1:	//mark as quest item
+				if (GetObjProperty (item, "questitem"))
+					EraseObjProperty (item, "questitem");
+					SendSysMessage (player, "This item is no longer marked as a quest item.");
+				else
+					SetObjProperty (item, "questitem", 1);
+					SendSysMessage (player, "This item is now marked as a quest item.");
+				endif
+			2:
+				SetQuestItemDeliverTo (player, item);
+			3:
+				AssignSpeech (player, item);
+			4:
+				SetQuestDeliveryGold (player, item);
+			5:
+				SetQuestDeliveryVirtue (player, item);
+			6:
+				SetQuestDeliveryItem (player, item);
+			7:
+				SetNukeKeywordOption (player, item);
+			default:
+				SendSysMessage (player, "Uh-oh.  This isn't supposed to happen!");
+				return;
+		endcase;
+	until (done or !player);
+
+endprogram
+
+
+
+
+///////////////////
+//  Set the NPC that the item should be delivered to
+///////////////////
+
+function MarkItemAsQuestItem (player)
+	var item := Target (player);
+	if (!item)
+		SendSysMessage (player, "Canceled.");
+		return;
+	endif
+
+	if (IsStackableItem (item))
+		SendSysMessage (player, "You can't mark stackable items.  Put them in a bag or something.");
+		return;
+	endif
+
+	if (GetObjProperty (item, "questitem"))
+		EraseObjProperty (item, "questitem");
+		SendSysMessage (player, "This item is no longer marked as a quest item.");
+	else
+		SetObjProperty (item, "questitem", 1);
+		SendSysMessage (player, "This item is now marked as a quest item.");
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Add a new keyword to the script
+///////////////////
+
+function AssignSpeech (player, item)
+	var done := 0;
+	var speech_lines := array {};
+	repeat
+		var thisline := SendTextEntryGump (player, "Enter the new reply", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 80, "(Line " + (len (speech_lines) + 1) +")");
+		if (!thisline)
+			done := 1;
+		else
+			speech_lines.append (thisline);
+		endif
+	until (done or !player);
+
+	if (!len (speech_lines))
+		SendSysMessage (player, "No speech. Finished.");
+		return;
+	endif
+	SetObjProperty (item, "delivery_speech", speech_lines);
+endfunction
+
+
+
+
+///////////////////
+//  Set the NPC that the item should be delivered to
+///////////////////
+
+function SetQuestItemDeliverTo (player, item)
+	SendSysMessage (player, "Select the NPC to deliver to:");
+	var selected_npc := Target (player);
+	if (!selected_npc)
+		SendSysMessage (player, "Canceled.");
+		return;
+	endif
+	
+	if (!selected_npc.npctemplate)
+		SendSysMessage (player, "That's not an NPC!");
+		return;
+	endif
+	
+	case (selected_npc.script)
+		"merchant":
+		":merchant:merchant":
+		"townguard":
+		":guards:townguard":
+			SendSysMessage (player, "Ok");
+		default:
+			SendSysMessage (player, "Warning: That NPC script may not be able to handle delivery");
+			if (!YesNo (player, "Continue?"))
+				SendSysMessage (player, "Canceled.");
+				return;
+			endif
+	endcase;
+
+	SetObjProperty (item, "deliverto", selected_npc.serial);
+	SendSysMessage (player, "Done!");
+endfunction
+
+
+
+
+///////////////////
+//  Set the gold the NPC pays when delivery occurs
+///////////////////
+
+function SetQuestDeliveryGold (player, item)
+	var amount := SendTextEntryGump (player, "Enter amount to be paid on delivery", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+	amount := CINT (amount);
+	if (!amount)
+		SendSysMessage (player, "Canceled.");
+		return;
+	endif
+	SetObjProperty (item, "delivery_payment", amount);
+	SendSysMessage (player, "Done!");
+endfunction
+
+
+
+
+///////////////////
+//  Set the virtue given on delivery
+///////////////////
+
+function SetQuestDeliveryVirtue (player, item)
+	var amount := SendTextEntryGump (player, "Enter amount to be virtue earned on delivery", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "(area award)");
+	amount := CINT (amount);
+	if (!amount)
+		SendSysMessage (player, "Canceled.");
+		return;
+	endif
+	SetObjProperty (item, "delivery_virtue", amount);
+	SendSysMessage (player, "Done!");
+endfunction
+
+
+
+
+///////////////////
+//  Set the items that the NPC gives when delivery occurs
+///////////////////
+
+function SetQuestDeliveryItem (player, item)
+	SendSysMessage (player, "Select the item to give as a reward:");
+	var reward_item := Target (player);
+	if (!reward_item)
+		SendSysMessage (player, "Canceled.");
+		return 1;
+	elseif (IsStackableItem (reward_item))
+		SendSysMessage (player, "You can't return stackable items.  Put them in a bag or something.");
+		return 1;
+	elseif (!reward_item.movable)
+		SendSysMessage (player, "That's not movable");
+		return 1;
+	elseif (!MoveItemToContainer (reward_item, deliverto_npc.backpack))
+		SendSysMessage (player, "NPC's backpack is full!");
+		return 1;
+	endif
+
+	SetObjProperty (item, "delivery_returnitem", array {reward_item.serial});
+	SendSysMessage (player, "Reward item set, done.");
+endfunction
+
+
+
+
+///////////////////
+//  Set the items that the NPC gives when delivery occurs
+///////////////////
+
+function SetNukeKeywordOption (player, item)
+	if (GetObjProperty (item, "delivery_nukekeywords"))
+		EraseObjProperty (item, "delivery_nukekeywords");
+		return;
+	endif
+	
+	SendSysMessage (player, "When this option is turned on, all keywords on the NPC will be");
+	SendSysMessage (player, "deleted when the NPC is handed this item.");
+
+	if (!YesNo (player, "Continue?"))
+		SendSysMessage (player, "Canceled.");
+		return;
+	endif
+	SendSysMessage (player, "Keyword nuke enabled.");
+	SetObjProperty (item, "delivery_nukekeywords", 1);
+endfunction
+
+
+

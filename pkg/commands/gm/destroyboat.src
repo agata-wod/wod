@@ -1,0 +1,64 @@
+use uo;
+use boat;
+
+program destroy_boat ( who, text )
+	if (text == "standon")
+		DestroyBoatFromStanding (who);
+		return;
+	endif
+
+	if (text == "other")
+		DestroyBoat (who);
+		return;
+	endif
+
+	SendSysMessage (who, "Target the mast");
+	var mast := Target (who, TGTOPT_NOCHECK_LOS);
+
+	var res := DestroyMulti (BoatFromItem(mast));
+	if (!res)
+		SendSysMessage (who, "Can't delete: " + res.errortext);
+	endif
+endprogram
+
+
+
+
+function DestroyBoatFromStanding (character)
+
+	var sh := GetStandingHeight (character.x, character.y, character.z, character.realm);
+	var themulti := sh.multi;
+	if (!themulti)
+		sh := GetStandingHeight (character.x, character.y, -2, character.realm);
+		var themulti := sh.multi;
+		if (!themulti)
+			SendSysMessage (character, "No Multi detected");
+			return;
+		endif
+	endif
+
+	SendSysMessage (character, "Serial is: " + themulti.serial);
+	MoveObjectToLocation( character, character.x, character.y+5, character.z, character.realm, MOVEOBJECT_FORCELOCATION );
+
+	var res := DestroyMulti (themulti);
+	SendSysMessage (character, "Done: "+res);
+
+endfunction
+
+
+
+
+function DestroyBoat (character)
+
+	SendSysMessage (character, "searching...");
+
+	var themulti := SystemFindBoatBySerial (1096041699);
+	if (!themulti)
+		SendSysMessage (character, "Can't find it!");
+		return;
+	endif
+
+	var res := DestroyMulti (themulti);
+	SendSysMessage (character, "Done: "+res);
+
+endfunction

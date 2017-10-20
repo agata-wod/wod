@@ -1,0 +1,612 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/crafting";
+include "include/attributes";
+include "include/string";
+include "../pkg/npcs/npcinfo";
+include "../pkg/combat/loot/loot";
+include "../pkg/skills/harvestingskills/lumberjacking/scroll_making";
+
+program use_blade (user, blade)
+	if (!TryToEquipItem (user, blade))
+		return;
+	endif
+
+	SendSysmessage ( user, "What would you like to use that on, " + user.name + "?" );
+	var use_on := TargetCoordinates ( user );
+	if (! use_on)
+		return;
+	endif
+
+	if (use_on.mobile.graphic == CID_SHEEP)
+		carvewool (user, use_on.mobile);
+	elseif (use_on.mobile.graphic == CID_PACK_HORSE or use_on.mobile.graphic == CID_PACK_LLAMA)
+		RemoveBridle (user, use_on.mobile);
+	elseif (use_on.item.objtype == UOBJ_CORPSE)
+		CarveCorpse (user, use_on.item);
+	elseif (is_fish(use_on.item.objtype ))
+		CarveFish (user,use_on.item);
+	elseif (is_tree (use_on.objtype))
+		CarveTree (user, use_on);
+	elseif (is_tree (use_on.item.objtype))
+		CarveTree (user,use_on.item);
+	elseif (IsTypeOfHide (use_on.item))
+		MakeBlankScrolls (user, use_on.item);
+	elseif ((blade.objtype == 0x17055) and (use_on.mobile == user))
+		ShaveBeard (user);
+	elseif ((blade.objtype == 0xEC4) and (use_on.mobile == user))
+		ShaveStache (user);
+	elseif ((blade.objtype == 0x1372) and (use_on.mobile == user))
+		CombHair(user);
+	elseif (IsStaticPlant (use_on))
+		HarvestStaticPlant (user, use_on);
+	elseif (use_on.item.objtype == 0xC6A)
+		CarvePumpkin (user, use_on.item);
+	elseif (use_on.item.objtype == 0xa035)
+		SliceCake (user, use_on.item);
+	else
+		SendSysmessage( user, "I don't know how to use those items together." );
+	endif
+
+endprogram
+
+function TryToEquipItem (character, item)
+	//Some items don't need equipped
+	case (item.objtype)
+		0x1372:
+		0x17055:
+		UOBJ_SKINNING_KNIFE:
+			return 1;
+		UOBJ_DAGGER:
+			//Don't autoequip newbie daggers
+			if (item.newbie)
+				return 1;
+			endif
+	endcase
+	
+	foreach equipped_item in ListEquippedItems (character)
+		if (equipped_item == item)
+			return 1;
+		endif
+	endforeach
+
+	if (!InInventory (character.backpack, item))
+		SendSysMessage (character, "The item must be in your backpack to use it!");
+		return 0;
+	endif
+
+	if (!item.movable)
+		SendSysMessage (character, "You cannot use that item!");
+		return 0;
+	endif
+
+	if (!ReserveItem (item))
+		SendSysMessage (character, "That item is already being used by someone!");
+		return 0;
+	endif
+
+	//Just try to equip it to be a bit faster
+	if (EquipItem (character, item))
+		sleep (2);
+		return 0;
+	endif
+
+	var thepack := item.container;
+	if (!thepack)
+		thepack := character.backpack;
+	endif
+
+	//Unequip old items to equip this one
+	var item_hand_one := GetEquipmentByLayer (character, LAYER_HAND1);
+	MoveItemToContainer (item_hand_one, thepack);
+	var item_hand_two := GetEquipmentByLayer (character, LAYER_HAND2);
+	MoveItemToContainer (item_hand_two, thepack);
+	if (EquipItem (character, item))
+		//try to requip whatever else they had and we're done
+		EquipItem (character, item_hand_one);
+		EquipItem (character, item_hand_two);
+		sleep (2);
+		return 0;
+	endif
+
+	EquipItem (character, item_hand_one);
+	EquipItem (character, item_hand_two);
+	return 0;
+endfunction
+
+
+
+///////////////////
+//  makes sure that the item given is one that can be removed
+///////////////////
+
+function RemoveIt (byref character, byref it)
+	if (it == GetEquipmentByLayer (character, LAYER_BEARD))
+		return 0;
+	elseif (it == GetEquipmentByLayer (character, LAYER_HAIR))
+		return 0;
+	elseif (it == GetEquipmentByLayer (character, LAYER_MOUNT))
+		return 0;
+	elseif (it == GetEquipmentByLayer (character, LAYER_HAIR))
+		return 0;
+	elseif (it == (character.backpack))
+		return 0;
+	endif	
+
+	return 1;
+endfunction
+
+
+
+function carvewool(user, sheep)
+	if (distance(user, sheep) > 3)
+        	sendsysmessage(user, "You are too far away!");
+        	return;
+	endif
+
+	sheep.graphic := CID_SHEERED_SHEEP;
+	createiteminbackpack(user, UOBJ_WOOL, 3);
+endfunction
+
+
+
+
+///////////////////
+//  Remove a bridle from an animal (turning a pack horse/llama into a normal horse llama)
+///////////////////
+
+function RemoveBridle (user, packanimal)
+	if (Distance (user, packanimal) > 2 )
+		SendSysMessage (user, "Too far away!");
+		return;
+	endif
+
+	if (!packanimal.script ["tamed"])
+		PrintTextAbove (packanimal, "The wild beast refuses to let you near it");
+		return;
+	endif
+
+	if (GetObjProperty (packanimal, "master") != user.serial)
+		PrintTextAbovePrivate (packanimal, "This isn't your animal!", user);
+		return;
+	endif
+
+	if (packanimal.graphic == CID_PACK_LLAMA)
+		SendSysMessage (user, "You cut the pack off the animal.");
+		foreach item in ListRootItemsInContainer (packanimal.backpack)
+			MoveObjectToLocation( item, packanimal.x, packanimal.y, packanimal.z, packanimal.realm, MOVEOBJECT_NORMAL );
+		endforeach
+
+		packanimal.graphic := CID_LLAMA;
+		RestartScript (packanimal);
+		if (GetObjProperty (packanimal, "totem") )
+			SetObjProperty (packanimal, "totem", 0x20f6);
+		endif
+	elseif (packanimal.graphic == CID_PACK_HORSE)
+		SendSysMessage (user, "You cut the pack off the animal.");
+		foreach item in ListRootItemsInContainer (packanimal.backpack)
+			MoveObjectToLocation( item, packanimal.x, packanimal.y, packanimal.z, packanimal.realm, MOVEOBJECT_NORMAL );
+		endforeach
+
+		packanimal.graphic := packanimal.objtype;
+		RestartScript (packanimal);
+		if (GetObjProperty (packanimal, "totem") )
+			SetObjProperty (packanimal, "totem", 0x211f);
+		endif
+	else
+		SendSysMessage (user, "I don't know how to use those together.");
+	endif
+
+endfunction
+
+
+
+function is_tree(theobj)
+
+        if ((theobj == 0x0c9e) or (theobj == 0x0ca8) or (theobj == 0x0caa) )
+                return 1;
+        elseif (theobj == 0x0cab)
+                return 1;
+        elseif ((theobj >= 0x0c99) and (theobj <= 0x0cea))
+                return 1;
+        elseif ((theobj >= 0x0cf3) and (theobj <= 0x0d03))
+                return 1;
+        elseif ((theobj >= 0x0d41) and (theobj <= 0x0dab))
+                return 1;
+        else
+                return 0;
+        endif
+
+endfunction
+
+function is_fish(theobj)
+
+        if ((theobj >= UOBJ_FISH_START) and (theobj <= UOBJ_FISH_END) )
+                return 1;
+        elseif ((theobj >= UOBJ_SFISH_START) and (theobj <= UOBJ_SFISH_END))
+                return 1;
+        else
+                return 0;
+        endif
+
+endfunction
+
+function CarveTree (user, tree)
+	if (CoorDist (user.x, user.y, tree.x, tree.y) > 3)
+		SendSysMessage (user, "You can't reach that!");
+		return;
+	endif
+
+	var wood_amount := HarvestResource ("wood", tree.x, tree.y, 2, 3, tree.realm);
+	if (!wood_amount)
+		SendSysmessage (user, "There's no kindling left.");
+		return 0;
+	endif
+
+	var skill := GetAttribute (user, ATTRIBUTEID_LUMBERJACKING);
+	wood_amount := RandomInt(CINT(skill/33)) + CINT(skill/33) + 1;
+	if (!wood_amount)
+		wood_amount := 1;
+	endif
+
+	CreateItemInBackpack (user, UOBJ_KINDLING, wood_amount);
+	SendSysmessage (user, "You chip off some kindling and put it in your backpack");
+endfunction
+
+
+function CarveFish(user, use_on)
+
+	ReserveItem (use_on);
+
+	var num_steaks := (4 * use_on.amount);
+
+        PlaySoundEffect(user, SFX_57);
+	PerformAction( user, ANIM_SALUTE );
+	CreateItemInBackpack(user, UOBJ_FISHSTEAK, num_steaks);
+	DestroyItem(use_on);
+	sleep(1);
+	
+	SendSysmessage(user, "You carve the fish steaks and put them in your backpack");
+
+endfunction
+
+
+function CarveCorpse (character, cadaver)
+	if ( distance (character, cadaver) > 2 )
+		SendSysmessage (character, "That's too far away.");
+		return;
+	endif
+	
+	if (!GetObjProperty (cadaver, "skinned"))
+		SetObjProperty (cadaver, "skinned", 1);
+		CheckBlood (cadaver);
+	
+		var rawtemplate := GetObjProperty (cadaver, "npctemplate");
+		var npctemplate := TrimTemplate (rawtemplate);
+		if (MakeLootOnCorpse (character.backpack, "carve_"+npctemplate))
+			return;
+		endif
+	endif
+       
+	if (GetObjProperty (cadaver, "cut"))
+		SendSysmessage (character, "You can't get any more from this corpse." );
+		return;
+	endif
+
+	var head := CreateItemInBackpack (character, UOBJ_HEAD, 1);
+	var tempname := cadaver.name;
+	tempname["A corpse of"] := "";
+	head.name := "the head of" + tempname;
+	SetObjProperty (cadaver, "cut", 1);
+
+	var npctemplate := GetObjProperty (cadaver, "npctemplate");
+	SetObjProperty (head, "npctemplate", TrimTemplate (npctemplate) );
+	
+	if (GetObjProperty (cadaver, "deliverto"))
+		SetObjProperty (head, "deliverto", GetObjProperty (cadaver, "deliverto"));
+		SetObjProperty (head, "delivertoname", GetObjProperty (cadaver, "delivertoname"));
+	endif
+	SendSysMessage (character, "You put the head in your backpack");
+
+endfunction
+
+function CheckBlood (corpse)
+	foreach item in ListItemsNearLocationOfType (corpse.x, corpse.y, corpse.z, 0, UOBJ_BLOOD, corpse.realm)
+		item.graphic := 0x122a;
+		return;
+	endforeach
+	var item := CreateItemAtLocation (corpse.x, corpse.y, corpse.z, UOBJ_BLOOD, 1, corpse.realm);
+	item.graphic := 0x122a;
+endfunction
+
+
+
+function shavebeard (me)
+
+//using Item 0x17055 straight razor or
+	if(me.race == RACE_GARGOYLE)
+		SendSysMessage(me, "Your race doesn't have any facial hair!");
+		return;
+	endif
+
+	var beard := GetEquipmentByLayer( me, LAYER_BEARD );
+	if (!beard)
+		PrintTextAbove(me,"Smooth as a baby's butt!");
+		return;
+	endif
+
+	PlaySoundEffect(me, SFX_57);
+	PerformAction (me, ANIM_SALUTE);
+
+	var newbeardcolor := beard.color;
+	if (!GetObjProperty(me,"haircolor"))
+		SetObjProperty(me,"haircolor",newbeardcolor);
+	endif
+
+	var newbeard := 0;
+	var hasstache := 0;
+
+	case (beard.objtype)
+		0x2040 :
+			newbeard := 0;
+		0x204d :
+			newbeard := 0x2041;
+			hasstache := 1;
+		0x203f :
+			newbeard := 0x2040;
+		0x204b :
+			newbeard := 0x204d;
+			hasstache := 1;
+		0x203e :
+			newbeard := 0x203f;
+		0x204c :
+			newbeard := 0x204b;
+			hasstache := 1;
+		default:
+			SendSysMessage(me, "Looks like you might need a knife for that mustache");
+			return;
+	endcase
+
+	DestroyItem(beard);
+
+	if (newbeard)
+		var newdoo := createitematlocation(me.x, me.y, me.z, newbeard,1, me.realm);
+		if (newdoo)
+			EquipItem(me,newdoo);
+			newdoo.color := newbeardcolor;
+		endif
+	endif
+
+	if (hasstache)
+		SendSysMessage(me, 
+		"Looks like you might need a dagger for that mustache");
+	endif
+
+endfunction
+
+function shavestache (me)
+//	Item 0xEC4  skinning knife
+	if (me.race == RACE_GARGOYLE)
+		SendSysMessage(me, "Your race doesn't have any facial hair!");
+		return;
+	endif
+
+	var beard := GetEquipmentByLayer( me, LAYER_BEARD );
+	if (!beard)
+		PrintTextAbove(me,"Smooth as a baby's butt!");
+		return;
+	endif
+
+	PlaySoundEffect(me, SFX_57);
+	PerformAction (me, ANIM_SALUTE);
+
+	var newbeardcolor := beard.color;
+	if (!GetObjProperty(me,"beardcolor"))
+		SetObjProperty(me,"beardcolor",newbeardcolor);
+	endif
+
+	var newbeard := 0;
+	case (beard.objtype)
+		0x2041: newbeard := 0;
+		0x204d: newbeard := 0x2040;
+		0x204b: newbeard := 0x203f;
+		0x204c: newbeard := 0x203e;
+		default:
+			SendSysMessage(me,"Better take a straight razor to that beard!");
+			return;
+	endcase
+
+	DestroyItem(beard);
+
+	if (newbeard)
+		var newdoo := createitematlocation(me.x, me.y, me.z, newbeard,1, me.realm);
+		if (newdoo)
+			EquipItem(me,newdoo);
+			newdoo.color := newbeardcolor;
+			SendSysMessage(me, 
+			"That beard might require a straight razor");
+		endif
+	endif
+
+endfunction
+
+function CombHair(me)
+   	if (me.race == RACE_GARGOYLE)
+		SendSysMessage(me, "Your race doesn't have any hair!");
+		return;
+	endif
+
+	var hair := GetEquipmentByLayer( me, LAYER_HAIR );
+
+   	if (!hair)
+		SendSysMessage(me, "Hmm.. not much there to brush...");
+		return;
+	endif
+
+	var newhair := 0;
+	var newhaircolor := hair.color;
+
+	if (GetObjProperty(me,"haircolor"))
+		newhaircolor := GetObjProperty(me,"haircolor");
+	else
+		SetObjProperty(me,"haircolor",newhaircolor);
+	endif
+
+	case (hair.objtype)
+	0x204a:	newhair := 0x2048;//krishna
+	0x2044:	newhair := 0x204a;//mowhawk
+	0x2048: newhair := 0x2044;//receding
+
+	0x2047: newhair := 0x2045;//afro
+	0x203B: newhair := 0x2047;//shorthair
+	0x2046: newhair := 0x203B;//buns
+	0x2045: newhair := 0x2046;//pageboy
+
+	0x203D: newhair := 0x203C;//ponytail
+	0x2049: newhair := 0x203D;//pigtail
+	0x203C: newhair := 0x2049;//longhair
+	
+	
+	endcase
+
+
+	DestroyItem(hair);
+
+	if (newhair)
+		var newdoo := createitematlocation(me.x, me.y, me.z, newhair,1, me.realm);
+		if (newdoo)
+			EquipItem(me,newdoo);
+			newdoo.color := newhaircolor;
+		else
+			PrintTextAbove(me,"Oops!");
+		endif
+	endif
+
+endfunction
+
+
+///////////////////
+//  Static plants can be used by using a bladed item on them
+///////////////////
+
+function IsStaticPlant (use_on)
+	if (use_on.item)
+		return 0;
+	endif
+	
+	case (use_on.objtype)
+		0x0C5C:
+		0x0C5D:
+		0x0C61:
+		0x0C62:
+		0x0C63:
+		0x0C6A:
+		0x0C6B:
+		0x0C6C:
+		0x0C6F:
+		0x0C72:
+		0x0C73:
+		0x0C74:
+		0x0C75:
+		0x0C76:
+		0x0C79:
+		0x0C7A:
+		0x0C7B:
+		0x0C7C:
+		//grapes
+		0x0D1E:
+		0x0D1F:
+		0x0D23:
+		0x0D24:
+			return 1;
+	endcase
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Harvest static plants via external script
+///////////////////
+
+function HarvestStaticPlant (user, use_on)
+	if (CoorDist (user.x, user.y, use_on.x, use_on.y) > 2)
+		SendSysMessage (user, "That is too far away!");
+		return;
+	endif
+
+	var parms := Array ();
+	parms[1] := user;
+	parms[2] := use_on;
+	start_script (":farming:harvest_static", parms);
+endfunction
+
+
+
+
+function CarvePumpkin (character, pumpkin)
+	if (!ReserveItem (pumpkin))
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+
+	SendSysMessage (character, "Select a candle to put inside of the pumpkin:");
+	var thecandle := Target (character);
+	if (!thecandle)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	
+	case (thecandle.objtype)
+		0x0A0F:
+		0x0A28:
+		0x142C:
+		0x142F:
+		0x1430:
+		0x1433:
+		0x1434:
+		0x1437:
+			var jack := CreateItemInContainer (character.backpack, 0x2850, 1);
+			if (!jack)
+				SendSysMessage (character, "Your backpack is full!");
+				return;
+			endif
+			SubtractAmount (thecandle, 1);
+			SubtractAmount (pumpkin, 1);
+		default:
+			SendSysMessage (character, "That won't work.");
+			return;
+	endcase
+endfunction
+
+function SliceCake (character, cake)
+	if (!cake.movable)
+		SendSysMessage (character, "You can't slice that cake");
+		return;
+	elseif (!ReserveItem (cake))
+		SendSysMessage (character, "You can't slice that cake");
+		return;
+	endif
+ 	
+	var tempstring := cake.desc;
+	tempstring := "a slice of " + TruncateArticle (tempstring);
+	var slice;
+
+	//create 6 slices of cake
+	for i := 1 to 6
+		if (cake.container)
+			slice := CreateItemInContainer (cake.container, 0xa036, 1);
+		else
+			slice := CreateItemAtLocation (cake.x, cake.y, cake.z, 0xa036, 1, cake.realm);
+		endif
+		slice.color := cake.color;
+		slice.name := tempstring;
+	endfor
+	DestroyItem (cake);
+endfunction
+

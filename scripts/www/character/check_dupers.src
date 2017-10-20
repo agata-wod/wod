@@ -1,0 +1,37 @@
+use uo;
+use os;
+use http;
+use datafile;
+
+
+program check_dupers()
+	WriteHTML ("<html><head><title>Dupe Checker</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+
+	UnloadDataFile (":drocket:grab_duping");
+	var acctinfodf := OpenDataFile (":drocket:grab_duping");
+	if (!acctinfodf)
+		acctinfodf := CreateDataFile (":drocket:grab_duping");
+		if (!acctinfodf)
+			Syslog ("Error opening :drocket:grab_duping data file!");
+			WriteHTML ("Unable to open datafile");
+			WriteHTML ("</body></html>");
+			return;
+		endif
+	endif
+	
+	var total_entries := 0;
+	foreach acctname in ListAccounts()
+		var entry := acctinfodf.FindElement (acctname);
+		if (entry)
+			WriteHTML ("<p>" + acctname);
+			foreach key in (entry.PropNames())
+				WriteHTML ("<br>" + key + ": " + entry.GetProp(key));
+			endforeach
+			total_entries := total_entries + 1;
+		endif
+	endforeach
+	WriteHTML ("<p>" + total_entries + " entries found");
+	WriteHTML ("</body></html>");
+endprogram
+

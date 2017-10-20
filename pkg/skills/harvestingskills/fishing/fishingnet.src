@@ -1,0 +1,393 @@
+use uo;
+use cfgfile;
+use os;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/attributes";
+include "include/crafting";
+
+Const UACTION_FISH := 0x9;
+var craftingbag;
+
+program use_fishingnet (character, net )
+
+	if (!ReserveItem (net) )
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+
+	if (GetAttribute (character, ATTRIBUTEID_FISHING) < 70)
+		SendSysMessage (character, "You're not skilled enough to use that.");
+		return;
+	endif
+
+	var targetted_location := TargetCoordinates (character);
+	if (!targetted_location)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (!IsDeepWater (character)) 
+		SendSysMessage (character, "This can only be used in deep water.");
+		return;
+	endif
+    
+	if ( !IsLocationAccessibleForFishing (character, targetted_location.x, targetted_location.y, targetted_location.z) )
+        	SendSysmessage (character, "That's too far away!");
+        	return;
+	elseif (!CheckLosAt ( character, targetted_location.x, targetted_location.y, targetted_location.z ))
+        	SendSysmessage (character, "You can't see that! Maybe it's too close to the hull.");
+        	return;	
+    	endif
+
+	craftingbag := FindCraftingBag (character);
+	PerformAction (character, UACTION_FISH);
+	sleep (2);
+	PlaySoundEffect (character, SFX_26);
+	MakeSplashTile (targetted_location.x, targetted_location.y, targetted_location.z, targetted_location.realm);
+
+	sleep ( RandomInt (6) + 4 );
+
+	SendSysMessage (character, "You start to haul the net in...");
+	sleep (1);
+	PlaySoundEffect (character, SFX_27);
+	sleep (1);
+	PlaySoundEffect (character, SFX_27);
+	sleep (1);
+	PlaySoundEffect (character, SFX_27);
+
+	if (!HarvestResource ("wood", targetted_location.x, targetted_location.y, RandomInt(5)+5, RandomInt(5)+5, targetted_location.realm)
+			or !HarvestResource ("wood", character.x, character.y, RandomInt(5)+5, RandomInt(5)+5, character.realm))
+		SendSysMessage (character, "Doesn't seem to be anything around here.");
+		return;
+	endif
+
+	if (!CheckSkill (character, SKILLID_FISHING, 80, 0) )
+		SendSysMessage (character, "Nothing.");
+		return;
+	endif
+
+	var number_of_fish := RandomInt (10) + 10;
+	if (!IsDeepWater (character)) 
+		number_of_fish := CINT (number_of_fish/2);
+		SendSysMessage (character, "You'd catch more if you weren't so close to shore.");
+	endif
+	for i := 1 to number_of_fish
+		MakeRandomFish (character);
+	endfor
+
+	var number_of_events := RandomInt (6) + 2;
+	if (!IsDeepWater (character)) 
+		number_of_events := CINT (number_of_events/2);
+	endif
+	for i := 1 to number_of_events
+		DoRandomEvent (character);
+		sleepms (250);
+	endfor
+
+	//now we maybe destroy the net
+	var past_uses := GetObjProperty (net, "used");
+	if (!past_uses)
+		past_uses := 0;
+	endif
+	if (past_uses >  3)
+		if (RandomInt(10) <= past_uses)
+			DestroyItem (net);
+			SendSysMessage (character, "The net tears as you're hauling it in.");
+			return;
+		endif
+	endif
+	past_uses := past_uses + 1;
+	SetObjProperty (net, "used", past_uses);
+
+endprogram
+
+
+
+
+function MakeMessage(me)
+
+	var it := CreateItemInContainer (craftingbag, 0x99f, 1);
+	if (!it)
+		SendSysMessage(me,"Your backpack is full!");
+		return 0;
+	endif
+	set_critical(1);
+	it.name := "a message in a bottle";
+	it.usescript := ":fishing:readnote";
+	it.buyprice := -1;
+	SetObjProperty (it, "questitem", 1);
+
+	var cfg := ReadConfigFile("treasure");
+	var elem := FindConfigElem(cfg,"locations");
+	var coords := GetConfigStringArray(elem,"location");
+	var coord := coords[ RandomInt(len(coords))+1 ];
+
+	var textgroup := RandomInt(4)+1;
+	elem := FindConfigElem(cfg,textgroup);
+	var textlines := GetConfigStringArray(elem,"text");
+	var note := array {};
+	foreach line in textlines
+		note[ len(note)+1 ] := line;
+	endforeach
+	var coordinates := splitwords(coord);
+	note[ len(textlines)+1 ] := "Last coordinates:";
+	note[ len(textlines)+2 ] := "     " + coordinates[1] + ", " + coordinates[2];
+	setobjproperty(it,"note",note);
+	setobjproperty(it,"treasurex",cint(coordinates[1]));
+	setobjproperty(it,"treasurey",cint(coordinates[2]));
+	set_critical(0);
+
+	return 1;
+
+endfunction
+
+
+
+
+///////////////////
+//  tries to create a random fish in the character's backpack
+///////////////////
+
+function MakeRandomFish (character)
+
+	var fish_type := GetRandomFishType (character);
+	CreateItemInContainer (craftingbag, fish_type, 1);
+
+endfunction
+
+
+
+
+///////////////////
+//  picks a random type of fish
+///////////////////
+
+function GetRandomFishType (character)
+
+	if ( RandomInt(4) != 1 )
+		return 0x09cc;
+	endif
+
+	var skill := GetAttribute (character, ATTRIBUTEID_FISHING);
+	var fish_type := 1;
+
+	if (skill< 40 )
+		fish_type := 1;
+	elseif (skill < 50 )
+		fish_type := randomint(2)+1;
+	elseif (skill < 60 )
+		fish_type := randomint(3)+1;
+	elseif (skill < 70 )
+		fish_type := randomint(4)+1;
+	elseif (skill < 80 )
+		fish_type := randomint(5)+1;
+	elseif (skill < 90 )
+		fish_type := randomint(6)+1;
+	elseif (skill < 95 )
+		fish_type := randomint(7)+1;
+	else
+		fish_type := randomint(8)+1;
+	endif
+
+	fish_type := RandomInt(fish_type)+1;
+	case (fish_type)
+		1:		return 0x09cc;
+		2:		return 0x09cd;
+		3:		return 0x09ce;
+		4:		return 0x09cf;
+		5:		return 0x0dd6;
+		6:		return 0x0dd7;
+		7:		return 0x0dd8;
+		8:		return 0x0dd9;
+		default:	return 0x09cc;
+	endcase
+
+endfunction
+
+
+
+
+///////////////////
+//  Sometimes does some random event
+///////////////////
+
+function DoRandomEvent (character)
+
+	var nearby_x_loc := character.x + RandomInt (3) - 1;
+	var nearby_y_loc := character.y + RandomInt (3) - 1;
+
+	case (RandomInt (12))
+		0:
+			if (RandomInt (2))
+				var maptype := 0x16003;
+				if ( RandomInt (5) == 0 )
+					maptype := 0x16005;
+				endif
+				if (CheckSkill (character, SKILLID_FISHING, 90, 0 ))
+					if (CreateIteminContainer (craftingbag, maptype, 1))
+						SendSysMessage (character, "You find a tattered old map!");
+						return 0;
+					endif
+				endif
+			endif
+		1:
+			if (RandomInt (2))
+				var maptype := 0x16004;
+				if ( RandomInt (5) == 0 )
+					maptype := 0x16006;
+				endif
+				if (CheckSkill (character, SKILLID_FISHING, 90, 0 ))
+					if (CreateIteminContainer (craftingbag, maptype, 1))
+						SendSysMessage (character, "You find a tattered old map!");
+						return 0;
+					endif
+				endif
+			endif
+		2:
+		3:
+			var thing :=	UOBJ_BACKPACK;
+			case (randomint(5))
+				0:	thing := UOBJ_SHOES;
+				1:	thing := UOBJ_SANDALS;
+				2:	thing := UOBJ_BOOTS;
+				3:	thing := UOBJ_THIGH_BOOTS;
+			endcase
+			var it := CreateIteminContainer (craftingbag, thing, 1);
+			if ( it )
+				SendSysMessage (character, "You find " + it.desc + "!");
+			endif
+			return 0;
+		4:
+		5:
+		6:
+			var water_elem := CreateNPCFromTemplate (":elementals:waterelemental", nearby_x_loc, nearby_y_loc, character.z, 0, character.realm);
+			if (water_elem)
+				water_elem.name := "a wave elemental";
+				SendSysmessage (character, "You attract the attention of a wave elemental!");
+				SetObjProperty (water_elem, "boatspawn", 1);
+				return 1;
+			endif
+			return 0;
+		7:
+		8:
+		9:
+			var water_elem := CreateNPCFromTemplate (":dragons:tentaclebeast", nearby_x_loc, nearby_y_loc, character.z, 0, character.realm);
+			if (water_elem)
+				SendSysmessage (character, "You dredge up a tentacle beast!");
+				SetObjProperty (water_elem, "boatspawn", 1);
+				return 1;
+			endif
+			return 0;
+		10:
+			var water_elem := CreateNPCFromTemplate (":dragons:seaserpent", nearby_x_loc, nearby_y_loc, character.z, 0, character.realm);
+			if (water_elem)
+				SendSysmessage (character, "You've disturbed a sea serpant!");
+				SetObjProperty (water_elem, "boatspawn", 1);
+				return 1;
+			endif
+			return 0;
+		11:
+			if (RandomInt (2))
+				if (MakeMessage (character))
+					SendSysMessage (character, "You find a message in a bottle!");
+					return 0;
+				endif
+			endif
+	endcase
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  determines if the targetted location is a deep water tile that we can use the net on
+///////////////////
+
+function IsDeepWater (targetted_location)
+	//Have to mark off some docks that would otherwise count as deep water
+	//Magincia
+	if (targetted_location.x > 3640 and targetted_location.x < 3700 and targetted_location.y > 2250 and targetted_location.y < 2310)
+		return 0;
+	endif
+
+	var info := GetMapInfo (targetted_location.x, targetted_location.y, targetted_location.realm);
+	if ((info.landtile < 168) or (info.landtile > 171))
+		return 0;
+	endif
+
+	info := GetMapInfo (targetted_location.x + 25, targetted_location.y, targetted_location.realm);
+	if ((info.landtile < 168) or (info.landtile > 171))
+		return 0;
+	endif
+
+	info := GetMapInfo (targetted_location.x, targetted_location.y + 25, targetted_location.realm);
+	if ((info.landtile < 168) or (info.landtile > 171))
+		return 0;
+	endif
+
+	info := GetMapInfo (targetted_location.x - 25, targetted_location.y, targetted_location.realm);
+	if ((info.landtile < 168) or (info.landtile > 171))
+		return 0;
+	endif
+
+	info := GetMapInfo (targetted_location.x, targetted_location.y - 25, targetted_location.realm);
+	if ((info.landtile < 168) or (info.landtile > 171))
+		return 0;
+	endif
+
+	return 1;
+
+endfunction
+
+
+
+
+///////////////////
+//  determines if the character can reach the targetted location to fish there
+///////////////////
+
+function IsLocationAccessibleForFishing ( me, x, y, z )
+
+	var xd := me.x - x;
+	if (xd < -4 or xd > 4) 
+		return 0;
+	endif
+
+	var yd := me.y - y;
+	if (yd < -4 or yd > 4) 
+		return 0;
+	endif
+	if (z)
+	endif
+	return 1;
+
+endfunction
+
+
+
+
+///////////////////
+//  makes, animates and then destroys the splash tile
+///////////////////
+
+function MakeSplashTile (x, y, z, rlm)
+
+	var splash_tile := CreateItemAtLocation (x, y, z, UOBJ_SPLASH_TILE, 1, rlm);
+	splash_tile.movable := 0;
+	splash_tile.decayat := ReadGameClock() + 200;
+	sleepms (200);
+
+	for tmp_tile := 13614 to 13616
+		splash_tile.graphic := tmp_tile;
+		sleepms (200);
+	endfor
+
+	DestroyItem (splash_tile);
+
+endfunction
+

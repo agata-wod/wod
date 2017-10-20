@@ -1,0 +1,208 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "include/utility";
+include "include/sysevent";
+include "include/eventid";
+include "../pkg/npcs/npcinfo";
+include "../pkg/npcs/npc_util";
+include "../pkg/npcs/townfolk/auctioneer/auctioneer";
+
+var me := Self();
+var next_possible_spam := ReadGameClock ();
+
+program auctioneer_ai()
+	if (!me.backpack)
+		DoAuctioneerOnCreationSetup ();
+	endif
+
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN + SYSEVENT_ENTEREDAREA, 10);
+
+	var ev;
+	while (me)
+		if (me.hidden)
+			sleep (30);
+			me.hidden := 0;
+		endif
+		
+		ev := wait_for_event (120);
+		CheckCompletedAuctions ();
+		if (ev)
+			ProcessEvent (ev);
+		endif
+	endwhile
+endprogram
+
+
+
+
+///////////////////
+//  pretty obvious - processes events picked up in the main AI loop
+///////////////////
+
+function ProcessEvent (byref ev)
+	case (ev.type)
+		EVID_ENGAGED:
+		EVID_DAMAGED:
+			me.hidden := 1;
+			SetVital (me, "Life", GetVitalMaximumValue (me, "Life"));
+		EVID_ENTEREDAREA:
+			if (ev.source.npctemplate)
+				return 0;
+			endif
+
+			if (ReadGameClock() > next_possible_spam)
+				GreetCustomer (ev.source);
+				next_possible_spam := ReadGameClock() + 60;
+			endif
+		EVID_SPEECH:
+			if (ev.source.npctemplate)
+				return 0;
+			endif
+
+			TurnToward (ev.source);
+			var evtext := lower(ev.text);
+			if (evtext["buy"])
+				var parms := array;
+				parms[1] := me;
+				parms[2] := ev.source;
+				start_script (":auctioneer:buyitems", parms);
+			elseif (evtext["sell"])
+				Say ("Sorry, but I'm not interested.");
+			elseif (evtext["status"])
+				var parms := array;
+				parms[1] := me;
+				parms[2] := ev.source;
+				start_script (":auctioneer:auctionstatus", parms);
+			elseif (evtext["collect"])
+				var gold_available  := DetermineGoldAvailable (ev.source.acctname);
+				if (gold_available > 60000)
+					gold_available := 60000;
+				endif
+				
+				var gold_held := DetermineGoldHeld (ev.source.acctname);
+				gold_held := gold_held - gold_available;
+				
+				if (!gold_available and gold_held)
+					PrintTextAbovePrivate (me, "I have " + gold_held + " gold of yours, but I'm afraid I can't give it to you right now.", ev.source);
+				elseif (!gold_available)
+					PrintTextAbovePrivate (me, "What are you talking about?  I don't have your gold!", ev.source);
+				elseif (CreateItemInContainer (ev.source.backpack, UOBJ_GOLD_COIN, gold_available) )
+					AddAmountToGoldHeld (ev.source.acctname, (0-gold_available));
+					if (gold_held)
+						PrintTextAbovePrivate (me, "There you go.  I still have " + gold_held + " gold of yours.", ev.source);
+					else
+						PrintTextAbovePrivate (me, "There you go.  I don't have any more of your gold.", ev.source);
+					endif
+				else
+					PrintTextAbovePrivate (me, "Maybe you should clean out your backpack some...", ev.source);
+				endif
+			endif
+
+		EVID_MERCHANT_BOUGHT:
+			TurnToward (ev.source);
+			return 1;
+
+		EVID_ITEM_GIVEN:
+			TurnToward (ev.source);
+			if (ev.item.objtype == UOBJ_GOLD_COIN)
+				PrintTextAbovePrivate (me, "I'll add that to your account.", ev.source);
+				AddAmountToGoldHeld (ev.source.acctname, ev.item.amount);
+				DestroyItem (ev.item);
+				sleep (1);
+				PrintTextAbovePrivate (me, "I'm currently holding " + DetermineGoldHeld (ev.source.acctname) + " gold for you.", ev.source);
+				return;
+			endif
+			
+			MoveItemToContainer (ev.item, me.backpack);
+			var parms := array;
+			parms[1] := me;
+			parms[2] := ev.source;
+			parms[3] := ev.item;
+			start_script (":auctioneer:sellitems", parms);
+	endcase
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  when a player enters the NPCs range, this function makes them
+//  yell a greeting
+///////////////////
+
+function GreetCustomer (customer)
+	if (customer.npctemplate)
+		return;
+	endif
+
+	if (customer.concealed)
+		return;
+	endif
+
+	TurnToward (customer);
+	case (RandomInt (10) )
+		0:
+			Say ("More fine clubs of macefighting than you can shake a stick at!");
+		1:
+			Say ("Welcome to my shop!");
+		2:
+			Say ("Let me know if you need help.");
+		3:
+			Say ("Let me show what I just got in!");
+		4:
+			Say ("I bet I have something you want!");
+		5:
+			Say ("Can I help you with anything?");
+		6:
+			Say ("Exotic merchandise from all over Britannia!");
+		7:
+			Say (customer.name + "!  Its good to see you again.");
+		8:
+			if (me.gender)
+				Say ("Have anything you want to get rid of?  I'm your woman!");
+			else
+				Say ("Have anything you want to get rid of?  I'm your man!");
+			endif
+		9:
+			Say ("Ah, " + customer.name + ", one of my best customers returns!");
+	endcase
+endfunction
+
+
+
+
+///////////////////
+//  called when the NPC is first created, this function names
+//  them and clothes them
+///////////////////
+
+function DoAuctioneerOnCreationSetup()
+	var newpack := CreateItemAtLocation (5288, 1176, 0, UOBJ_BACKPACK, 1, REALM_BRITANNIA);
+	if (!EquipItem (me, newpack))
+		DestroyItem (newpack);
+	endif
+
+	me.gender := RandomInt (2);
+	me.graphic := 400+me.gender;
+	me.name := RandomName (me);
+	me.title_suffix := " the auctioneer";
+
+	if (me.gender)
+		EquipFromTemplate (me, "female_auctioneer");
+	else
+		EquipFromTemplate (me, "male_auctioneer");
+	endif
+
+	var myhome := array{};
+	myhome[1] := me.x;
+	myhome[2] := me.y;
+	myhome[3] := me.z;
+	myhome[4] := me.realm;
+	SetObjProperty (me, "myhome", myhome);
+endfunction

@@ -1,0 +1,25 @@
+use os;
+use uo;
+use cfgfile;
+
+include "include/client";
+include "include/clock";
+include "include/wodinc";
+include "include/accounts";
+include "../pkg/npcs/npc_util";
+include "../pkg/world/weather/weather";
+include "../pkg/character/virtue/virtue";
+
+program namecheckatlogon (character)
+
+	start_script ("logonmessage", character );
+
+	if (CanMod (character, "name", 1))
+		start_script ("namecheck", character);
+	endif
+
+	start_script ("checkjail", character );
+	start_script ("bankcheck", character );
+	start_script ("player_listener", character );
+
+endprogram

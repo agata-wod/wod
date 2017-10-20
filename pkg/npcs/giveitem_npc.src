@@ -1,0 +1,141 @@
+use uo;
+use os;
+use util;
+
+include "include/locations";
+include "include/utility";
+include "../pkg/character/virtue/virtue";
+
+program use_questitem (parms)
+	if (!parms or len (parms) < 3)
+		return;
+	endif
+	
+	var player := parms [1];
+	var npc := parms [2];
+	var questitem := parms [3];
+
+	if (!player or !npc or !questitem)
+		if (questitem)
+			if (player)
+				if (!MoveItemToContainer (questitem, player.backpack))
+MoveObjectToLocation( questitem, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+				endif
+			elseif (npc)
+MoveObjectToLocation( questitem, npc.x, npc.y, npc.z, npc.realm, MOVEOBJECT_FORCELOCATION );
+			endif
+		endif
+		return;
+	endif
+
+	if (!MoveItemToContainer (questitem, npc.backpack))
+MoveObjectToLocation( questitem, npc.x, npc.y, npc.z, npc.realm, MOVEOBJECT_FORCELOCATION );
+		ReserveItem (questitem);
+	endif
+
+	var deliverto := GetObjProperty (questitem, "deliverto");
+	if (!deliverto)
+		PrintTextAbove (npc, "Sorry, I don't need that.");
+		if (!MoveItemToContainer (questitem, player.backpack))
+MoveObjectToLocation( questitem, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		return;
+	endif
+
+	if (deliverto != npc.serial)
+		GiveQuestDirections (player, npc, questitem);
+		if (!MoveItemToContainer (questitem, player.backpack))
+MoveObjectToLocation( questitem, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		return;
+	endif
+
+	var delivery_handled := 0;
+
+	if (GetObjProperty (questitem, "delivery_speech"))
+		var speech_lines := GetObjProperty (questitem, "delivery_speech");
+		for i := 1 to len (speech_lines)
+			PrintTextAbove (npc, speech_lines[i]);
+			if (len (speech_lines[i]) > 50)
+				sleep (2);
+			elseif (len (speech_lines[i]) > 40)
+				sleepms (1500);
+			else
+				sleep (1);
+			endif
+		endfor
+		delivery_handled := 1;
+	endif
+
+	if (GetObjProperty (questitem, "delivery_payment"))
+		var amount := GetObjProperty (questitem, "delivery_payment");
+		var thegold := CreateItemInContainer (player.backpack, UOBJ_GOLD_COIN, amount);
+		if (!thegold)
+			CreateItemAtLocation (player.x, player.y, player.z, UOBJ_GOLD_COIN, amount, player.realm);
+		endif
+		SendSysMessage (player, npc.name + " gives you " + amount + " gold.");
+		delivery_handled := 1;
+	endif
+
+	if (GetObjProperty (questitem, "delivery_virtue"))
+		var amount := CINT (GetObjProperty (questitem, "delivery_virtue"));
+		foreach mobile in ListMobilesNearLocation (npc.x, npc.y, npc.z, 10, npc.realm)
+			AddVirtue (mobile, amount);
+		endforeach
+		
+		delivery_handled := 1;
+	endif
+
+	if (GetObjProperty (questitem, "delivery_returnitem"))
+		var delivery_items := GetObjProperty (questitem, "delivery_returnitem");
+		for i := 1 to len (delivery_items)
+			var returnitem_serial := delivery_items [i];
+			foreach item in ListRootItemsInContainer (npc.backpack)
+				if (item.serial == returnitem_serial)
+					if (!MoveItemToContainer (item, player.backpack))
+					MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+					endif
+					SendSysMessage (player, npc.name + " gives you " + item.desc);
+					delivery_handled := 1;
+					break;
+				endif
+			endforeach
+		endfor
+	endif
+	
+	if (GetObjProperty (questitem, "delivery_nukekeywords"))
+		EraseObjProperty (npc, "keywords");
+		EraseObjProperty (npc, "override_quest");
+	endif
+
+	if (delivery_handled)
+		DestroyItem (questitem);
+	else
+		PrintTextAbove (npc, "Thanks, but no thanks.");
+		if (!MoveItemToContainer (questitem, player.backpack))
+MoveObjectToLocation( questitem, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+	endif
+	return;
+endprogram
+
+
+
+function GiveQuestDirections (player, npc, questitem)
+	var questie := SystemFindObjectBySerial (GetObjproperty (questitem, "deliverto"));
+	if (!questie)
+		PrintTextAbove (npc, "I don't think you'll ever find who you are looking for.");
+		return;
+	endif
+
+	var dir := GetDirection (player, questie.x, questie.y);
+	if (dir)
+		PrintTextAbove (npc, "Looking for " + questie.name + "?  I think they are " + dir);
+	else
+		PrintTextAbove (npc, "Looking for " + questie.name + "?  I'm afraid I don't know.");
+	endif
+endfunction
+
+
+
+

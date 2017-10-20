@@ -1,0 +1,250 @@
+use os;
+use uo;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/eventid";
+include "include/utility";
+include "include/attributes";
+include "../pkg/items/housing/house";
+
+program detect_hidden (character)
+	if (GetObjProperty (character, "#useskill"))
+		if (GetProcess (GetObjProperty (character, "#useskill")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#useskill", GetPid());
+
+	var sign := FindHouseSign (character);
+	if (sign)
+		SearchHouse (character, sign);
+	endif
+
+	SendSysMessage (character, "Where do you want to look?");
+	var targetted := TargetCoordinates (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (!CanAccessLocation (character, targetted) )
+		return;
+	endif
+
+	if (!targetted.item)
+		LookAroundLocation (character, targetted);
+	else
+		ExamineItem (character, targetted.item);
+	endif
+endprogram
+
+
+
+
+///////////////////
+//  figures out if the character can see what he's trying to target
+///////////////////
+
+function CanAccessLocation (character, targetted)
+	if (targetted.item)
+		if (InInventory (character.backpack, targetted.item))
+			return 1;
+		endif
+
+		if (CheckLoSBetween (character.x, character.y, character.z, targetted.item.x, targetted.item.y, targetted.item.z) )
+			if (Coordist (character.x, character.y, targetted.x, targetted.y) > 5)
+				SendSysMessage (character, "That's too far away!");
+				return 0;
+			endif
+			return 1;
+		endif
+		SendSysMessage (character, "You can't see that!");
+		return 0;
+	endif
+
+	if (Coordist (character.x, character.y, targetted.x, targetted.y) > 5)
+		SendSysMessage (character, "That's too far away!");
+		return 0;
+	endif
+
+	if (CheckLOSBetween (character.x, character.y, character.z, targetted.x, targetted.y, targetted.z) )
+		return 1;
+	else
+		SendSysMessage (character, "You can't see that!");
+		return 0;
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  searches the area around the character for hiders or traps (soon)
+///////////////////
+
+function LookAroundLocation (character, targetted)
+	var range := CINT (GetAttribute (character, ATTRIBUTEID_DETECTHIDDEN)/10) + 1;
+	var foundsomeone := 0;
+	foreach mobile in ListMobilesNearLocationEx (targetted.x, targetted.y, targetted.z, range, LISTEX_FLAG_HIDDEN, targetted.realm )
+		if (!GetObjProperty (mobile, "#specialhidden_nodamage"))
+			if (FoundPerson (character,mobile) )     
+				mobile.hidden := 0;
+				foundsomeone := 1;
+				PrintTextAbovePrivate (mobile, "You have been discovered!", mobile);
+				if (mobile.npctemplate)
+					var ev := struct;
+					ev.+source := character;
+					ev.+type := EVID_ENTEREDAREA;
+					SendEvent (mobile, ev);
+				endif
+				PrintTextAbovePrivate (mobile, "Found someone!", character);
+			endif
+		endif
+	endforeach
+    
+	if (!foundsomeone)
+		SendSysMessage (character, "You didn't find anyone.");
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  compares a hider's hiding skill against the searcher's detect hidden skill
+///////////////////
+function FoundPerson (searcher, hider)
+	var hide_skill := GetAttribute (hider, ATTRIBUTEID_HIDING);
+	if (CheckSkill (searcher, SKILLID_DETECTINGHIDDEN, hide_skill, 0 ) )
+		return 1;
+	else
+		return 0;
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  checks an item for traps
+///////////////////
+
+function ExamineItem (character, chest)
+	var previous_searchers := GetObjProperty (chest, "#searchers");
+	if (!previous_searchers)
+		previous_searchers := {};
+	endif
+
+	var previous_results := GetObjProperty (chest, "#search_results");
+	if (!previous_results)
+		previous_results := {};
+	endif
+
+	if (character.serial in previous_searchers)
+		for i := 1 to len (previous_searchers)
+			if (previous_searchers[i] == character.serial)
+				case (previous_results[i])
+					1:
+						if (GetObjProperty (chest, "trap"))
+							SendSysMessage (character, "Its trapped!");
+							//Higher skill levels can identify the trap
+							if (Checkskill (character, SKILLID_DETECTINGHIDDEN, 70, 0))
+								case (GetObjProperty (chest, "trap"))
+									"explosion":
+									"safeexplosion":
+										SendSysMessage (character, "It appears to be an explosion trap");
+									"poison":
+										SendSysMessage (character, "It appears to be an poison trap");
+									"djinni":
+										SendSysMessage (character, "It appears to be guarded by a spirit");
+									"npcspawn":
+										SendSysMessage (character, "It appears to be protected by a guardian");
+									default:
+										SendSysMessage (character, "You've never seen a trap like this before");
+								endcase
+							else
+								SendSysMessage (character, "You cannot tell what kind of trap it is.");
+							endif
+							chest.name := "a trapped chest";
+						else
+							SendSysMessage (character, "You feel sure that its not trapped.");
+						endif
+					default:
+						SendSysMessage (character, "You can't tell...");
+				endcase
+				return;
+			endif
+		endfor
+		return;
+	endif
+
+	previous_searchers.append (character.serial);
+	SetObjProperty (chest, "#searchers", previous_searchers);
+	if (CheckSkill (character, SKILLID_DETECTINGHIDDEN, -1, 0))
+		if (GetObjProperty (chest, "trap"))
+			SendSysMessage (character, "Its trapped!");
+			//Higher skill levels can identify the trap
+			if (Checkskill (character, SKILLID_DETECTINGHIDDEN, 70, 0))
+				case (GetObjProperty (chest, "trap"))
+					"explosion":
+					"safeexplosion":
+						SendSysMessage (character, "It appears to be an explosion trap");
+					"poison":
+						SendSysMessage (character, "It appears to be an poison trap");
+					"djinni":
+						SendSysMessage (character, "It appears to be guarded by a spirit");
+					"npcspawn":
+						SendSysMessage (character, "It appears to be protected by a guardian");
+					default:
+						SendSysMessage (character, "You've never seen a trap like this before");
+				endcase
+			else
+				SendSysMessage (character, "You cannot tell what kind of trap it is.");
+			endif
+			chest.name := "a trapped chest";
+		else
+			SendSysMessage (character, "You feel sure that its not trapped.");
+		endif
+		previous_results.append (1);
+		SetObjProperty (chest, "#search_results", previous_results);
+		return;
+	endif
+
+	previous_results.append (0);
+	SetObjProperty (chest, "#search_results", previous_results);
+	SendSysMessage (character, "You can't tell...");
+endfunction
+
+
+
+
+///////////////////
+//If the character is in their house, using this skill will reveal any hidden NPCs or characters in the house
+///////////////////
+
+function SearchHouse (character, sign)
+	var found_someone := 0;
+	var z;
+	for ( z := -120; z <= 120; z := z + 30)
+		foreach mobile in ListMobilesNearLocationEx (character.x, character.y, z, 32, LISTEX_FLAG_HIDDEN, character.realm)
+			if (!GetObjProperty (mobile, "#specialhidden_nodamage"))
+				if (IsInsideTheHouse (mobile, sign))
+					mobile.hidden := 0;
+					PrintTextAbove (mobile, "Found someone!");
+					found_someone := 1;
+				endif
+			endif
+		endforeach
+	endfor
+	
+	if (!found_someone)
+		SendSysMessage (character, "Doesn't seem to be anyone here.");
+	endif
+endfunction
+
+
+
+

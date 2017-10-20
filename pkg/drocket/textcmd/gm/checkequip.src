@@ -1,0 +1,14 @@
+use uo;
+use os;
+
+program check_equip (character, text)
+	var targetted := character;
+	if (text and text == "target")
+		targetted := Target (character);
+	endif
+
+	foreach item in ListEquippedItems (targetted)
+		SendsysMessage (character, "Item: " + item.desc + ", layer " + item.layer + ", graphic " + HEX (item.graphic));
+	
+	endforeach
+endprogram

@@ -1,0 +1,62 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 5;
+
+program cast_raise_dead (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		return 0;
+	endif
+	var cast_loc := GetSpellCastOn (caster, parms);
+	if (!cast_loc)
+		return 0;
+	endif
+
+	var lastcast := GetObjProperty (caster, "#lastcastraisedead");
+	if (lastcast and (lastcast + 120 > ReadGameClock()))
+		SendSysMessage (caster, "You're still drained from your last casting!");
+		return 0;
+	endif
+	SetObjProperty (caster, "#lastcastraisedead", ReadGameClock() );
+
+	if (!CheckSkill (caster, SKILLID_SPIRITSPEAK, -1, 0))
+		SendSysMessage (caster, "You fail to contact the nether realm");
+		return 0;
+	endif
+
+	var npctemplate := "";
+	var amount := RandomDiceRoll("1d4+1");
+	var duration := 60 + (GetAttribute (caster, ATTRIBUTEID_NECROMANCY) * 2);
+
+	for i :=  1 to amount
+		Case (RandomInt(7))
+			0:
+				npctemplate := "iceskeleton";
+			1:
+				npctemplate := "zombie";
+			2:
+				npctemplate := "spectre";
+			3:
+				npctemplate := "wraith";
+			4:
+				npctemplate := "vampire";
+			5:
+				npctemplate := "boneknight";
+			6:
+				npctemplate := "mummy";
+		endcase
+
+		SummonCreature (caster, npctemplate, cast_loc, duration);
+	endfor
+
+	detach ();
+	sleep (120);
+	EraseObjProperty (caster, "#lastcastraisedead");
+	return 1;
+endprogram

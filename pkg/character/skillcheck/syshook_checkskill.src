@@ -1,0 +1,58 @@
+use uo;
+use os;
+use util;
+use vitals;
+use attributes;
+
+include "include/attributes";
+include "include/math";
+
+exported function NewCheckSkill (character, skillid, difficulty, points)
+	var attribute := GetAttributeIDBySkillID (skillid);
+	var player_skill := GetAttribute (character, attribute);
+	if (!player_skill)
+		player_skill := 0;
+	endif
+
+	//Skill-level based check
+	if (difficulty < 0)
+		if ((1+RandomInt (100)+difficulty) < player_skill)
+			if (points)
+				AwardRawSkillPoints (character, skillid, points);
+			endif
+			return 1;
+		endif
+		return 0;
+	endif
+
+	//Difficulty based skill check
+	//limit the difficulty
+	if (difficulty > 140)
+		difficulty := 140;
+	endif
+	
+	//Check for autopass and autofail
+	if (player_skill < difficulty - 20)
+		return 0;
+	elseif (player_skill >= difficulty + 20)
+		if (points)
+			AwardRawSkillPoints (character, skillid, points);
+		endif
+		return 1;
+	endif
+	
+	difficulty := player_skill - difficulty + 20;
+	if (RandomInt (40) < difficulty)
+		if (points)
+			AwardRawSkillPoints (character, skillid, points);
+		endif
+		return 1;
+	endif
+	return 0;
+endfunction
+
+
+program SyshookCheckSkill ()
+	Syslog ("Installing skillcheck...");
+	return 1;
+endprogram

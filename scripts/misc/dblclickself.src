@@ -1,0 +1,20 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/wodinc";
+
+program dblclickself (character)
+
+	set_critical(1);
+
+	var mount := GetEquipmentByLayer (character, 25);
+	if (!mount or character.warmode)
+		OpenPaperdoll (character, character);
+		return;
+	else
+		Dismount (character, mount);
+	endif
+
+endprogram

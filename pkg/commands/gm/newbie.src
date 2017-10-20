@@ -1,0 +1,44 @@
+use uo;
+use os;
+
+include "include/gumps";
+include "include/utility";
+
+program textcmd_newbie (character)
+
+	SendSysMessage (character, "What do you wish to newbifie?");
+	var targetted := Target (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (targetted == character or targetted.npctemplate)
+		SendSysMessage (character, "Do you wish to newbie everything equipped on the target and in its backpack?");
+		if (!YesNo (character, "Proceed?"))
+			SendSysMessage (character, "Canceled.");
+			return;
+		endif
+
+		foreach item in ListEquippedItems (targetted)
+			if (item != targetted.backpack)
+				item.newbie := 1;
+			endif
+		endforeach
+
+		foreach item in ListRootItemsInContainer (targetted.backpack)
+			item.newbie := 1;
+		endforeach
+		SendSysMessage (character, "All equipment and root items in backpack are now newbie.");
+		return;
+	endif
+
+	if (targetted.newbie)
+		targetted.newbie := 0;
+		SendSysMessage (character, "Item is no longer newbie.");
+	else
+		targetted.newbie := 1;
+		SendSysMessage (character, "Item is now newbie.");
+	endif
+
+endprogram

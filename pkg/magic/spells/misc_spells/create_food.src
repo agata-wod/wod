@@ -1,0 +1,31 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 1;
+
+program create_food (parms, spellid)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+
+	var food;
+	case (RandomInt(8))
+		0:	food := 0xc920;
+		1:	food := 0x09ea;
+		2:	food := 0x1040;
+		3:	food := 0x09b7;
+		4: 	food := 0x1608;
+		5: 	food := 0x09e9;
+		6: 	food := 0x1044;
+		7: 	food := 0x0c77;
+	endcase
+	PlaySoundEffect (caster, SFX_1E3);
+	CreateIteminBackpack (caster, food, 1);
+	return 1;
+endprogram

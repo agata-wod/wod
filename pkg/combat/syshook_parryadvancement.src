@@ -1,0 +1,41 @@
+use uo;
+use os;
+use util;
+
+include "include/attributes";
+
+exported function NewParryAdvancement (attacker, weapon, defender, shield)
+	if (attacker and weapon and defender and shield)
+	endif
+//	QuickAwardRawAttributePoints (defender, ATTRIBUTEID_PARRY, 30);
+endfunction
+
+
+///////////////////
+//  This function is slightly less accurate than the general-purpose AwardRawAttributePoints,
+//  but is quite a bit faster (by about 40%).  Since the combat advancement systemhook
+//  is called so often, this function is used.
+///////////////////
+
+function QuickAwardRawAttributePoints (character, attributeid, rawpoints)
+	var current := GetAttributeBaseValue (character, attributeid);
+	var to_increase := GetNeededRawPointsToIncrease (current);
+	if (RandomInt (to_increase) < rawpoints)
+		var skillcap := GetBaseSkillCap (character, GetSkillIDByAttributeID (attributeid));
+		if (skillcap)
+			if (current = skillcap)
+				return;
+			elseif (current+1 > skillcap)
+				current := skillcap-1;
+			endif
+		endif
+		SetAttributeBaseValue (character, attributeid, current+1);
+	endif
+endfunction
+
+program SyshookParryAdvancement ()
+//	Syslog ("Installing parryadvancement...");
+//	return 1;
+	Syslog ("Skipping the install of parryadvancement...");
+	return 0;
+endprogram

@@ -1,0 +1,14 @@
+use os;
+use uo;
+
+program my_form( who )
+
+	if (!GetObjProperty(who,"toadmode"))
+		who.graphic := who.trueobjtype;
+		who.color := who.truecolor;
+	else
+		who.graphic := 0x51;
+		who.color := 1425;
+	endif
+
+endprogram

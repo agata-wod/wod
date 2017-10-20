@@ -1,0 +1,424 @@
+///////////////////////////////////////
+// msg.src -- Send a message to another online player
+///////////////////////////////////////
+
+use os;
+use uo;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+
+var layout := array {
+	"page 0",
+	"resizepic 0 20 2620 310 470",
+	"gumppic 20 50 2621",    
+	"text 20 29 40 0",
+	"text 240 29 40 1"
+};
+
+var data := array {
+	"Player Name",
+	"Message"
+};
+
+var xpos := 100;
+var ypos := 100;
+var style := "new";
+var big_move_mode := 1;
+
+var logging_acctnames := array {};
+
+program textcmd_msg (character, name)
+	if (name == "server")
+		SendSysMessage (character, "Due to popular demand, this option has been removed.");
+		return;
+	elseif (name == "style")
+		if (GetObjProperty (character, "dotmsgstyle") )
+			EraseObjProperty (character, "dotmsgstyle");
+			SendSysMessage (character, "You will now use the new style .msg gump");
+		else
+			SetObjProperty (character, "dotmsgstyle", "old");
+			SendSysMessage (character, "You will now use the old style .msg gump");
+		endif
+		return;
+	elseif (name == "noerrors")
+		if (GetObjProperty (character, "nomsgerrors") )
+			EraseObjProperty (character, "nomsgerrors");
+			SendSysMessage (character, "Error messages turned on again.");
+		else
+			SetObjProperty (character, "nomsgerrors", 1);
+			SendSysMessage (character, "Error messages turned off.");
+		endif
+		return;
+	elseif (name == "help")
+		SendSysMessage (character, "MSG:  Allows you to send a message to another online player.");
+		SendSysMessage (character, "You can either specify a name after the command (.msg bob) or, if no");
+		SendSysMessage (character, "name is specified, you will be presented with a menu of online players.");
+		SendSysMessage (character, "Options are:");
+		SendSysMessage (character, "style - Toggles the style of the text gump");
+		return;
+	endif
+	
+	if (GetObjProperty (character, "dotmsgstyle"))
+		style := "old";
+	endif
+	
+	if (GetObjProperty (character, "dotmsg_gump_position"))
+		var gumppos := GetObjProperty (character, "dotmsg_gump_position");
+		xpos := gumppos[1];
+		ypos := gumppos[2];	
+	endif
+
+
+	if (!name)
+		FillInArrays (character);
+		var result := SendDialogGump (character, layout, data);
+		if (!result and result[0] != 0)
+			SendSysMessage (character, "You must close other gumps before you can do this!");
+			return;
+		endif
+		
+		if (result[0] == 0)
+			SendSysMessage (character, "Canceled.");
+			return;
+		endif
+		name := data[result[0]];
+	endif
+
+	name := lower (name);
+	var player := FindOnlinePlayerByName (character, name);
+	if (!player)
+		if (!GetObjProperty (character, "nomsgerrors") )
+			SendSysMessage (character, "That player is either not online or is in private mode.");
+		endif
+		return;
+	endif
+	SendTheMessage (character, player);
+endprogram
+
+
+
+
+///////////////////
+//  builds the gump to be displayed so a player can be selected
+///////////////////
+
+function FillInArrays (character)
+
+	var playercount := 0;
+	var pagecount := 1;
+	var ylocation := 70;
+	var string_counter := 2;
+
+	layout.append ("page " + pagecount);
+	foreach player in EnumerateOnlineCharacters()
+		if (ListThePlayer (character, player))
+			data.append (player.name);
+			layout.append ("text 20 " + ylocation + " 40 " + string_counter);
+			string_counter := string_counter + 1;
+			layout.append ("button 260 " + ylocation + " 2640 2641 1 0 " + len(data));
+			ylocation:= ylocation + 20;
+			playercount := playercount + 1;
+		endif
+
+		case (playercount)
+			20:
+			40:
+			60:
+			80:
+			100:
+				layout.append ("button 285 30 2648 2647 0 " + (pagecount + 1));
+				pagecount := pagecount + 1;
+				layout.append ("page " + pagecount);
+				ylocation := 70;
+				layout.append ("button 255 30 2650 2651 0 " + (pagecount - 1));
+		endcase
+	endforeach
+endfunction
+
+
+
+
+function ListThePlayer (character, player)
+	if (character.cmdlevel)
+		return 1;
+	elseif (player.cmdlevel)
+		return 0;
+	elseif (GetObjProperty (player, "private"))
+		return 0;
+	else
+		return 1;
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Tries to find the best match of an online character based on the provided name
+///////////////////
+
+function FindOnlinePlayerByName (character, name)
+	//Try to find an exact match first
+	foreach onlinechr in EnumerateOnlineCharacters()
+		if (lower (onlinechr.name) == name)
+			if (!GetObjProperty (onlinechr, "private"))
+				return onlinechr;
+			elseif (character.cmdlevel)
+				return onlinechr;
+			endif
+		endif
+	endforeach
+	
+	//Then try to find someone who's name is at least close
+	foreach onlinechr in EnumerateOnlineCharacters()
+		var thename := lower (onlinechr.name);
+		if (thename[name])
+			if (!GetObjProperty (onlinechr, "private"))
+				return onlinechr;
+			elseif (character.cmdlevel)
+				return onlinechr;
+			endif
+		endif
+	endforeach
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  sends the message
+///////////////////
+
+function SendTheMessage (character, whom)
+	if ( GetObjProperty (character,"private") )
+		SendSysMessage (character, "No longer in Privacy mode");
+		EraseObjProperty (character,"private");
+	endif
+
+	var receivers_name := whom.name;
+	var text := " ";
+	repeat
+		if (style == "old")
+			text := SendTextEntryGump (character, text, TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "Message for " + whom.name + ":");
+		else
+			text := GetLineOfText (character, receivers_name, text);
+		endif
+		if (text and text != "NULL MOVED")
+			PlaySoundEffectPrivate (whom, 0x225, whom);
+			SendSysMessage (whom, character.name + ": " + text, FONT_NORMAL, MESSAGE_COLOR_MESSAGE);
+			SetObjProperty (whom, "replyto", character.name);
+			SendSysMessage (character, "Message sent to " + whom.name + ": " + text, FONT_NORMAL, MESSAGE_COLOR_MESSAGE - 1);
+			
+			//Logging of certain conversations...  Icky
+			if ((character.acctname in logging_acctnames) or (whom.acctname in logging_acctnames))
+				LogAccountMessages (character, whom, text);
+			endif
+		endif
+		if (!whom)
+			SendSysMessage (character, receivers_name + " is no longer online.");
+			return;
+		endif
+	until (!text or !character or !whom);
+
+endfunction
+
+
+
+
+///////////////////
+//  Fancy new gump
+///////////////////
+
+function GetLineOfText (character, receivers_name, previous_line)
+	if (previous_line == "NULL MOVED")
+		previous_line := " ";
+	endif
+
+	var msg_layout := array {
+		"nodispose",
+		"page 0",
+		"resizepic " + xpos + " " + ypos + " 5054 600 160",
+		"resizepic " + (xpos+20) + " " + (ypos+60) + " 2620 560 40",
+		"text " + (xpos+20) + " " + (ypos+10) + " 0 0",
+		"text " + (xpos+20) + " " + (ypos+30) + " 0 1",
+		"text " + (xpos+90) + " " + (ypos+30) + " 1350 2",
+		"button " + (xpos+80) + " " + (ypos+105) + " 5600 5604 1 0 2",	//Up
+		"button " + (xpos+80) + " " + (ypos+135) + " 5602 5606 1 0 3",	//Down
+		"button " + (xpos+100) + " " + (ypos+120) + " 5601 5605 1 0 4",	//right
+		"button " + (xpos+60) + " " + (ypos+120) + " 5603 5607 1 0 5",	//left
+
+		"button " + (xpos+380) + " " + (ypos+120) + " 243 241 1 0 0",	//Cancel
+		"button " + (xpos+460) + " " + (ypos+120) + " 249 247 1 0 1",	//Ok
+		"textentry " + (xpos+30) + " " + (ypos+70) + " 540 20 1350 10 3"
+	};
+	var msg_data := array {
+		"Message for " + receivers_name + ":",
+		"Previous:",
+		previous_line,
+		""
+	};
+	if (big_move_mode)
+		msg_layout.append ("button " + (xpos+81) + " " + (ypos+121) + " 1210 1210 1 0 6");
+	else
+		msg_layout.append ("button " + (xpos+81) + " " + (ypos+121) + " 1209 1209 1 0 6");
+	endif
+
+	var gump_return := SendDialogGump (character, msg_layout, msg_data);
+
+	if (gump_return [2])
+		if (big_move_mode)
+			ypos := ypos - 100;
+		else
+			ypos := ypos - 25;
+		endif
+		if (ypos < 0)
+			ypos := 0;
+		endif
+		return "NULL MOVED";
+	elseif (gump_return [3])
+		if (big_move_mode)
+			ypos := ypos + 100;
+		else
+			ypos := ypos + 25;
+		endif
+		return "NULL MOVED";
+	elseif (gump_return [4])
+		if (big_move_mode)
+			xpos := xpos + 150;
+		else
+			xpos := xpos + 25;
+		endif
+		return "NULL MOVED";
+	elseif (gump_return [5])
+		if (big_move_mode)
+			xpos := xpos - 100;
+		else
+			xpos := xpos - 25;
+		endif
+		if (xpos < 0)
+			xpos := 0;
+		endif
+		return "NULL MOVED";
+	elseif (gump_return [6])
+		if (big_move_mode)
+			big_move_mode := 0;
+		else
+			big_move_mode := 1;
+		endif
+		return "NULL MOVED";
+	endif
+
+	if (!gump_return [1])
+		return "";
+	endif
+
+	var msg := CSTR (gump_return[10]);
+	msg := msg[(find(msg, " ", 1)+1), len(msg)];
+	if (msg)
+		return msg;
+	endif
+	return "NULL MOVED";
+endfunction
+
+
+
+
+///////////////////
+//  players can send messages to the entire server
+///////////////////
+
+/*function SendGlobalMessage (character)
+	if (GetObjProperty (character, "#globalmessagetimer") and GetObjProperty (character, "#globalmessagetimer") + 1800 > ReadGameClock() )
+		SendSysMessage (character, "You can only send one message to the entire server every half-hour!");
+		return;
+	endif
+
+	var sound_options := character.acct.GetProp ("sound_options");
+	if (!sound_options)
+		sound_options := {0};
+	endif
+	
+	while (len (sound_options) < 2)
+		sound_options.append (0);
+	endwhile;
+
+	if (sound_options[2])
+		SendSysMessage (character, "You cannot send server messages while you are set to not receive them!");
+		return;
+	endif
+
+	var text := SendTextEntryGump (character, "Message for entire server:",
+			TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60);
+	if (!text)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	
+	SetObjProperty (character, "#globalmessagetimer", ReadGameClock());
+
+	foreach player in EnumerateOnlineCharacters()
+		var acct := player.acct;
+		var sound_options := acct.GetProp ("sound_options");
+		if (!sound_options or !sound_options[2])
+			SendSysMessage (player, "Global message from " + character.name + ": " + text, FONT_NORMAL, MESSAGE_COLOR_MESSAGE);
+		endif
+	endforeach
+endfunction
+*/
+
+
+
+
+///////////////////
+//  Alerts the GM (Generally me, Drocket) to any important events in the invasion spawner
+///////////////////
+
+function alertgm (msg, syslogit := 0)
+	if (syslogit)
+		syslog (msg);
+	endif
+
+	foreach player in EnumerateOnlineCharacters ()
+		if (IsAGM (player) = 5)
+			SendSysMessage (player, msg);
+		endif
+	endforeach
+endfunction
+
+
+
+function LogAccountMessages (character, whom, text)
+	set_critical (1);
+	var acctinfodf := OpenDataFile (":character:msg_logging");
+	if (!acctinfodf)
+		acctinfodf := CreateDataFile (":character:msg_logging");
+		if (!acctinfodf)
+			Syslog ("Error opening character data file!");
+			set_critical (0);
+			return 0;
+		endif
+	endif
+	
+	var acctname := character.acctname;
+	if (!(character.acctname in logging_acctnames))
+		acctname := whom.acctname;
+	endif
+
+	var entry := acctinfodf.FindElement (acctname);
+	if (!entry)
+		acctinfodf.CreateElement (acctname);
+		entry := acctinfodf.FindElement (acctname);
+	endif
+	
+	var propname := CSTR (ReadGameClock());
+	var value := array{character.name, whom.name, text};
+
+	entry.SetProp (propname, value);
+	UnloadDataFile (":character:msg_logging");
+	set_critical (0);
+
+endfunction
+

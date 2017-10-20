@@ -1,0 +1,15 @@
+use uo;
+use os;
+use util;
+
+program dice(who, dice)
+
+	PlaySoundEffect(who, 0x1c4);
+
+	var die1 := RandomInt(6)+1;
+	var die2 := RandomInt(6)+1;
+	var total := die1+die2;
+
+	PrintTextAbove(dice,who.name + " rolls a " + die1 + " and a " + die2 + " for " + total);
+
+endprogram

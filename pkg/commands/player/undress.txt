@@ -1,0 +1,2 @@
+.undress will move everything you are wearing into your backpack.
+

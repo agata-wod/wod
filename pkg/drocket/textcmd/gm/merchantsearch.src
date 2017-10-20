@@ -1,0 +1,101 @@
+use os;
+use uo;
+
+include "include/math";
+include "include/utility";
+
+program merchant_search (character, searchparms)
+	if (!searchparms)
+		SendSysMessage (character, "Please enter a phrase to search for.");
+		return;
+	endif
+	
+	var search_results;
+
+	for i := 1 to 100
+		search_results := merchantsearch (character, searchparms);
+		if (1)
+			SendSysMessage (character, "Counter: " + i);
+		endif
+		sleepms (10);
+	endfor
+
+
+	var data := array {
+		"page 0",    
+		"nodispose", 
+		"resizepic 40 40 5054 500 400",
+		"tilepic 56 52 5357",
+		"tilepic 65 49 4032",
+		"text 109 50 62 0",
+		"htmlgump 52 79 476 348 1 1 1"
+	};
+	var lines := array {
+		"Search results:",
+		search_results
+	};
+  
+	SendDialogGump (character, data, lines);
+endprogram
+
+
+function merchantsearch (character, searchparms)
+	var keywords := SplitWords (searchparms);
+	if (!len (keywords) )
+		SendSysMessage (character, "Please enter a phrase to search for.");
+		return 0;
+	elseif (len (keywords) > 3)
+		SendSysMessage (character, "Please enter a phrase to search for.");
+		return 0;
+	endif
+
+	var playermerchantlist := GetGlobalProperty ("#playermerchantlist");
+	if (!playermerchantlist)
+		SendSysMessage (character, "Unable to find any merchants.");
+		return 0;
+	endif
+	
+	var storage := FindStorageArea( "Merchant Storage" );
+	if (!storage)
+		SendSysMessage (character, "Error opening merchant storage!");
+		return 0;
+	endif
+
+	var search_results := "";
+	
+	var itemdesc, addedthisguy, founditem, total_found := 0;
+	foreach merchantserial in playermerchantlist
+		addedthisguy := 0;
+		var inv_fs := FindRootItemInStorageArea (storage, merchantserial + " FS");
+		if (inv_fs)
+			foreach item in EnumerateItemsInContainer (inv_fs)
+				if (item.container == inv_fs)
+					founditem := 1;
+					itemdesc := Lower (item.desc);
+					foreach keyword in keywords
+						if (!itemdesc[keyword])
+							founditem := 0;
+						endif
+					endforeach
+	
+					if (founditem)
+						total_found := total_found + 1;
+						if (!addedthisguy)
+							var merchant := SystemFindObjectBySerial (merchantserial);
+							if (merchant)
+								search_results := search_results + "<p><b>" + merchant.name + "</b>";
+							endif
+							addedthisguy := 1;
+						endif
+						if ( item.amount > 1 )
+							search_results := search_results + "<br>" + item.desc + " at " + item.sellprice + " each";
+						else
+							search_results := search_results + "<br>" + item.desc + " at " + item.sellprice;
+						endif
+					endif
+				endif
+			endforeach
+		endif
+	endforeach
+	return search_results;
+endfunction

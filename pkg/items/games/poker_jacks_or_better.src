@@ -1,0 +1,515 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/magicitems";
+include "include/clock";
+include "include/accounts";
+include "include/objtype";
+include "include/gumps";
+
+CONST GUMP_CARD_BASE := 0x1c01;
+var players_cards := array{};
+var drawn_cards := array{};
+var players_cards_status := array{0, 0, 0, 0, 0};
+var gump_layout, gump_data;
+var win_results;
+var player_bet := 1;
+var winning_string := "";
+
+program poker (character)
+	SetObjProperty (character, "#playing_games", GetPID());
+
+	//get their bet
+	player_bet := GetPlayersBet (character);
+	if (!player_bet)
+		EraseObjProperty (character, "#playing_games");
+		return;
+	endif
+
+	//data for monthly counter
+	var year := Systime_GetYear ();
+	var month := lower (Systime_GetMonth ());
+
+	var still_playing := 1;
+	repeat
+		//Take their money
+		if (!character.spendgold (player_bet))
+			SendSysMessage (character, "You don't have enough money!");
+			EraseObjProperty (character, "#playing_games");
+			return;
+		endif
+
+		//random stats
+		set_critical (1);
+			var game_counter := GetGlobalProperty ("jacks_or_better_games_total");
+			if (!game_counter)
+				game_counter := 0;
+			endif
+			game_counter := game_counter + 1;
+			SetGlobalProperty ("jacks_or_better_games_total", game_counter);
+			
+			game_counter := GetGlobalProperty (CSTR ("jacks_or_better_games_" + year + "_" + month));
+			if (!game_counter)
+				game_counter := 0;
+			endif
+			game_counter := game_counter + 1;
+			SetGlobalProperty (CSTR ("jacks_or_better_games_" + year + "_" + month), game_counter);
+			
+			var bet_counter := GetGlobalProperty ("jacks_or_better_bets_total");
+			if (!bet_counter)
+				bet_counter := 0;
+			endif
+			bet_counter := bet_counter + player_bet;
+			SetGlobalProperty ("jacks_or_better_bets_total", bet_counter);
+			
+			bet_counter := GetGlobalProperty (CSTR ("jacks_or_better_bets_" + year + "_" + month));
+			if (!bet_counter)
+				bet_counter := 0;
+			endif
+			bet_counter := bet_counter + player_bet;
+			SetGlobalProperty (CSTR ("jacks_or_better_bets_" + year + "_" + month), bet_counter);
+		set_critical (0);
+
+		//reset all the data
+		players_cards := array{};
+		players_cards_status := array{0, 0, 0, 0, 0};
+		drawn_cards := array{};
+		winning_string := "";
+
+		//draw 5 cards
+		for i := 1 to 5
+			players_cards[i] := DrawCard ();
+		endfor
+
+		var done := 0;
+		repeat
+			BuildHoldGump ();
+			var gump_return := SendDialogGump (character, gump_layout, gump_data);
+			if (gump_return == error)
+				SendSysMessage (character, "Please close other gumps first.");
+				EraseObjProperty (character, "#playing_games");
+				return;
+			elseif (!gump_return[0])
+				SendSysMessage (character, "Don't do that.");
+			else
+				case (gump_return[0])
+					1:
+						if (players_cards_status[1])
+							players_cards_status[1] := 0;
+						else
+							players_cards_status[1] := 1;
+						endif
+					2:
+						if (players_cards_status[2])
+							players_cards_status[2] := 0;
+						else
+							players_cards_status[2] := 1;
+						endif
+					3:
+						if (players_cards_status[3])
+							players_cards_status[3] := 0;
+						else
+							players_cards_status[3] := 1;
+						endif
+					4:
+						if (players_cards_status[4])
+							players_cards_status[4] := 0;
+						else
+							players_cards_status[4] := 1;
+						endif
+					5:
+						if (players_cards_status[5])
+							players_cards_status[5] := 0;
+						else
+							players_cards_status[5] := 1;
+						endif
+					10:	//deal
+						done := 1;
+					999:	//help
+						var game_help := "Jacks or Better:";
+						game_help := game_help + "<p>Jacks or Better is a single-player version of the game of poker ";
+						game_help := game_help + " (often refered to as video poker.)  After placing your bet, you are dealt ";
+						game_help := game_help + "5 cards from a standard deck of 52.  Click on any card that you want to hold ";
+						game_help := game_help + "(HELD will appear in yellow below the card), then press 'deal' to replace any ";
+						game_help := game_help + "non-held cards.  At this time, you hand is checked to see if you have won or lost.  ";
+						game_help := game_help + "A pair of jacks is the minimum winning hand, and better hands win higher amounts.";
+						game_help := game_help + "<p><b>Paytable:</b>";
+						game_help := game_help + "<br>Pair (jacks or better) 1:1";
+						game_help := game_help + "<br>Two Pair 2:1";
+						game_help := game_help + "<br>Three of a Kind 3:1";
+						game_help := game_help + "<br>Straight 4:1";
+						game_help := game_help + "<br>Flush 6:1";
+						game_help := game_help + "<br>Full House 9:1";
+						game_help := game_help + "<br>Four of a Kind 25:1";
+						game_help := game_help + "<br>Straight Flush 50:1";
+						game_help := game_help + "<br>Royal Flush 800:1";
+
+						SendStringAsHtmlWindow (character, game_help, "Jacks or Better help");
+					default:
+						SendSysMessage (character, "Error!  Bad gump return");
+						EraseObjProperty (character, "#playing_games");
+						return;
+				endcase
+			endif
+		until (done or !character);
+	
+	  	
+		//pick new cards for the ones they threw away
+		for i := 1 to 5
+			if (!players_cards_status[i])
+				players_cards[i] := DrawCard ();
+			endif
+		endfor
+	  	
+	  	//check to see if they won.  If so, give them their money
+		win_results := DetermineWinOrLoss ();
+		if (win_results[2])
+			var winnings := win_results[2] * player_bet;
+			winning_string := "You win " + winnings + " gold";
+
+			//random stats
+			var winnings_counter := GetGlobalProperty ("jacks_or_better_winnings_total");
+			if (!winnings_counter)
+				winnings_counter := 0;
+			endif
+			winnings_counter := winnings_counter + winnings;
+			SetGlobalProperty ("jacks_or_better_winnings_total", winnings_counter);
+			
+			winnings_counter := GetGlobalProperty (CSTR ("jacks_or_better_winnings_" + year + "_" + month));
+			if (!winnings_counter)
+				winnings_counter := 0;
+			endif
+			winnings_counter := winnings_counter + winnings;
+			SetGlobalProperty (CSTR ("jacks_or_better_winnings_" + year + "_" + month), winnings_counter);
+
+			//stackable gold fix
+			if (winnings > 60000)
+				repeat
+					CreateItemInContainer (character.backpack, UOBJ_GOLD_COIN, 60000);
+					winnings := winnings - 60000;
+				until (winnings < 60000);
+			endif
+			CreateItemInContainer (character.backpack, UOBJ_GOLD_COIN, winnings);
+		endif
+	
+		//show the outcome
+		done := 0;
+		repeat
+			BuildResultsGump ();
+			var gump_return := SendDialogGump (character, gump_layout, gump_data);
+			if (gump_return == error)
+				SendSysMessage (character, "Please close other gumps first.");
+				EraseObjProperty (character, "#playing_games");
+				return;
+			elseif (!gump_return[0])
+				SendSysMessage (character, "Finished");
+				EraseObjProperty (character, "#playing_games");
+				return;
+			else
+				case (gump_return[0])
+					10:
+						done := 1;
+					998:
+						player_bet := GetPlayersBet (character);
+						if (!player_bet)
+							EraseObjProperty (character, "#playing_games");
+							return;
+						endif
+						done := 1;
+					999:	//help
+						var game_help := "Jacks or Better:";
+						game_help := game_help + "<p>Jacks or Better is a single-player version of the game of poker ";
+						game_help := game_help + " (often refered to as video poker.)  After placing your bet, you are dealt ";
+						game_help := game_help + "5 cards from a standard deck of 52.  Click on any card that you want to hold ";
+						game_help := game_help + "(HELD will appear in yellow below the card), then press 'deal' to replace any ";
+						game_help := game_help + "non-held cards.  At this time, you hand is checked to see if you have won or lost.  ";
+						game_help := game_help + "A pair of jacks is the minimum winning hand, and better hands win higher amounts.";
+						game_help := game_help + "<p><b>Paytable:</b>";
+						game_help := game_help + "<br>Pair (jacks or better) 1:1";
+						game_help := game_help + "<br>Two Pair 2:1";
+						game_help := game_help + "<br>Three of a Kind 3:1";
+						game_help := game_help + "<br>Straight 4:1";
+						game_help := game_help + "<br>Flush 6:1";
+						game_help := game_help + "<br>Full House 9:1";
+						game_help := game_help + "<br>Four of a Kind 25:1";
+						game_help := game_help + "<br>Straight Flush 50:1";
+						game_help := game_help + "<br>Royal Flush 800:1";
+
+						SendStringAsHtmlWindow (character, game_help, "Jacks or Better help");
+					default:
+						SendSysMessage (character, "Error:  Bad gump return.");
+				endcase;
+			endif
+		until (done or !character);
+		
+	until (!still_playing or !character);
+	EraseObjProperty (character, "#playing_games");
+
+endprogram
+
+
+
+
+///////////////////
+//  Picks a card, first making sure that it isn't one already used
+///////////////////
+
+function DrawCard ()
+	var chosencard := -1;
+	repeat
+		chosencard := RandomInt (52);
+		if (chosencard in drawn_cards)
+			chosencard := -1;
+		endif
+	until (chosencard >= 0);
+	drawn_cards.append (chosencard);
+	return chosencard;
+endfunction
+
+
+
+
+///////////////////
+//  This is the gump that lets the player click cards to hold them
+///////////////////
+
+function BuildHoldGump ()
+	gump_layout := array {
+		"page 0",
+		"nodispose",
+		"nomove",
+		"resizepic 50 50 2600 510 240",
+		"page 1",
+		"button 440 225 2118 2117 1 1 10",
+		"text 460 220 1321 1",
+		"text 120 200 1321 2",
+		"button 440 245 2033 2032 1 1 999"
+	};
+	
+	gump_data := array {
+	       "HELD",         //0
+	       "Deal",
+	       "Your bet: " + player_bet + " gold"
+	};
+	
+	for i := 1 to 5
+		var heldcard := players_cards [i];
+		var cardgraphic := GUMP_CARD_BASE + GetSuitOfCard(heldcard)*16 + GetRankOfCard(heldcard);
+		gump_layout.append ("button " + (30+i*80) + " 80 " + cardgraphic + " " + cardgraphic + " 1 1 " + i);
+		
+		if (players_cards_status[i])
+			gump_layout.append ("text " + (50+i*80) + " 175 52 0");
+		endif
+	endfor
+endfunction
+
+
+
+
+///////////////////
+//  This gump displays the final results (win or loss)
+///////////////////
+
+
+function BuildResultsGump ()
+	gump_layout := array {
+		"page 0",
+		"nodispose",
+		"nomove",
+		"resizepic 50 50 2600 510 240",
+		"page 1",
+		"text 120 200 1321 1",
+		"text 120 220 1321 2",
+		"button 440 205 2118 2117 1 1 10",
+		"text 460 200 1321 3",
+		"button 440 225 2118 2117 1 1 998",
+		"text 460 220 1321 4",
+		"button 440 245 2033 2032 1 1 999"
+	};
+	
+	gump_data := array {
+		"HELD",
+		win_results[1],
+		winning_string,
+		"Play again",
+		"Change Bet"
+	};
+	
+	for i := 1 to 5
+		var heldcard := players_cards [i];
+		var cardgraphic := GUMP_CARD_BASE + GetSuitOfCard(heldcard)*16 + GetRankOfCard(heldcard);
+		gump_layout.append ("gumppic " + (30+i*80) + " 80 " + cardgraphic);
+	endfor
+endfunction
+
+
+
+
+///////////////////
+//  Figures out if we've won or lost.  There has to be an easier way to do this...
+//  Returns an array.  [1] is a string description, [2] is the winning multiplier (0 for loss)
+///////////////////
+
+function DetermineWinOrLoss ()
+	//the first thing to do is calculate the cards suit and value
+	var cardsuits := array{};
+	var cardvalues := array{};
+	var card_values_counter := dictionary;
+	for i := 1 to 5
+		var thiscardvalue := GetRankOfCard (players_cards[i]);
+		cardvalues[i] := thiscardvalue;
+		if (!card_values_counter.exists (thiscardvalue))
+			card_values_counter.insert (thiscardvalue, 1);
+		else
+			card_values_counter[thiscardvalue] := card_values_counter[thiscardvalue] + 1;
+		endif
+		cardsuits[i] := GetSuitOfCard (players_cards[i]);
+	endfor
+
+	//next, we'll check for matching cards (pairs or better)
+	//(this happens if we have less than 5 values in held cards)
+	var card_values_counter_keys := card_values_counter.keys();
+	if (card_values_counter_keys.size() < 5)
+		//if there's 4 keys, it must be a single pair
+		if (card_values_counter_keys.size() == 4)
+			//the pair needs to be jacks or better...
+			for i := 10 to 12
+				if (card_values_counter[i] == 2)
+					return array{"Pair", 1};
+				endif
+			endfor
+			if (card_values_counter[0] == 2)
+				return array{"Pair", 1};
+			endif
+			return array{"Sorry, try again.", 0};
+		
+		//if there's 3 keys, it could be 2 pair or 1 triple
+		elseif (card_values_counter_keys.size() == 3)
+			foreach key in card_values_counter_keys
+				if (card_values_counter[key] == 3)
+					return array{"Three of a kind", 3};
+				endif
+			endforeach
+			return array{"Two pair", 2};
+		
+		//if there's 2 keys, its either a flush of a four-of-a-kind
+		elseif (card_values_counter_keys.size() == 2)
+			foreach key in card_values_counter_keys
+				if (card_values_counter[key] == 4)
+					return array{"Four of a kind", 25};
+				endif
+			endforeach
+			return array{"Full House", 9};
+		else
+			return array{"Error, bad cards!", 1};
+		endif
+	endif
+
+	//check for flush
+	var found_flush := 1;
+	for i := 1 to 4
+		if (cardsuits[i] != cardsuits[i+1])
+			found_flush := 0;
+		endif
+	endfor
+	
+	//check for straight
+	var found_straight := 0;
+	for i := 0 to 8
+		if (card_values_counter.exists (i))
+			if (card_values_counter.exists (i+1))
+				if (card_values_counter.exists (i+2))
+					if (card_values_counter.exists (i+3))
+						if (card_values_counter.exists (i+4))
+							found_straight := 1;
+						endif
+					endif
+				endif
+			endif
+		endif
+		
+		//gotta do some messiness because aces are both high and low
+		if (card_values_counter.exists (0))
+			if (card_values_counter.exists (12))
+				if (card_values_counter.exists (11))
+					if (card_values_counter.exists (10))
+						if (card_values_counter.exists (9))
+							found_straight := 1;
+						endif
+					endif
+				endif
+			endif
+		endif
+	endfor
+	
+	if (found_straight)
+		if (found_flush)
+			//check for royal flush
+			if (card_values_counter.exists (0))
+				if (card_values_counter.exists (12))
+					return array{"Royal Flush!!!", 800};
+				endif
+			endif
+			return array{"Straight Flush!", 50};
+		endif
+		return array{"Straight!", 4};
+	elseif (found_flush)
+		return array{"Flush!", 6};
+	endif
+
+	return array{"Sorry, try again.", 0};
+endfunction
+
+
+
+
+///////////////////
+//  returns the suit of the card
+///////////////////
+
+function GetSuitOfCard (cardvalue)
+	return CINT (cardvalue/13);
+endfunction
+
+
+
+
+///////////////////
+//  returns the value of the card
+///////////////////
+
+function GetRankOfCard (cardvalue)
+	return (cardvalue%13);
+endfunction
+
+
+
+
+///////////////////
+//  Gets the players bet
+///////////////////
+
+function GetPlayersBet (character)
+	var thebet := SendTextEntryGump (character, "Please enter your bet", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 4, "(1 to 1000 gold)");
+	thebet := CINT (thebet);
+	if (!thebet)
+		SendSysMessage (character, "Invalid bet");
+		return 0;
+	elseif (thebet > 1000)
+		SendSysMessage (character, "Maximum bet is 1000 gold.");
+		return 1000;
+	endif
+	return thebet;
+endfunction
+
+
+
+
+
+
+
+
+
+

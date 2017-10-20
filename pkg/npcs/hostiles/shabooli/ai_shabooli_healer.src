@@ -1,0 +1,207 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/mainloop_killpcs_normal";
+include "../pkg/npcs/main_ai/main/sleepmode_normal";
+include "../pkg/npcs/main_ai/combat/fightmode_smart";
+include "../pkg/npcs/main_ai/combat/closedistance_spellcaster";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/hostiles/shabooli/shabooli";
+
+const HALT_THRESHOLD := 8; // how close before he attacks?
+drop_anchor();
+
+program KillPlayers()
+	if (!me.backpack)
+		DoOnCreationSetup ();
+		if (me.gender)
+			EquipFromTemplate (me, "shabooli_female_mage");
+		else
+			EquipFromTemplate (me, "shabooli_male_mage");
+		endif
+	endif
+	DoStartupSetup ();
+
+	if (getobjproperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	post_combat ();
+	main_AI_loop ();
+endprogram
+
+function process_combat_event (byref ev)
+	SpellAttack (ev.source);
+
+	case (ev.type)
+		EVID_DAMAGED:
+			if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/2))
+				sleep (1);
+				CastSpell (me, me,":misc_spells:gheal");
+				if( me.poisoned )
+					CastSpell (me, me, ":poison_spells:cure");
+					CastSpell (me, ev.source, ":poison_spells:poison");
+				endif
+			endif
+			if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/10))
+				EraseObjProperty (me, "#flees");
+				Flee (ev.source);
+			endif
+	endcase
+endfunction
+
+function spellattack (byref opponent)
+
+	if (!GetObjProperty (me, "#lastspell"))
+		SetObjProperty (me, "#lastspell",ReadGameClock() + 2);
+	endif
+
+	if (GetObjProperty (me, "#lastspell") > ReadGameClock() )
+		return;
+	endif
+
+	if (GetVital (me, "Mana") < 6000 and GetVital (me, "Mana") >= 4000 and GetVital (opponent, "Mana") > 3000)
+		if (GetAttribute (me, "Intelligence") > GetAttribute (opponent, "Intelligence"))
+			TurnToward (opponent);
+			sleep (1);
+			CastSpell (me, opponent, ":misc_spells:manavamp");
+			SetObjProperty (me, "#lastspell", ReadGameClock() + 4);
+			return;
+		endif
+	endif
+
+	foreach mobile in ListMobilesNearLocation (opponent.x, opponent.y, opponent.z, HALT_THRESHOLD, opponent.realm)
+		if (mobile.npctemplate["shabooli"] and RandomInt (2))
+			if (mobile.poisoned)
+				if (CheckLoSAt (me, mobile.x, mobile.y, mobile.z))
+					TurnToward (mobile);
+					sleep (1);
+					CastSpell (me, mobile, ":poison_spells:cure");
+					SetObjProperty (me, "#lastspell", ReadGameClock() + 3);
+					return;
+				endif
+			endif
+			if (GetVital (mobile, "Life") < CINT (GetVitalMaximumValue (mobile, "Life")/2))
+				if (CheckLoSAt (me, mobile.x, mobile.y, mobile.z))
+					TurnToward (mobile);
+					sleep (1);
+					CastSpell (me, mobile, ":misc_spells:gheal");
+					SetObjProperty (me, "#lastspell", ReadGameClock() + 2);
+					return;
+				endif
+			endif
+		endif
+		if (!mobile.npctemplate and GetAttribute (mobile, ATTRIBUTEID_MAGERY) > 80 and GetVital (mobile, "Mana") > 4000)
+			if (GetAttribute (me, "Intelligence") > GetAttribute (opponent, "Intelligence") and RandomInt (2))
+				TurnToward (mobile);
+				sleep (1);
+				CastSpell (me, opponent, ":misc_spells:manadrain");
+				SetObjProperty (me, "#lastspell", ReadGameClock() + 2);
+				return;
+			endif
+		endif
+	endforeach
+
+	if (RandomInt (2))
+		sleep (1);
+		SetObjProperty (me, "#lastspell", ReadGameClock() + 4);
+		cast_offensive_spell (me, opponent);
+		return;
+	endif
+endfunction
+
+function in_combat_event_loop (byref opponent)
+
+	spellattack(opponent);
+
+endfunction
+
+function prepare_for_fight (byref opponent)
+	DisableMainEvents ();
+	EnableCombatEvents ();
+	if (!GetObjProperty (me, "mr"))
+		CastSpell (me, me, ":misc_spells:reflect");
+	endif
+
+	if (GetVital (me, "Mana") < 8000)
+		return;
+	endif
+	foreach mobile in ListMobilesNearLocation (me.x, me.y, me.z, CINT (HALT_THRESHOLD*2), me.realm)
+		var masterserial := GetObjProperty (mobile, "master");
+		if (masterserial and masterserial == me.serial)
+			return;
+		endif
+	endforeach
+	foreach mobile in ListMobilesNearLocation (opponent.x, opponent.y, opponent.z, CINT (HALT_THRESHOLD*2), opponent.realm)
+		var masterserial := GetObjProperty (mobile, "master");
+		if (masterserial and masterserial == me.serial)
+			return;
+		endif
+	endforeach
+
+	case (RandomInt (10))
+		0:
+			CastSpell (me, opponent, ":summoning_spells:summon_water");
+		1:
+			CastSpell (me, opponent, ":summoning_spells:summon_air");
+		2:
+			CastSpell (me, opponent, ":summoning_spells:summon_earth");
+		default:
+			CastSpell (me, opponent, ":summoning_spells:summon_fire");
+	endcase
+	
+	if (RandomInt (2) or GetVital (me, "Mana") < 8000)
+		sleep (5);
+		return;
+	endif
+	sleep (1);
+
+	foreach mobile in ListMobilesNearLocation (me.x, me.y, me.z, CINT (HALT_THRESHOLD*2), me.realm)
+		var masterserial := GetObjProperty (mobile, "master");
+		if (masterserial and masterserial == me.serial)
+			return;
+		endif
+	endforeach
+	foreach mobile in ListMobilesNearLocation (opponent.x, opponent.y, opponent.z, CINT (HALT_THRESHOLD*2), opponent.realm)
+		var masterserial := GetObjProperty (mobile, "master");
+		if (masterserial and masterserial == me.serial)
+			return;
+		endif
+	endforeach
+
+	if (RandomInt (2) or GetVital (me, "Mana") < 8000)
+		sleep (5);
+		return;
+	endif
+	sleep (1);
+
+	case (RandomInt (10))
+		0:
+			CastSpell (me, opponent, ":summoning_spells:summon_water");
+		1:
+			CastSpell (me, opponent, ":summoning_spells:summon_air");
+		2:
+			CastSpell (me, opponent, ":summoning_spells:summon_earth");
+		default:
+			CastSpell (me, opponent, ":summoning_spells:summon_fire");
+	endcase
+	sleep (5);
+	return;
+endfunction
+
+function post_combat ()
+	if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/2))
+		CastSpell(me,me,":misc_spells:gheal");
+	endif
+
+	DisableCombatEvents();
+	EnableMainEvents();
+
+	SetWarMode( 0 );
+	sleep(1);
+	look_around();
+endfunction

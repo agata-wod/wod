@@ -1,0 +1,24 @@
+use uo;
+use os;
+use guilds;
+
+program removefromguild( me, text )
+	var newmember := Target( me, TGTOPT_NOCHECK_LOS );
+	if (!newmember.acctname)
+		SendSysMessage (me, "That is not a player.");
+		return;
+	endif
+	var guild := FindGuild(cint(text));
+	if (guild)
+		var guildname := guild.getprop("name");
+		if (guild.ismember(newmember))
+			guild.removemember(newmember);
+			SendSysMessage (me, newmember.name + " removed from guild " + guildname);
+		else
+			SendSysMessage (me, newmember.name + " is not a member of guild " + guildname);
+		endif
+	else
+		SendSysMessage (me, "Guild ID not valid");
+	endif
+endprogram
+

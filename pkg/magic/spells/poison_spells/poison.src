@@ -1,0 +1,39 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 3;
+
+program cast_poison( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	cast_on := CheckMagicReflection (caster, cast_on);
+	if (!cast_on)
+		return 1;
+	endif
+
+	var p_level := CINT (caster_magery/20)+1;
+	if (CheckSkill (cast_on, SKILLID_MAGICRESISTANCE, caster_evalint, 0) );
+		SendSysMessage (caster, cast_on.name + " resists your spell!");
+		SendSysMessage (cast_on, "You feel yourself resisting magical energy!");
+		PlaySoundEffect (cast_on, SFX_SPELL_WEAKEN);
+		PlayObjectCenteredEffect (cast_on, FX_CURSE_EFFECT, 5, 5);
+		return 1;
+	endif
+
+	PlayObjectCenteredEffect (cast_on, FX_CURSE_EFFECT, 0x0a, 0x1e);
+	AddVirtue (caster, -1);
+	SetPoison (cast_on, p_level, caster.name + " has poisoned you!");
+	return 1;
+endprogram

@@ -1,0 +1,41 @@
+use uo;
+use os;
+use http;
+use datafile;
+
+program view_www_logs ()
+	WriteHTML ("<html><head><title>POL WWW logs</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+	
+	var www_datafile := OpenDataFile ("www_logs");
+	if (!www_datafile)
+		www_datafile := CreateDataFile ("www_logs");
+		if (!www_datafile)
+			WriteHTML ("<p>Error:  Unable to open or create datafiles!");
+			WriteHTML ("</body></html>");
+			return;
+		endif
+	endif
+
+	var entry := www_datafile.FindElement ("access_attempts");
+	if (!entry)
+		WriteHTML ("<p>No entries recorded.");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+
+	var the_elem;
+	WriteHTML ("<table width=80% align=center>");
+	WriteHTML ("<tr><td>Time</td><td>IP Address</td><td>Page</td><td>Character</td></tr>");
+	foreach propname in (entry.PropNames())
+		the_elem := entry.GetProp (propname);
+		WriteHTML ("<tr><td>" + the_elem[2] + "</td><td>" + the_elem[1] + "</td><td>" + the_elem[3] + "</td><td>" + the_elem[4] + "</td></tr>");
+			
+	
+	endforeach
+	WriteHTML ("</table>");
+	WriteHTML ("</body></html>");
+
+endprogram
+
+

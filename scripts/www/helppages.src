@@ -1,0 +1,40 @@
+use os;
+use uo;
+use http;
+
+
+include "include/www";
+include "include/clock";
+
+program ViewHelpPages ()
+	LogWWWPageAccess (QueryIP());
+	WriteHTML ("<html><head><title>POL Server Performance Center</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+
+	var playerswithpages := array{};
+	foreach player in EnumerateOnlineCharacters ();
+		if (GetObjProperty (player, "HELP") )
+			playerswithpages.append (player);
+		endif
+	endforeach
+	
+	if (!len (playerswithpages) )
+		WriteHTML ("There are no current helppages in the queue</body></html>");
+		return;
+	endif
+	
+	WriteHTML ("<div align=center>");
+	WriteHTML ("<table border=1 cellspacing=0 cellpadding=5 width=600>");
+	WriteHTML ("<tr><td width=200>Player:</td><td>Page:</td></tr>");
+	
+	foreach player in playerswithpages
+		var thepage := GetObjProperty (player, "HELP");
+		WriteHTML ("<tr><td>"+player.name + " ("+player.acctname+")</td>");
+		WriteHTML ("<td>");
+		foreach line in thepage
+			WriteHTML (line);
+		endforeach
+		WriteHTML ("</td></r>");
+	endforeach
+	WriteHTML ("</table></body></html>");
+endprogram

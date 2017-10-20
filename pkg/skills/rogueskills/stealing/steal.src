@@ -1,0 +1,145 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/eventid";
+include "include/attributes";
+include "../pkg/character/virtue/virtue";
+
+program textcmd_dmg ( who )
+	if (GetObjProperty (who, "#useskill"))
+		if (GetProcess (GetObjProperty (who, "#useskill")))
+			PrintTextAbovePrivate (who, "I am already performing another action.", who);
+			return;
+		endif
+	endif
+	SetObjProperty (who, "#useskill", GetPid());
+
+	SendSysMessage (who, "Steal from whom?");
+	var victim := Target (who, TGTOPT_CHECK_LOS);
+	if (!victim)
+		SendSysMessage(who,"Canceled");
+		return;
+	endif
+
+	if (Distance (who, victim) > 2 )
+		SendSysMessage (who, "A bit far away, don't you think?");
+		return;
+	endif
+
+	var diff := CanStealFrom (victim);
+	if (!diff or diff > GetAttribute (who, ATTRIBUTEID_STEALING)+20 )
+		SendSysMessage (who, "You'd be caught red handed!");
+		SendSysMessage (who, "Canceled");
+		return;
+	endif
+
+	if (!CheckSkill (who, SKILLID_STEALING, diff, 0))
+		Busted (who, victim);
+		return;
+	endif
+
+	if (GetObjProperty (victim, "#robbed"))
+		if ( ReadGameClock() < GetObjProperty (victim, "#robbed") )
+			SendSysMessage (who, "Doesn't look like they have any money.");
+			return;
+		endif
+	endif
+
+	SetObjProperty (victim, "#robbed", ReadGameClock()+1800);
+	AddVirtue (who, -2);
+
+	var lootbag := who.backpack;
+	if ( GetObjProperty (who, "grabbag") )
+		var bagserial := GetObjProperty (who, "grabbag");
+		foreach item in EnumerateItemsInContainer (who.backpack)
+			if (item.serial == bagserial)
+				lootbag := item;
+				break;
+			endif
+		endforeach
+	endif
+
+	if (RandomInt(100) < diff )
+		SendSysMessage(who,"Ooh!  Gems!");
+		var gem := gemtype (diff);
+		var amount := RandomInt (2) + 1;
+		foreach item in EnumerateItemsInContainer (who.backpack)
+			if (item.objtype == gem)
+				if (AddAmount (item, amount))
+					return;
+				endif
+			endif
+		endforeach
+		CreateItemInContainer (lootbag, gem, amount);	
+	else
+		SendSysMessage(who,"You successfully pilfer a few coins.");
+		CreateItemInContainer (lootbag, UOBJ_GOLD_COIN, RandomInt(diff)+(diff*2));
+	endif
+
+endprogram
+
+function Busted (who, victim)
+	PrinttextAbove (victim, "Stop!  Help!  A thief!");
+	who.SetCriminal (1);
+
+	var ev := struct;
+	ev.+type := EVID_DAMAGED;
+	ev.+source := who;
+	SendEvent (victim, ev);
+
+	Foreach guard in ListMobilesNearLocation(victim.x, victim.y, victim.z, 20, victim.realm)
+		if (guard.npctemplate["townguard"] or guard.npctemplate["guardspawner"])
+			SendEvent (guard ,ev);
+		endif
+	endforeach
+endfunction
+
+function CanStealFrom(victim)
+	if (victim.npctemplate["person"])
+		return 20;
+	elseif (victim.npctemplate["townperson"])
+		return 40;
+	elseif (victim.npctemplate["questie"])
+		return 60;
+	elseif (victim.npctemplate[":guards:warrior"] and !GetObjProperty (victim, "master"))
+		return 80;
+	elseif (victim.npctemplate["townguard"] or victim.script["merchant"])
+		return 100;
+	else
+		return 0;
+	endif
+endfunction
+
+function GemType(diff)
+
+	var d := RandomInt(2);
+	var tone, ttwo;
+
+	case (diff)
+	100:
+		tone := 0x0F30;//diamond
+		ttwo := 0x0F0F;//starsapphire
+	80:
+		tone := 0x0F10;//emerald
+		ttwo := 0x0F11;//sapphire
+	60:
+		tone := 0x0F13;//ruby
+		ttwo := 0x0F16;//amethyst
+	40:
+		tone := 0x0F15;//citrine
+		ttwo := 0x0F18;//tourmaline
+	default:
+		tone := 0x0F25;//amber
+		ttwo := 0x0F25;//amber
+	endcase
+
+	if (d)
+		return tone;
+	else
+		return ttwo;
+	endif
+
+endfunction

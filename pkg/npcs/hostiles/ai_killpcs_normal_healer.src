@@ -1,0 +1,246 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/mainloop_killpcs_normal";
+include "../pkg/npcs/main_ai/main/sleepmode_normal";
+include "../pkg/npcs/main_ai/combat/fightmode_normal_spellcaster";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/main_ai/combat/gethelp_default";
+
+const HALT_THRESHOLD := 8;	// how close before he attacks?
+drop_anchor();
+
+program KillPlayers ()
+	if (!me.backpack)
+		DoOnCreationSetup ();
+	endif
+	DoStartupSetup ();
+
+	if (GetObjProperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	post_combat ();
+	main_AI_loop ();
+endprogram
+
+function process_combat_event (byref ev)
+	case (ev.type)
+		EVID_DAMAGED:
+			if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/2))
+				sleep (1);
+				CastSpell (me, me,":misc_spells:gheal");
+				if (me.poisoned)
+					CastSpell (me, me, ":poison_spells:cure");
+					if (RandomInt (2))
+						CastSpell (me, ev.source, ":poison_spells:poison");
+					endif
+				endif
+			endif
+			if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/10))
+				EraseObjProperty (me, "#flees");
+				Flee (ev.source);
+			endif
+	endcase
+	//Cast magic reflect sometimes
+	if (!GetObjProperty (me, "mr"))
+		if (GetVital (me, "Mana") > 4000 and RandomInt (6) == 1)
+			CastSpell (me, me, ":misc_spells:reflect");
+			return;
+		endif
+	endif
+
+	SpellAttack (ev.source);
+endfunction
+
+function spellattack (byref opponent)
+	if (!GetObjProperty (me, "#lastspell"))
+		SetObjProperty (me, "#lastspell", ReadGameClock() + 2);
+	endif
+
+	if (GetObjProperty (me, "#lastspell") > ReadGameClock() )
+		return;
+	endif
+
+	//If we're really low on mana, don't even bother
+	if (GetVital (me, "Mana") < 1000)
+		SetObjProperty (me, "#lastspell", ReadGameClock() + 10);
+	endif
+
+	//if we're running low on mana and our opponent has plenty, try to drain some of it.
+	if (GetVital (me, "Mana") < 6000 and GetVital (me, "Mana") >= 4000 and GetVital (opponent, "Mana") > 4000 and RandomInt (2))
+		if (GetAttribute (me, "Intelligence") + 20 > GetAttribute (opponent, "Intelligence") and RandomInt (2))
+			TurnToward (opponent);
+			sleep (1);
+			CastSpell (me, opponent, ":misc_spells:manavamp");
+			SetObjProperty (me, "#lastspell", ReadGameClock() + 4);
+			return;
+		endif
+	endif
+
+	//look around for friends of mine in need of help
+	var total_friends := 0;
+	var friends_in_need := array{};
+	foreach mobile in ListMobilesNearLocation (opponent.x, opponent.y, opponent.z, HALT_THRESHOLD, opponent.realm)
+		if (IsHostile (mobile))
+			total_friends := total_friends + 1;
+			if (GetVital (mobile, "Life") < CINT (GetVitalMaximumValue (mobile, "Life")*0.75)or mobile.poisoned)
+				if (CheckLoSAt (me, mobile.x, mobile.y, mobile.z))
+					friends_in_need.append (mobile);
+				endif
+			endif
+		endif
+		if ((!mobile.npctemplate or mobile == opponent) and GetAttribute (mobile, ATTRIBUTEID_MAGERY) > 80 and GetVital (mobile, "Mana") > 4000)
+			if (GetAttribute (me, "Intelligence") > GetAttribute (opponent, "Intelligence") and RandomInt (2))
+				TurnToward (mobile);
+				sleep (1);
+				CastSpell (me, opponent, ":misc_spells:manadrain");
+				SetObjProperty (me, "#lastspell", ReadGameClock() + 3);
+				return;
+			endif
+		endif
+		if (GetObjProperty (mobile, "summoned") and GetObjProperty (mobile, "master") )
+			if (RandomInt (2) )
+				TurnToward (mobile);
+				sleep (1);
+				CastSpell (me, opponent, ":summoning_spells:dispel");
+				SetObjProperty (me, "#lastspell", ReadGameClock() + 3);
+				return;
+			endif
+		endif
+	endforeach
+
+	if (!total_friends or (RandomInt(8)==1) )
+		sleep (1);
+		SetObjProperty (me, "#lastspell", ReadGameClock() + 3);
+		cast_offensive_spell (me, opponent);
+		return;
+	endif
+
+	if (!len (friends_in_need) )
+		if (RandomInt (5) == 1)
+			sleep (1);
+			SetObjProperty (me, "#lastspell", ReadGameClock() + 4);
+			cast_offensive_spell (me, opponent);
+		endif
+		return;
+	endif
+
+	var chosen_friend_number := RandomInt (len (friends_in_need) ) + 1;
+	var chosen_friend := friends_in_need [chosen_friend_number];
+	if (!chosen_friend)
+		if (RandomInt (2))
+			sleep (1);
+			SetObjProperty (me, "#lastspell", ReadGameClock() + 4);
+			cast_offensive_spell (me, opponent);
+		endif
+		return;
+	endif
+
+	if (GetVital (chosen_friend, "Life") < CINT (GetVitalMaximumValue (chosen_friend, "Life")*0.75))
+		if (CheckLoSAt (me, chosen_friend.x, chosen_friend.y, chosen_friend.z))
+			TurnToward (chosen_friend);
+			sleep (1);
+			CastSpell (me, chosen_friend, ":misc_spells:gheal");
+			SetObjProperty (me, "#lastspell", ReadGameClock() + 2);
+			return;
+		endif
+	elseif (chosen_friend.poisoned)
+		if (CheckLoSAt (me, chosen_friend.x, chosen_friend.y, chosen_friend.z))
+			TurnToward (chosen_friend);
+			sleep (1);
+			CastSpell (me, chosen_friend, ":poison_spells:cure");
+			SetObjProperty (me, "#lastspell", ReadGameClock() + 3);
+			return;
+		endif
+	endif
+
+	if (RandomInt (2))
+		sleep (1);
+		SetObjProperty (me, "#lastspell", ReadGameClock() + 4);
+		cast_offensive_spell (me, opponent);
+		return;
+	endif
+endfunction
+
+
+function in_combat_event_loop (byref opponent)
+	spellattack (opponent);
+endfunction
+
+function prepare_for_fight (byref opponent)
+	ClearEventQueue ();
+	DisableMainEvents ();
+	EnableCombatEvents ();
+	
+	//Cast magic reflect
+	if (!GetObjProperty (me, "mr"))
+		if (GetVital (me, "Mana") > 10000 or GetVital (me, "Mana") < 8000)
+			CastSpell (me, me, ":misc_spells:reflect");
+		endif
+	endif
+
+	if (GetVital (me, "Mana") < 8000 or GetAttribute (me, ATTRIBUTEID_MAGERY) < 90)
+		return;
+	endif
+
+	//If we don't have any friends around to help, summon a creature
+	var total_friends := 0;
+	foreach mobile in ListMobilesNearLocation (opponent.x, opponent.y, opponent.z, HALT_THRESHOLD, opponent.realm)
+		if (IsHostile (mobile))
+			total_friends := total_friends + 1;
+		endif
+	endforeach
+	
+	if (total_friends > 2)
+		return;
+	endif	
+
+	case (RandomInt (4))
+		0:
+			CastSpell (me, opponent, ":summoning_spells:summon_water");
+		1:
+			CastSpell (me, opponent, ":summoning_spells:summon_air");
+		2:
+			CastSpell (me, opponent, ":summoning_spells:summon_earth");
+		default:
+			CastSpell (me, opponent, ":summoning_spells:summon_fire");
+	endcase
+
+	if (RandomInt (2) or GetVital (me, "Mana") < 8000)
+		sleep (3);
+		return;
+	endif
+	sleep (1);
+
+	case (RandomInt (4))
+		0:
+			CastSpell (me, opponent, ":summoning_spells:summon_water");
+		1:
+			CastSpell (me, opponent, ":summoning_spells:summon_air");
+		2:
+			CastSpell (me, opponent, ":summoning_spells:summon_earth");
+		default:
+			CastSpell (me, opponent, ":summoning_spells:summon_fire");
+	endcase
+	sleep (3);
+	return;
+endfunction
+
+function post_combat ()
+	if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/2))
+		CastSpell (me, me, ":misc_spells:gheal");
+	endif
+
+	ClearEventQueue ();
+	DisableCombatEvents();
+	EnableMainEvents();
+
+	SetWarMode (0);
+	sleep (1);
+	look_around();
+endfunction

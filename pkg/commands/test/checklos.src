@@ -1,0 +1,4 @@
+use uo;program textcmd_target( who)	var coords := TargetCoordinates( who );	if (CheckLoSAt(who, coords.x, coords.y, coords.z))		SendSysmessage( who, "CheckLoSAt ok!");	endif	if (CheckLoSAt(who, coords.mobile.x, coords.mobile.y, coords.mobile.z))		SendSysmessage( who, "CheckLoSAt mobile ok!");	endif	if (CheckLoSAt(who, coords.item.x, coords.item.y, coords.item.z))		SendSysmessage( who, "CheckLoSAt item ok!");	endif	if (CheckLineOfSight(who, coords.mobile))		SendSysmessage( who, "CheckLineOfSight mobile ok!");	endif	if (CheckLineOfSight(who, coords.item))		SendSysmessage( who, "CheckLineOfSight item ok!");	endif	if (CheckLoSBetween(who.x, who.y, who.z, coords.x, coords.y, coords.z, who.realm))		SendSysmessage( who, "CheckLoSBetween ok!");	endif	
+endprogram
+
+

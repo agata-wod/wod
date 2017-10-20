@@ -1,0 +1,4 @@
+use os;
+
+start_script( "regspawner" );
+Syslog("Region Spawner Started.");

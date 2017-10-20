@@ -1,0 +1,102 @@
+use uo;
+use os;
+use util;
+
+program MakeEasterBasket (character)
+	var basket := CreateItemInContainer (character.backpack, 0x990, 1);
+	if (!basket)
+		SendSysMessage (character, "Error creating basket!");
+		return;
+	endif
+	
+	basket.graphic := 5344;
+	basket.name := "an Easter basket";
+	case (RandomInt (4))
+		0:
+			basket.color := 1419;
+		1:
+			basket.color := 1328;
+		2:
+			basket.color := 1650;
+		default:
+			basket.color := 621;
+	endcase
+	
+	var item := CreateItemInContainer (basket, 0x285a, 1);
+	MoveItemToContainer (item, basket, 67, 85);
+
+	//all the items have to be created first, otherwise crappy autostack stuff happens
+	var items := array{};
+	for i := 1 to 14
+		items[i] := CreateItemInContainer (basket, 0xc951, 1);
+	endfor
+
+	//now we change graphics and rename items
+	items[1].graphic := 3378;
+	items[1].color := 273;
+	items[1].name := "bubblegum Easter grass";
+	MoveItemToContainer (items[1], basket, 50, 85);
+	
+	items[2].graphic := 3378;
+	items[2].color := 273;
+	items[2].name := "bubblegum Easter grass";
+	MoveItemToContainer (items[2], basket, 75, 85);
+
+	items[3].graphic := 3873;
+	items[3].color := 0;
+	items[3].name := "a jellybean";
+	MoveItemToContainer (items[3], basket, 55, 90);
+	
+	items[4].graphic := 3881;
+	items[4].color := 0;
+	items[4].name := "a jellybean";
+	MoveItemToContainer (items[4], basket, 50, 85);
+
+	items[5].graphic := 3882;
+	items[5].color := 0;
+	items[5].name := "a jellybean";
+	MoveItemToContainer (items[5], basket, 50, 90);
+
+	items[6].graphic := 3883;
+	items[6].color := 0;
+	items[6].name := "a jellybean";
+	MoveItemToContainer (items[6], basket, 80, 88);
+
+	items[7].graphic := 3884;
+	items[7].color := 0;
+	items[7].name := "a jellybean";
+	MoveItemToContainer (items[7], basket, 70, 90);
+
+	items[8].graphic := 3886;
+	items[8].color := 0;
+	items[8].name := "a jellybean";
+	MoveItemToContainer (items[8], basket, 75, 84);
+	
+	items[9].graphic := 3887;
+	items[9].color := 0;
+	items[9].name := "a jellybean";
+	MoveItemToContainer (items[9], basket, 65, 85);
+	
+	items[10].graphic := 3874;
+	items[10].color := 0;
+	items[10].name := "a jellybean";
+	MoveItemToContainer (items[10], basket, 65, 85);
+
+	items[11].graphic := 8474;
+	items[11].color := 53;
+	items[11].name := "a marshmallow peep";
+	MoveItemToContainer (items[11], basket, 80, 88);
+	
+	items[12].graphic := 8474;
+	items[12].color := 53;
+	items[12].name := "a marshmallow peep";
+	MoveItemToContainer (items[12], basket, 50, 90);
+
+	MoveItemToContainer (items[13], basket, 63, 85);
+	MoveItemToContainer (items[14], basket, 70, 95);
+
+endprogram
+
+	
+	
+	

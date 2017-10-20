@@ -1,0 +1,56 @@
+use uo;
+use os;
+use polsys;
+
+program HookStart()
+	return 1;
+endprogram
+
+exported function HandleGuildChat( character, byref packet )
+	var speech := "";
+	var speechstart := 12;
+	var type := packet.GetInt8(3);
+	if (packet.GetInt8(3) >= 0xC0)                        //Filter out speech.mul
+		type := type - 0xC0;                           // You can change this to type -= 0xC0 if not on POL096.
+		var triggers := packet.GetInt16(12)/16;
+		var bytes := CInt(triggers*1.5 + 2);
+		speechstart := CInt(speechstart + bytes);
+		var speechlen := packet.GetInt16(1) - 1 - speechstart;
+		speech := CStr(packet.GetString(speechstart, speechlen));
+	else
+		var speechlen := (packet.GetInt16(1) - 13)/2;
+		speech := CChrZ(packet.GetUnicodeString(speechstart, speechlen));
+	endif
+	if (find(speech, ".", 1) == 1)
+		return 0;
+	endif
+	if (type == 0x0D || type == 0x0E)
+		var newpacket := CreatePacket(0xAE, MSGLEN_VARIABLE);
+		newpacket.SetInt32(3, character.serial);
+		newpacket.SetInt16(7, character.graphic);
+		newpacket.SetInt8(9, type);
+		newpacket.SetInt16(10, packet.GetInt16(4));
+		newpacket.SetInt16Flipped(12, packet.GetInt16(6));
+		newpacket.SetInt32(14, packet.GetInt32(8));
+		newpacket.SetString(18, character.name, 0);
+		newpacket.SetUnicodeString(48, CAscZ(speech), 1);
+		newpacket.SetInt16(1, newpacket.GetSize());
+//		if (type == 0x0D)
+//			var guild := character.guild;
+//			foreach member in (guild.members)
+//				newpacket.SendPacket(member);
+//			endforeach
+//		else
+			var onlinechars := EnumerateOnlineCharacters();
+			foreach member in (onlinechars)
+				newpacket.SendPacket(member);
+			endforeach
+////			foreach ally in (guild.allyguilds)
+////				foreach member in (ally.members)
+////					newpacket.SendPacket(member);
+////				endforeach
+////			endforeach
+//		endif
+		return 1;
+	endif
+endfunction

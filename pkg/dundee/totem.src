@@ -1,0 +1,94 @@
+use os;
+use uo;
+use cfgfile;
+use vitals;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/spawn";
+include "include/attributes";
+
+program totem (who, totem)
+	if (!ReserveItem (totem))
+		SendSysMessage (who, "You can't use this right now.");
+		return;
+	endif
+	
+	if (!totem.movable)
+		SendSysMessage (who, "You can't use this while its locked down!");
+		return;
+	endif
+
+	var npctemplate := GetObjProperty (totem, "critter");
+	if (!npctemplate)
+		SendSysMessage (who, "There's a problem with this totem.  Contact a GM.");
+		return;
+	endif
+
+	if (GetObjProperty (totem, "broken"))
+		SendSysMessage (who, "It seems to be broken.");
+		return;
+	endif
+
+	set_critical (1);
+		var it := SpawnNPCAtLocation (npctemplate, who.x - 1, who.y + 1, who.z, 0, who.realm);
+		if (!it)
+			it := SpawnNPCAtLocation (npctemplate, who.x + 1, who.y + 1, who.z, 0, who.realm);
+			if (!it)
+				SendSysMessage (who, "Error creating creature - try a different location.");
+				return;
+			endif
+		endif
+
+		SetObjProperty (it, "totem", totem.objtype );
+		SetObjProperty (it, "totemcolor", totem.color );
+		SetObjProperty (it, "master", who.serial );
+		
+		if (GetObjProperty (totem, "totemdeaths"))
+			SetObjProperty (it, "totemdeaths", GetObjProperty (totem, "totemdeaths"));
+		endif
+
+		if (GetObjProperty (totem, "ownerserial"))
+			SetObjProperty (it, "ownerserial", GetObjProperty (totem, "ownerserial"));
+			SetObjProperty (it, "ownername", GetObjProperty (totem, "ownername"));
+			SetObjProperty (it, "oldname", GetObjProperty (totem, "oldname"));
+		endif
+
+		it.setmaster (who);
+		it.script := "::tamed";
+		it.name := totem.name;
+		it.color := GetObjProperty (totem, "critcolor");
+  		it.graphic := GetObjProperty (totem, "critgraphic");
+		RestartScript (it);
+		var skills := GetObjProperty (totem, "skills");
+		if (skills)
+			for i := 0 to 57
+				var skill := skills[i];
+				if (!skill)
+					skill := 0;
+				endif
+				SetAttributeBaseValue (it, GetAttributeIDBySkillID(i), skill*10);
+			endfor
+			SetObjProperty (it, "skills", skills);
+		endif
+	
+		var stats := GetObjProperty (totem, "stats");
+		if (stats)
+			SetAttributeBaseValue (it, "Strength", stats[1] * 10);
+			SetAttributeBaseValue (it, "Intelligence", stats[2] * 10);
+			SetAttributeBaseValue (it, "Dexterity", stats[3] * 10);
+			SetObjProperty (it, "stats", stats);
+			RecalcVitals (it);
+		endif
+
+		if ( GetObjProperty (totem, "totemhp"))
+			SetVital (it, "Life", CINT (GetObjProperty (totem, "totemhp") * 100));
+		endif
+
+		PlaySoundEffect (who, SFX_SPELL_DISPEL);
+		PlayStationaryEffect (it.x, it.y, it.z, FX_SMOKE, 0xA, 0xA, 0, it.realm );
+		DestroyItem (totem);
+
+	set_critical (0);
+endprogram

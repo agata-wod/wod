@@ -1,0 +1,20 @@
+use uo;
+use os;
+use guilds;
+
+program addtoguild( me, text )
+	var newmember := Target( me, TGTOPT_NOCHECK_LOS );
+	if (!newmember.acctname)
+		SendSysMessage (me, "That is not a player.");
+		return;
+	endif
+	var guild := FindGuild(cint(text));
+	if (guild)
+		guild.addmember(newmember);
+		var guildname := guild.getprop("name");
+		SendSysMessage (me, newmember.name + " added to guild " + guildname);
+	else
+		SendSysMessage (me, "Guild ID not valid");
+	endif
+endprogram
+

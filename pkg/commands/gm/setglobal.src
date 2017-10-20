@@ -1,0 +1,11 @@
+use uo;
+use os;
+
+
+program textcmd_setglobal( who, text )
+    var tparams := splitwords( text );
+    var res := SetGlobalProperty (tparams[1], tparams[2]);
+    if (!res)
+        SendSysMessage( who, "Error setting property: " + res.errortext );
+    endif
+endprogram

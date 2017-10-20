@@ -1,0 +1,43 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 4;
+
+program cast_curse( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	cast_on := CheckMagicReflection (caster, cast_on);
+	if (!cast_on)
+		return 1;
+	endif
+
+	var mod_amount := CalcModAmount() * 2;
+	if (cast_on.npctemplate)
+		//more effective against NPCs, but only for good mages
+		if (caster_magery > 90)
+			mod_amount := mod_amount * 2;
+		elseif (caster_magery > 70)
+			mod_amount := CINT (mod_amount * 1.5);
+		endif
+	endif
+	mod_amount := Resisted (caster, cast_on, mod_amount);
+
+	var duration := CalcCurseModDuration ();
+
+	PlaySoundEffect (cast_on, SFX_SPELL_CURSE);
+	PlayObjectCenteredEffect (cast_on, FX_CURSE_EFFECT, 7, 7);
+	DoMagicStatMod (cast_on, STATMOD_ALL, 0-mod_amount, duration, "Curse Spell");
+	return 1;
+endprogram

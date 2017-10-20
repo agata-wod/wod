@@ -1,0 +1,349 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/eventid";
+include "include/utility";
+include "include/itemtypes";
+include "../pkg/items/housing/house";
+
+var Layout := array {
+    "nodispose",
+    "page 0",
+    "resizepic 30 30 83 280 200",
+    "button 50 70 2104 2103 1 0 1101",
+    "button 50 90 2104 2103 1 0 1201",
+    "button 50 110 2104 2103 1 0 1301",
+    "button 50 130 2104 2103 1 0 1401",
+    "button 50 150 2104 2103 1 0 1501",
+    "button 50 170 2104 2103 1 0 1601",
+    "button 130 70 2104 2103 1 0 1701",
+    "button 130 90 2104 2103 1 0 1801",
+    "button 130 110 2104 2103 1 0 1001",
+    "button 130 130 2104 2103 1 0 901",
+    "button 130 150 2104 2103 1 0 801",
+    "button 130 170 2104 2103 1 0 701",
+    "button 210 70 2104 2103 1 0 601",
+    "button 210 90 2104 2103 1 0 501",
+    "button 210 110 2104 2103 1 0 401",
+    "button 210 130 2104 2103 1 0 301",
+    "button 210 150 2104 2103 1 0 201",
+    "button 210 170 2104 2103 1 0 101",
+    "button 130 194 2104 2103 1 0 1",
+    "text 50 42 1 0",
+    "text 70 65 1121 1",
+    "text 70 85 1221 2",
+    "text 70 105 1321 3",
+    "text 70 125 1421 4",
+    "text 70 145 1521 5",
+    "text 70 165 1621 6",
+    "text 150 65 1721 7",
+    "text 150 85 1821 8",
+    "text 150 105 1021 9",
+    "text 150 125 921 10",
+    "text 150 145 821 11",
+    "text 150 165 721 12",
+    "text 230 65 621 13",
+    "text 230 85 521 14",
+    "text 230 105 421 15",
+    "text 230 125 321 16",
+    "text 230 145 221 17",
+    "text 230 165 121 18",
+    "button 50 195 2119 2120 1 0 0",
+    "text 150 190 1 19"
+};
+
+var Data := array {
+    "Select a color range:",
+    "One",
+    "Two",
+    "Three",
+    "Four",
+    "Five",
+    "Six",
+    "Seven",
+    "Eight",
+    "Nine",
+    "Ten",
+    "Eleven",
+    "Twelve",
+    "Thirteen",
+    "Fourteen",
+    "Fifteen",
+    "Sixteen",
+    "Seventeen",
+    "Eighteen",
+    "Use current color"
+};
+
+var layout2 := array {
+
+"page 0",
+"gumppic 0 50 2620",
+"gumppic 20 50 2621",
+"gumppic 290 50 2622",
+"gumppic 0 68 2623",
+"gumppic 22 68 2624",
+"gumppic 288 68 2625",
+"gumppic 0 272 2623",
+"gumppic 22 272 2624",
+"gumppic 288 272 2625",
+"gumppic 0 476 2626",
+"gumppic 20 476 2627",
+"gumppic 290 476 2628",
+"text 20 62 1102 0"
+};
+
+var Data2 := array {
+    "Select a color:",
+    "Color1",
+    "Color2",
+    "Color3",
+    "Color4",
+    "Color5",
+    "Color6",
+    "Color7",
+    "Color8",
+    "Color9",
+    "Color10",
+    "Color11",
+    "Color12",
+    "Color13",
+    "Color14",
+    "Color15",
+    "Color16",
+    "Color17",
+    "Color18",
+    "Color19",
+    "Color20",
+    "Color21",
+    "Color22",
+    "Color23",
+    "Color24",
+    "Color25",
+    "Color26",
+    "Color27",
+    "Color28",
+    "Color29",
+    "Color30",
+    "Color31",
+    "Color32",
+    "Color33",
+    "Color34",
+    "Color35",
+    "Color36",
+    "Color37",
+    "Color38",
+    "Color39",
+    "Color40",
+    "Color41",
+    "Color42",
+    "Color43",
+    "Color44",
+    "Color45",
+    "Color46",
+    "Color47",
+    "Color48",
+    "Color49",
+    "Color50",
+    "Color51",
+    "Color52"
+};
+
+program UseTub(who,tub)
+
+	var i;
+	var textline;
+	var maxcolor := 52;
+	var newcolor := 0;
+	var res := SendDialogGump( who, layout, data );
+	var basecolor := res[0];
+
+	if (!basecolor)
+		SendSysMessage(who,"Canceled");	
+		return;
+	elseif (basecolor == 1101)
+		maxcolor := 47;
+	endif
+
+    if (basecolor == 1)
+	newcolor := tub.color;
+    else
+
+	for (i :=1 ; i <= 20; i := i +1 )
+		textline := "button 20 " + cstr(65+(20*i)) + " 2104 2103 1 0 " + cstr(basecolor+i);
+		Layout2[ cint(len(Layout2)+1) ] := textline;
+	endfor
+	for (i :=21 ; i <= 40; i := i +1 )
+		textline := "button 100 " + cstr(65+(20*(i-20))) + " 2104 2103 1 0 " + cstr(basecolor+i);
+		Layout2[ cint(len(Layout2)+1) ] := textline;
+	endfor
+	for (i :=41 ; i <= maxcolor; i := i +1 )
+		textline := "button 180 " + cstr(65+(20*(i-40))) + " 2104 2103 1 0 " + cstr(basecolor+i);
+		Layout2[ cint(len(Layout2)+1) ] := textline;
+	endfor
+
+	basecolor := basecolor -1;
+	for (i :=1 ; i <= 20; i := i +1 )
+		textline := "text 40 " + cstr(60+(20*i)) + " " + cstr(basecolor + i) + " " + cstr(i);
+		Layout2[ cint(len(Layout2)+1) ] := textline;
+	endfor
+	for (i :=21 ; i <= 40; i := i +1 )
+		textline := "text 120 " + cstr(60+(20*(i-20))) + " " + cstr(basecolor + i) + " " + cstr(i);
+		Layout2[ cint(len(Layout2)+1) ] := textline;
+	endfor
+	for (i :=41 ; i <= maxcolor; i := i +1 )
+		textline := "text 200 " + cstr(60+(20*(i-40))) + " " + cstr(basecolor + i) + " " + cstr(i);
+		Layout2[ cint(len(Layout2)+1) ] := textline;
+	endfor
+
+	Layout2[ len(Layout2)+1 ] := "button 220 440 2119 2120 1 0 0";
+
+	res := SendDialogGump( who, layout2, data2 );
+	newcolor := res[0];
+	if (!newcolor)
+		SendSysMessage(who,"Canceled");	
+		return;
+	else
+		tub.color := newcolor;
+	endif
+
+    endif
+
+	if (newcolor == 1)
+		newcolor := 0;
+	endif
+
+	SendSysMessage(who,"Select the furniture you wish to dye");
+	var item := Target (who, TGTOPT_NOCHECK_LOS);
+	if (!item)
+		SendSysMessage(who,"Canceled");	
+		return;
+	endif
+
+	case (item.objtype)
+		0x0A70:	//
+		0x0A71:	//
+		0x0A72:	//
+		0x0A73:	//
+		0x0A74:	//
+		0x0A75:	//	Lots of beds
+		0x0A76:	//
+		0x0A77:	//
+		0x0A60:	//
+		0x0A61:	//
+		0x0A5E:	//
+		0x0A5F:	//
+		
+		0x11e2:	//
+		0x11e3:	//	More beds
+		0x11e4:	//
+		0x11e5:	//
+		
+		0x0B91:	//
+		0x0B92:	//	large bench
+		0x0B93:	//
+		0x0B94:	//
+		
+			DyeBed (who, item, newcolor);
+			return;
+	endcase
+
+	if (!Isfurniture (item.objtype))
+		SendSysMessage (who, "You can't dye that.");	
+		return;
+	endif
+	if (!item.movable)
+		if (item.container)
+			SendSysMessage (who, "You can't dye that.");	
+			return;
+		else
+			var sign := FindHouseSign (who);
+			if (!sign)
+				SendSysMessage (who, "You must be in your house to do that!");
+				return;
+			endif
+		endif
+	endif
+
+	PlaySoundEffect (who, 0x4F);
+	item.color := newcolor;
+
+endprogram
+
+function IsFurniture (obj_type)
+
+	case (obj_type)
+		0x09b5:
+		0x17057:
+		0x11c6:
+		0x11c7:
+		0x0b45:
+		0x0b46:
+		0x0b47:
+		0x0b48:
+		0x0a2a:
+		0x0b2c:
+		0x0b2f:
+		0x0b5a:
+		0x0b5a:
+		0x0b56:
+		0x0b53:
+		0x0b32:
+		0x0a4f:
+		0x0a53:
+		0x0a51:
+		0x0a4d:
+		0x0A2C:
+		0x0A34:
+		0x0a30:
+		0x0a38:
+		0x0a9b:
+		0x0a9c:
+		0x0a9d:
+		0x0a9e:
+		0x09aa:
+		0x0e7d:
+		0x0e42:
+		0x0e43:
+		0x09a9:
+		0x0e7e:
+		0x0e3f:
+		0x0e3e:
+		0x0e3c:
+		0x0e3d:
+		0X0e77:
+		0X1940:
+		0X1ad7:
+		0X1f14:
+		0x0b34:
+		0x0b40:
+		0x0b7d:
+		0x0b90:
+		0x0b7c:
+		0x0b8f:
+		0x0b4b:
+			return 1;
+	endcase
+
+	return 0;
+	
+endfunction
+
+
+
+
+function DyeBed (character, bed, newcolor)
+	var otheritem_serials := GetObjProperty (bed, "otheritems");
+	if (!otheritem_serials)
+		SendSysMessage (character, "You cannot dye that.  Try redeeding it.");
+		return;
+	endif
+
+	foreach serial in otheritem_serials
+		var item := SystemFindObjectBySerial (serial);
+		if (item)
+			item.color := newcolor;
+		endif
+	endforeach
+endfunction

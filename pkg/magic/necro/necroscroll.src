@@ -1,0 +1,85 @@
+use uo;
+use cfgfile;
+use math;
+
+include "include/magic";
+include "include/client";
+include "../pkg/character/virtue/virtue";
+include "../pkg/magic/necro/necro";
+
+
+
+program use_scroll (character, scroll)
+	if (!ReserveItem(scroll))
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+
+	var spellid := GetSpellId (scroll);
+	if (!spellid)
+		SendSysMessage (character, "What sort of scroll is that, anyway?");
+		return;
+	endif
+
+	var spell_cfg_file:= ReadConfigFile("::spells");
+	var current_spell := FindConfigelem (spell_cfg_file, spellid);
+	if (!current_spell)
+		SendSysMessage (character, "Error finding spell definition");
+		return;
+	endif
+
+	SpeakPowerWords (character, spellid);
+
+	var circle := FindSpellCircle (spellid);
+	if (!CanCastSpell (character, circle) or !FreeHands (character))
+		return;
+	endif
+
+	var i;
+	var spelldelay := GetSpellDelay (spellid);
+	for (i := 1; i <= spelldelay; i := i + 1)
+		PerformAction (character, ANIM_CAST_DIR);
+		spelldelay := spelldelay - 1;
+		sleep(1);
+	endfor
+	sleepms(500);
+
+	//do a skill check
+	var difficulty := GetSpellDifficulty(spellid) - 20;
+	if (!CheckSkill(character, SKILLID_MAGERY, difficulty, 0))
+		PlayObjectCenteredEffect (character, FX_SPELL_FAIL, 7, 7);
+		PlaySoundEffect (character, SFX_5B);
+		return 0;
+	endif
+	
+	var script := GetSpellScript (spellid);
+	start_script (script, character);
+
+	LoseSkill (character);
+	AddVirtue (character, -1);
+	SubtractAmount (scroll, 1);
+	return 1;
+endprogram
+
+
+
+
+///////////////////
+//  Determines the spellid for the given scroll
+///////////////////
+
+function GetSpellId (magicitem)
+    var itemdesc_cfg := ReadConfigFile ("::itemdesc");
+    return CINT (itemdesc_cfg [magicitem.objtype].spellid);
+endfunction
+
+
+
+///////////////////
+//  Determines the spellid for the given scroll
+///////////////////
+
+function GetSpellScript (spellid)
+    var spells_cfg := ReadConfigFile ("::spells");
+    return spells_cfg [spellid].Script;
+endfunction

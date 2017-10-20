@@ -1,0 +1,206 @@
+use uo;
+use os;
+use cfgfile;
+use util;
+
+var regspawn;
+
+
+
+include "include/wodinc";
+include "../pkg/npcs/npc_util";
+include "../pkg/items/housing/house";
+
+
+program SpawnThatStuff( me, region )
+
+	sendsysmessage(me, "Restoring Region " + region);
+
+	UnloadConfigFile( ":regionalspawner:regionspawn" );
+
+	set_critical(0);
+
+	regspawn := ReadConfigFile( ":regionalspawner:regionspawn" );
+
+//	var numregions := GetConfigMaxIntKey( regspawn );
+	var i := cint(region);
+
+        	var spawnregion := regspawn[ i ];
+
+		var spawngroups := GetConfigStringArray( spawnregion, "group" );
+
+		foreach spawngroup in spawngroups
+			var groupstring := splitwords(spawngroup);
+			SendSysMessage(me,"Group: " + groupstring);
+			var groupname := groupstring[1];
+			var groupdensity := cint(groupstring[2]);
+			SpawnThisGroup(me, i, spawnregion, groupname, groupdensity);
+			sleep(5);
+		endforeach
+
+	SendSysMessage(me,"Done spawning region "+ region);
+
+endprogram
+
+function SpawnThisGroup(me, regionnum, spawnregion, groupname, groupdensity)
+
+	var coords := splitwords(spawnregion.rect);
+	var x1 := cint(coords[1]);
+	var y1 := cint(coords[2]);
+	var x2 := cint(coords[3]);
+	var y2 := cint(coords[4]);
+	var rlm := spawnregion.realm;
+	if (!rlm)
+		rlm := _DEFAULT_REALM;
+	endif
+
+	var spawngroup := FindConfigElem( regspawn, groupname );
+	if (!spawngroup)
+		SendSysMessage(me,"Could not find: "+groupname);
+	endif
+
+	NukeThisGroup(me,regionnum,spawnregion,groupname);
+
+	var critterlist := GetConfigStringArray( spawngroup, "npc" );
+
+	var sizeofregion := (x2 - x1) * (y2 - y1);
+
+	var numtospawn := cint((sizeofregion * groupdensity)/10000);
+
+	if (!numtospawn)
+		numtospawn := 1;
+	endif
+
+	var SpawnName := "r"+regionnum+"g"+groupname;
+	if (groupdensity == 0)
+		SendSysMessage(me, "Erasing: "+SpawnName);
+		EraseGlobalProperty(SpawnName);
+		return;
+	endif
+
+	if (!GetGlobalProperty(SpawnName))
+		SetGlobalProperty(SpawnName,0);
+	endif
+
+	var currentspawn := Cint(GetGlobalProperty(SpawnName));
+
+	if (currentspawn < 0)
+		currentspawn := 0;
+		SetGlobalProperty(SpawnName,0);
+	endif
+
+	numtospawn := numtospawn - currentspawn;
+
+	SendSysMessage(me,"Number to Spawn: "+numtospawn);
+
+	if (numtospawn < 1)
+		return;
+	endif
+
+	var critnum;
+	var thecritter;
+	var x;
+	var y;
+	var z;	
+	var i;
+	var tries;
+	var sh;
+	var info;
+
+	for( i := 1; i <= numtospawn; i := i + 1 )
+		critnum := RandomInt(len(critterlist))+1;
+
+		thecritter := 0;
+		tries := 0;
+		repeat
+
+		    x := RandomInt (x2-x1)+x1;
+		    y := RandomInt (y2-y1)+y1;
+		    z := GetMapInfo(x,y, rlm).z;
+		    tries := tries +1;
+
+		    if ((z) or (z == 0))
+			sh := GetStandingHeight( x, y, z, rlm );
+			if (sh.multi or sh.multi.serial)
+				thecritter := 0;
+			else
+				info := hex(GetMapInfo( x , y, rlm ).landtile);
+				if ((info < 0x406) or (info > 0x455))
+					thecritter := createnpcfromtemplate(critterlist[critnum],x,y,z, 0, rlm);
+					if (thecritter)
+						set_critical(1);
+						SetObjProperty(thecritter,"regspawn",SpawnName);
+						currentspawn := Cint(GetGlobalProperty(SpawnName))+1;
+						SetGlobalProperty(SpawnName,currentspawn);
+						set_critical(0);
+					endif
+				endif
+			endif
+		    else
+				thecritter:= 0;
+		    endif
+
+		until (thecritter) or (tries > 25);
+
+		if (tries > 25)
+			SendSysMessage(me,"Error - could not spawn "+ critterlist[critnum] + " in " + SpawnName);
+		endif
+
+	endfor
+
+endfunction
+
+
+function NukeThisGroup(me, regionnum, spawnregion, groupname)
+
+	var coords := splitwords(spawnregion.rect);
+	var x1 := cint(coords[1]);
+	var y1 := cint(coords[2]);
+	var x2 := cint(coords[3]);
+	var y2 := cint(coords[4]);
+	var rlm:= spawnregion.realm;
+	if (!rlm)
+		rlm := _DEFAULT_REALM;
+	endif
+	var kills := 0;
+
+	var SpawnName := "r"+regionnum+"g"+groupname;
+
+	var x, y;//, z;
+	for( x := x2 ; x > x1 ; x := x  - 16)
+    	  for( y := y1; y < y2; y := y + 16 )
+//	    for( z := -128; z <= 127; z := z + 16 )
+		foreach npc in ListMobilesNearLocationEx( x, y, LIST_IGNORE_Z, 32,0x02+0x01, rlm)
+			if ( GetObjProperty( npc, "regspawn" ) == SpawnName )
+				set_critical(1);
+				EraseObjProperty( npc, "regspawn" );
+				KillIt (npc);
+				kills := kills +1;
+				set_critical(0);
+			endif
+		endforeach
+//	    endfor
+	  endfor
+		sleep(1);
+	endfor
+
+	SendSysMessage(me,"kills: "+kills);
+	SetGlobalProperty(SpawnName,0);
+
+endfunction
+
+
+
+///////////////////
+//  kill the given NPC
+///////////////////
+
+function KillIt (npc)
+	var hostiles := ListHostiles (npc, 9 );
+	if (hostiles.size() or npc.warmode)
+		EraseObjProperty ( npc, "regspawn" );
+		return;
+	endif
+	
+	KillNPC (npc);
+endfunction

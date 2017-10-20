@@ -1,0 +1,49 @@
+use uo;
+use os;
+use polsys;  
+
+include "include/eventid";
+include "include/objtype";
+include ":contextMenus:contextMenus";
+
+
+program Install()
+	Print("INSTALLING packethook: Context menus");
+	return 1;
+endprogram
+           
+exported function HandlePopupRequest(who, byref packet)
+	var result := run_script_to_completion ( ":contextMenus:request", array {who, packet});
+	return result;
+endfunction
+
+exported function HandlePopupResponse(who, byref packet)
+	var serial := packet.GetInt32(5);
+	var object := SystemFindobjectBySerial(serial, SYSFIND_SEARCH_OFFLINE_MOBILES);
+	var result := packet.GetInt16(9);
+	
+	var event := struct;
+	event.+type := EVID_CONTEXT_MENU;
+	event.+result := result;
+	event.+source := who;
+	
+	// NPCs
+	if (object.isa (POLCLASS_NPC))
+		SendEvent(object, event);
+	else
+		var script := GetProcess(GetObjProperty(object, "PID"));
+		if (script)
+			script.SendEvent(event);
+		else
+			object.ReceiveEvent(event);
+		endif
+	endif
+/*
+	var resultPrefix := packet.GetInt8(9);
+	var resultSuffix := packet.GetInt8(10);
+	case(resultPrefix)
+		0x00: ReceiveMenuSelf(who, object, resultSuffix);
+	endcase
+*/
+	return 1;
+endfunction

@@ -1,0 +1,53 @@
+use uo;
+use os;
+use cfgfile;
+use util;
+
+include "include/wodinc";
+include "../pkg/npcs/npc_util";
+include "../pkg/items/housing/house";
+
+
+program textcmd_tele (character)
+	while (character)
+		SendSysMessage (character, CheckAreaIfSpawnable (character, character.x, character.y, GetMapInfo(character.x,character.y, character.realm).z, character.realm));
+	
+	
+		var where := TargetCoordinates (character);
+		if (!where)
+			return;
+		endif
+		
+		MoveObjectToLocation (character, where.x, where.y, where.z, where.realm, MOVEOBJECT_FORCELOCATION);
+  	endwhile
+endprogram
+
+
+
+///////////////////
+//  Checks around the area to see if the position is inside of a house or if there's a player around
+///////////////////
+
+function CheckAreaIfSpawnable (character, x, y, startz, rlm)
+	var sh := GetStandingHeight (x, y, startz, rlm);
+	if (sh.z == error)
+		return "No standing height";
+	endif
+
+	if (sh.multi or sh.multi.serial)
+		return "There's a multi here";
+	endif	
+	var mapinfoz := GetMapInfo(x,y, rlm).z;
+	var nextsh := GetStandingHeight (x, y, sh.z+1, rlm);
+	SendSysMessage (character, "Mapinfoz is " + mapinfoz + ", sh z is " + sh.z + ", nextsh.z is " + nextsh.z);
+
+	if (FindHouseSignAtLocation (x, y, rlm))
+		return "There's a house here";
+	endif
+	
+	return "Should be OK";
+endfunction
+
+
+
+

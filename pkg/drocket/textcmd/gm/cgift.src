@@ -1,0 +1,87 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/magicitems";
+include "include/accounts";
+include "include/string";
+include "include/magic";
+
+program choose_winner (character)
+	SendSysMessage (character, "DEBUG - testing 1");
+	var acctinfodf := OpenDataFile (":character:character_data");
+	if (!acctinfodf)
+		acctinfodf := CreateDataFile (":character:character_data");
+		if (!acctinfodf)
+			SendSysMessage (character, "Error opening character data file!");
+			return;
+		endif
+	endif
+
+	SendSysMessage (character, "DEBUG - testing 2");
+
+	var total_points := 0;
+	foreach acctname in ListAccounts ()
+		var tempentry := acctinfodf.FindElement (acctname);
+		if (!tempentry)
+			acctinfodf.CreateElement (acctname);
+			tempentry := acctinfodf.FindElement (acctname);
+		endif
+		var account_points := CINT (tempentry.GetProp ("santa_elf_points"));
+
+		if (account_points)
+			total_points := total_points + account_points;
+		endif
+	endforeach
+	SendSysMessage (character, "Total points: " + total_points);
+	
+	var thewinner := RandomInt (total_points) + 1;
+	SendSysMessage (character, "The number is: " + thewinner);
+	
+	
+	var current_counter := 0;
+	foreach acctname in ListAccounts ()
+		var tempentry := acctinfodf.FindElement (acctname);
+		if (!tempentry)
+			acctinfodf.CreateElement (acctname);
+			tempentry := acctinfodf.FindElement (acctname);
+		endif
+		var account_points := CINT (tempentry.GetProp ("santa_elf_points"));
+
+		if (account_points)
+			current_counter := current_counter + account_points;
+			if (current_counter > thewinner)
+				SendSysMessage (character, "The winning account is " + acctname);
+				return;
+			endif
+		endif
+	endforeach
+	
+	
+endprogram
+
+function MakeChristmasGift (character, playeracctname)
+/*
+	var bankbox := FindBankBox (playeracctname);
+	if (!bankbox)
+		SendSysMessage (character, "Error finding bankbox of " + playeracctname);
+		return;
+	endif
+
+	var stocking := CreateItemInContainer (bankbox, 0x278b, 1);
+	if (!stocking)
+		SendSysMessage (character, "Error creating stocking for " + playeracctname);
+		return;
+	endif
+	
+	var gift;
+	gift := CreateItemInContainer (stocking, 0x29cd, 5);
+	MoveItemToContainer (gift, stocking, 20, 131);
+	gift := CreateItemInContainer (stocking, 0x29ce, 5);
+	MoveItemToContainer (gift, stocking, 83, 139);
+	gift := CreateItemInContainer (stocking, 10271, 1);
+	MoveItemToContainer (gift, stocking, 53, 110);
+*/
+return;
+endfunction 

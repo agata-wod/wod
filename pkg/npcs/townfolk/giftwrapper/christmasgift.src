@@ -1,0 +1,73 @@
+use uo;
+use os;
+
+program christmasgift (character, giftbox)
+	if (!ReserveItem (giftbox) )
+		return;
+	endif
+
+	SendSysMessage (character, "What do you want for Christmas?");
+	var select_menu := CreateMenu ("Pick a gift:");
+	AddMenuItem (select_menu, 0, "A stone dragon statue");
+	AddMenuItem (select_menu, 0, "A marble horse statue");
+	AddMenuItem (select_menu, 0, "A set of toy soldiers");
+	AddMenuItem (select_menu, 0, "A painting deed");
+	AddMenuItem (select_menu, 0, "An item repair kit");
+
+	var selected_item := SelectMenuItem2 (character, select_menu);
+	if (!selected_item)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	
+	case (selected_item.index)
+		1:
+			var dragondeed := CreateItemInContainer (character.backpack, 0xB019, 1);
+			if (!dragondeed)
+				PrintTextAbovePrivate (character, "*Your Backpack is full!*", character);
+				return;
+			endif
+			DestroyItem (giftbox);
+			
+		2:
+			var horsedeed := CreateItemInContainer (character.backpack, 0xB020, 1);
+			if (!horsedeed)
+				PrintTextAbovePrivate (character, "*Your Backpack is full!*", character);
+				return;
+			endif
+			DestroyItem (giftbox);
+	
+		3:
+			var soldier := CreateItemInContainer (character.backpack, 0xa054, 1);
+			if (!soldier)
+				PrintTextAbovePrivate (character, "*Your Backpack is full!*", character);
+				return;
+			endif
+			CreateItemInContainer (character.backpack, 0xa055, 1);
+			CreateItemInContainer (character.backpack, 0xa056, 1);
+			CreateItemInContainer (character.backpack, 0xa057, 1);
+			CreateItemInContainer (character.backpack, 0xa058, 1);
+			DestroyItem (giftbox);
+
+		4:
+			var paintingdeed := CreateItemInContainer (character.backpack, 0xB018, 1);
+			if (!paintingdeed)
+				PrintTextAbovePrivate (character, "*Your Backpack is full!*", character);
+				return;
+			endif
+			DestroyItem (giftbox);
+	
+		5:
+			var repairkit := CreateItemInContainer (character.backpack, 0x1709f, 1);
+			if (!repairkit)
+				PrintTextAbovePrivate (character, "*Your Backpack is full!*", character);
+				return;
+			endif
+			DestroyItem (giftbox);
+		default:
+			SendSysMessage (character, "This isn't supposed to happen!  Ack!");
+			return;
+	
+	endcase
+	SendSysMessage (character, "Merry Christmas!");
+endprogram

@@ -1,0 +1,668 @@
+use cfgfile;
+
+include ":crafting:crafting";
+include "include/attributes";
+include "include/objtype";
+include "include/crafting";
+include "include/gumps";
+include "include/utility";
+include "include/magicitems";
+include "magicjewelry";
+
+var item_config := ReadConfigFile( ":*:itemdesc" );
+var craft_config := ReadConfigFile( ":tinkering:tinkering" );
+
+program MakeTinkerItems (who, tool)
+	if (!ReserveItem (tool) )
+		SendSysMessage (who, "You cannot use that right now.");
+		return;
+	endif
+
+	var rinfo := sendCraftGump( who, ATTRIBUTEID_TINKERING );
+	if( rinfo == 0 )
+		return 0;
+	endif
+
+	var the_objtype := rinfo[1],
+	    amt := rinfo[2],
+	    repair := rinfo[3],
+	    resmelt := rinfo[4],
+	    fortify := rinfo[5];
+     
+	if( repair )
+                RepairItem( who, SKILLID_TINKERING );
+	elseif (fortify)
+		MakeSpecialItem (who, SKILLID_TINKERING);
+	elseif (resmelt)
+		return 0;
+        elseif( craft_config[Hex( the_objtype )].assemble == 1 )
+		CraftTinkerAssembly( who, tool, the_objtype, amt );
+	else
+		makeTinkeringItem( who, tool, the_objtype, amt );
+	endif
+
+	return 1;
+endprogram
+
+function CraftTinkerAssembly( who, tool, the_objtype, amt )
+
+	if( !the_objtype || !amt )
+		SendSysMessage( who, "Cancelled." );
+		return 0;
+	endif
+
+ 	var craft_elem := craft_config[the_objtype],
+ 	    skill_elem := menu_config[craft_skill],
+            x := who.x,
+	    y := who.y;
+	
+	var craftingbag := FindCraftingBag (who);
+
+        SendSysMessage( who, "You start "+skill_elem.EndMessage+"...", 3, 89 );
+
+	while( amt )
+		if( !tool )
+			break;
+		endif
+
+                if( amt != -1 )
+                	SendSysMessage( who, "Looping ["+amt+" more to go].", 3, 89 );
+                else
+                	SendSysMessage( who, "Looping.", 3, 89 );
+                endif
+                
+                Sleep( CRAFT_DELAY );
+
+                PlaySoundEffect (who, SFX_HAMMER);
+
+                if( who.x != x || who.y != y )
+			SendSysMessage( who, "Cancelled." );
+			break;
+                endif
+
+                var parts_list := Craft_CheckParts( who, craft_elem );
+                if( !parts_list )
+                	break;
+                elseif( !Craft_ConsumeParts( who, parts_list ))
+                	break;
+                endif
+                
+		if (CheckSkill (who, SKILLID_TINKERING, craft_elem.skill, 0))
+			var the_item :=  CreateItemInContainer (craftingbag, the_objtype, 1);
+			if (!the_item)
+				PrintTextAbovePrivate (who, "*Your backpack is full!*", who);
+				the_item := CreateItemAtLocation( who.x, who.y, who.z, the_objtype, 1, who.realm );
+			endif
+		else
+			SendSysMessage( who, "You lost some materials." );
+		endif
+
+                if( amt != -1 )
+                	amt -= 1;
+                endif
+	endwhile
+
+        SendSysMessage( who, "You stop "+skill_elem.EndMessage+"...", 3, 89 );
+
+	return 1;
+endfunction
+
+
+function makeTinkeringItem( who, tool, chosen_item, amt )
+	if (tool)
+	endif
+	if( !chosen_item || !amt )
+		SendSysMessage( who, "Cancelled." );
+		return 0;
+	endif
+
+	var items_to_make := amt;
+	if (items_to_make == 0)
+		return 0;
+	endif
+
+	var skill_elem := menu_config[craft_skill];
+	//find the item in craft config file
+	var selection := FindConfigElem (craft_config, chosen_item);
+	if (!selection)
+		SendSysMessage (who, "That was an invalid selection");
+		return;
+	endif
+	case (chosen_item)
+		0x20d7:
+		0x2121:
+		0x211f:
+		0x20f6:
+		0x2136:
+		0x170b6:
+			MakeTotem (who, chosen_item, items_to_make);
+			SendSysMessage( who, "You stop "+skill_elem.EndMessage+"...", 3, 89 );
+			return 1;
+	endcase
+		
+
+	var material_needed := cint (selection.material);
+	var material_type := selection.type;
+	var item_skill := cint (selection.skill);
+	var time_delay := cint (selection.time);
+	var item_lockable := selection.lockable;
+	var item_stackable := selection.stackable;
+	var item_name := selection.name;
+	var crafting_sounds := 0;
+	case (material_type)
+		"wood":
+			crafting_sounds := SFX_CARPENTRY;
+		"metal":
+		"gold":
+			crafting_sounds := SFX_ANVIL;
+		"clay":
+			crafting_sounds := SFX_HAMMER;
+		"glass":
+			crafting_sounds := SFX_GLASSBREAK4;
+		default:
+			crafting_sounds := SFX_HAMMER;
+	endcase
+	SendSysMessage(who, "(Skill: " + item_skill + ", " + material_type + ": " + material_needed + ")");
+
+	var logs := MaterialSelection( who, craft_skill, material_type );
+	if( !logs )
+		return 0;
+	endif
+	
+	//save the who's position and ask them how many they want to make
+	var craftingbag := FindCraftingBag (who);
+	var whox := who.x;
+	var whoy := who.y;
+	var amax := CINT (logs.amount/material_needed);
+	if (!amax)
+		SendSysMessage (who, "You don't have enough " + material_type + " to make that!");
+		return;
+	elseif (amax > 10)
+		amax := 10;
+	endif
+	if ((material_type == "clay" or material_type == "glass") and !SearchForOvenInArea (who))
+		SendSysmessage (who, "You must be near an oven to make " + material_type + " items!");
+		return;
+	endif
+
+
+	//save the who's position and ask them if they want to autoloop
+	var autoupgrade := 0;;
+	if (selection.Exceptional)
+		autoupgrade := quality;
+	endif
+
+	var created_item;
+	repeat
+		created_item := 0;
+		if (logs.amount < material_needed or !logs)
+			SendSysmessage (who, "You don't have enough " + material_type + " to continue!");
+			break;
+		endif
+
+		PlaySoundEffect (who, crafting_sounds);
+		sleep (3);
+		for i := 1 to time_delay
+			PlaySoundEffect(who, crafting_sounds);
+			sleep (3);
+		endfor
+		PlaySoundEffect(who, crafting_sounds);
+
+		if (!CheckSkill (who, SKILLID_TINKERING, item_skill, 0))
+			var lossamount := RandomInt (material_needed);
+			SubtractAmount (logs, lossamount);
+			SendSysmessage (who, "You fail, destroying some " + material_type + ".");
+		else
+			if (chosen_item == UOBJ_OBSIDIAN or chosen_item == UOBJ_PORCELAIN or chosen_item == UOBJ_EMPTY_BOTTLE or chosen_item == UOBJ_LOCKPICKS)
+				var amount_to_create := items_to_make;
+				if (amount_to_create > 10)
+					amount_to_create := 10;
+				endif
+				if (amount_to_create > CINT (logs.amount/material_needed))
+					amount_to_create := CINT (logs.amount/material_needed);
+				endif
+				
+				created_item := CreateItemInContainer (craftingbag, chosen_item, amount_to_create);
+				if (!created_item)
+					PrintTextAbovePrivate (who, "*Your backpack is full*", who);
+					return;
+				endif
+				SubtractAmount (logs, material_needed*amount_to_create);
+				items_to_make := items_to_make - amount_to_create;
+			else
+				created_item := CreateItemInContainer (craftingbag, chosen_item, 1);
+				if (!created_item)
+					PrintTextAbovePrivate (who, "*Your backpack is full!*", who);
+					break;
+				endif
+
+				created_item.movable := 1;
+				created_item.buyprice := 0;
+				SendSysMessage (who, "You place the item in your backpack.");
+				//set the color
+				if (selection.retain and logs.color)
+					created_item.color := logs.color;
+				endif
+				if (!item_stackable)
+					SetObjProperty (created_item, "material_objtype", logs.objtype);
+				endif
+				SubtractAmount (logs, material_needed);
+				if (selection.mark)
+					created_item.name := item_name;
+					SetObjProperty (created_item, "craftername", who.name);
+				endif
+				created_item.hp := created_item.maxhp;
+				if (item_lockable)
+					if ( CheckSkill (who, SKILLID_TINKERING, 40, 0) )
+						PrintTextAbovePrivate (who, "Lockable!", who);
+						SetObjProperty (created_item, "lockable", "1");
+						var lockid := AllocLockId ();
+						var thekey := CreateItemInContainer (created_item, UOBJ_COPPER_KEY, 1); 
+						SetObjProperty (thekey, "lockid", lockid);
+						SetObjProperty (created_item, "lockid", lockid);
+					endif
+				endif
+
+				if (autoupgrade)
+					var upgrade_material := CINT (material_needed/2);
+					if (logs.amount < upgrade_material)
+						SendSysMessage (who, "You don't have enough " + material_type + " to upgrade that item!");
+						break;
+					endif
+				
+					var upgrade_skill := item_skill + 15;
+					if (upgrade_skill > 110)
+						upgrade_skill := 110;
+					endif
+					if (upgrade_skill >= GetAttribute (who, ATTRIBUTEID_TINKERING) + 20)
+						SendSysMessage (who, "Your skill is too low to upgrade that item.");
+						break;
+					endif
+
+					if (whox != who.x or whoy != who.y)
+						break;
+					endif
+
+					PerformItemUpgrade (who, created_item, logs, upgrade_material,
+							SKILLID_TINKERING, upgrade_skill, item_name, autoupgrade);
+				endif
+				if (created_item)
+					items_to_make := items_to_make - 1;
+				endif
+			endif
+		endif
+		
+		if (whox != who.x or whoy != who.y)
+			break;
+		endif
+		
+		sleep (2);
+
+	until (!items_to_make);
+
+        SendSysMessage( who, "You stop "+skill_elem.EndMessage+"...", 3, 89 );
+
+	return 1;
+endfunction
+
+function MakeSpecialItem(character, skillid)
+	if (skillid)
+	endif
+	SendSysmessage (character, "Select your material:");
+	var use_on := Target (character);
+	if (!use_on)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (!Accessible (character, use_on) )
+		SendSysMessage (character, "You can't reach that.");
+		return;	
+	endif
+
+	if (!ReserveItem (use_on) )
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+
+	//try to make magic jewelry
+	if (GetObjProperty (use_on, "gem") )
+		MakeMagicItem (character, use_on);
+		return;
+	endif
+	
+	if (IsJewelry (use_on))
+		if (GetObjProperty (use_on, "str") or GetObjProperty (use_on, "int") or GetObjProperty (use_on, "dex"))
+			SendSysMessage (character, "You can't upgrade that magic jewelry further.");
+		else
+			MakeJewelry (character, use_on);
+			return;
+		endif
+	endif
+
+	case (use_on.objtype)
+		UOBJ_HEAD:
+			MakePreservedHead (character, use_on);
+		UOBJ_ELIXER_POTION:
+			MakeManaStone (character, use_on);
+		default:
+			UpgradeItem(character, SKILLID_TINKERING, use_on);
+	endcase 
+        
+endfunction
+
+function DoSpecialUpgradeStuff (byref character, byref item, repair_skill)
+	//nothing we can do with player made items at the highest upgrade level
+	if (item.desc["exceptional"] or item.desc["Exceptional"])
+		SendSysMessage (character, "That item can't be upgraded further.");
+		return;
+	endif
+
+	if (IsMagicalItem (item))
+		SendSysMessage (character, "You can't modify this item with your tool.");
+
+	//otherwise try to upgrade it
+	else
+		DoItemUpgrade (character, item, repair_skill);
+		return;
+	endif
+
+        return;
+endfunction
+
+
+///////////////////
+//  makes gold items
+///////////////////
+
+function MakeJewelry (character, use_on)
+	var item_skill := craft_config[use_on.objtype].skill;
+	var item_name := craft_config[use_on.objtype].name;
+	if (!ReserveItem(use_on))
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+	if (!Accessible(character, use_on))
+		SendSysmessage (character, "You can't reach that!");
+		return;
+	endif
+	SendSysmessage (character, "Select a gem for this item.");
+	var thegem := Target (character);
+	if (!thegem)  
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+	if (!ReserveItem(thegem))
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+	if (!IsAGem (thegem.objtype))
+		SendSysMessage (character, "That is not a gem!");
+		return;
+	endif
+	if (!Accessible(character, thegem))
+		SendSysmessage (character, "You can't reach that!");
+		return;
+	endif
+
+	for i := 1 to 3
+		PlaySoundEffect (character, SFX_HAMMER);
+		sleep (2);
+	endfor
+	
+	if (CheckSkill (character, SKILLID_TINKERING, item_skill, 0))
+		SetObjProperty (use_on, "gem", thegem.objtype);
+		case (thegem.objtype)
+			UOBJ_GEM_DIAMOND:
+				use_on.name := "a diamond " + item_name;
+			UOBJ_GEM_SAPPHIRE:
+				use_on.name := "a sapphire " + item_name;
+			UOBJ_GEM_STAR_SAPPHIRE:
+				use_on.name := "a star sapphire " + item_name;
+			UOBJ_GEM_EMERALD:
+				use_on.name := "an emerald " + item_name;
+			UOBJ_GEM_RUBY:
+				use_on.name := "a ruby " + item_name;
+			UOBJ_GEM_AMETHYST:
+				use_on.name := "an amethyst " + item_name;
+			UOBJ_GEM_CITRINE:
+				use_on.name := "a citrine " + item_name;
+			UOBJ_GEM_TOURMALINE:
+				use_on.name := "a tourmaline " + item_name;
+			UOBJ_GEM_AMBER:
+				use_on.name := "an amber " + item_name;
+		endcase
+		SubtractAmount (thegem, 1);
+		SendSysmessage (character, "You etch the gem into the piece of jewelry.");
+	else
+		SendSysMessage (character, "You fail, destroying the item.");
+		DestroyItem (use_on);
+	endif
+endfunction
+
+
+///////////////////
+//  Makes an obsidian golem
+///////////////////
+
+function MakeTotem (character, selection, amount)
+	SendSysMessage (character, "Select the material.");
+	var material := Target(character);
+	if( !material )
+		SendSysMessage (character, "Cancelled.");
+	endif
+	
+	case (selection)
+		0x20d7:
+		0x2121:
+		0x20f6:
+		0x2136:
+			if (material.objtype != UOBJ_OBSIDIAN)
+				SendSysMessage (character, "That is not obsidian.");
+				return;
+			endif
+		0x211f:
+			if (material.objtype != UOBJ_PORCELAIN)
+				SendSysMessage (character, "That is not porcelain.");
+				return;
+			endif
+		0x170b6:
+			if (material.objtype != UOBJ_OBSIDIAN and material.objtype != UOBJ_PORCELAIN)
+				SendSysMessage (character, "That's neither obsidian or porcelain.");
+			endif
+		default:
+			SendSysMessage (character, "What are you trying to do? Please contact a GM.");
+	endcase
+	if (GetAttribute (character, ATTRIBUTEID_MAGERY) < 71)
+		SendSysMessage (character, "You're not a skilled enough mage to work with that.");
+		return;
+	endif
+
+	if (GetAttribute (character, ATTRIBUTEID_TINKERING) < 71)
+		sendsysmessage (character, "You're not a skilled enough tinker to work with that.");
+		return;
+	endif
+
+	while (amount)
+		if (material.amount < 200)
+			SendSysMessage (character, "You don't have enough material to make anything.");
+			return;
+		endif
+
+
+		for i := 1 to 3
+			PlaySoundEffect (character, SFX_GLASSBREAK4);
+			sleep (2);
+		endfor
+
+		if (!CheckSkill (character, SKILLID_MAGERY, 90, 0) or !CheckSkill (character, SKILLID_TINKERING, 90, 0))
+			SendSysMessage (character, "You fail to make anything useful.");
+			SubtractAmount (material, RandomInt (30)+20);
+			continue;
+		endif
+	
+		var totem := CreateItemInContainer (FindCraftingBag (character), selection, 1);
+		if (!totem)
+			SendSysMessage (character, "Your backpack is full!");
+			return;
+		endif
+		SendSysMessage (character, "You place the item in your backpack.");
+		amount := amount - 1;
+		SubtractAmount (material, 200);
+		totem.color := 906;
+		totem.movable := 1;
+		if (selection != 0x170b6)
+			totem.usescript := ":dundee:totem";
+		endif
+		case (selection)
+			0x20d7:
+				totem.name := "an obsidian golem";
+				SetObjProperty (totem, "critter", "obsidiangolem");
+				SetObjProperty (totem, "critcolor", 1109);
+			0x2121:
+				totem.name := "an obsidian steed";
+				SetObjProperty (totem, "critter", "obsidiansteed");
+				SetObjProperty (totem, "critcolor", 1109);
+			0x20f6:
+				totem.name := "an obsidian llama";
+				SetObjProperty (totem, "critter", "obsidianllama");
+				SetObjProperty (totem, "critcolor", 1106);
+			0x211f:
+				totem.name := "a porcelain steed";
+				SetObjProperty (totem, "critter", "porcelainsteed");
+				SetObjProperty (totem, "critcolor", 0);
+			0x2136:
+				totem.name := "an obsidian ostard";
+				SetObjProperty (totem, "critter", "obsidianostard");
+				SetObjProperty (totem, "critcolor", 1107);
+			0x170b6:
+				totem.color := 0;
+				case (material.objtype)
+					UOBJ_OBSIDIAN:
+						SetObjProperty (totem, "materialtype", "obsidian");
+						totem.name := "an obsidian repair kit (new)";
+					UOBJ_PORCELAIN:
+						SetObjProperty (totem, "materialtype", "porcelain");
+						totem.name := "a porcelain repair kit (new)";
+				endcase
+			default:
+				SendSysMessage (character, "This isn't supposed to happen!");
+				return;
+		endcase
+	
+	endwhile
+endfunction
+
+
+///////////////////
+//  makes a mana stone that can be used to transfer magic between items
+///////////////////
+
+function MakeManaStone (character, potion)
+	if (GetAttribute (character, ATTRIBUTEID_TINKERING) < 91)
+		SendSysMessage (character, "Your skill is too low to do that!");
+		return;
+	endif
+
+	var gems := FindObjtypeInContainer (character.backpack, UOBJ_GEM_STAR_SAPPHIRE);
+	if (!gems or gems.amount < 10)
+		SendSysMessage (character, "You need 10 star sapphires to make a mana stone.");
+		return;
+	endif
+	if (!ReserveItem (gems))
+		SendSysMessage (character, "You need 10 star sapphires to make a mana stone.");
+		return;
+	endif
+
+	var gold_bar := FindObjtypeInContainer (character.backpack, UOBJ_GOLD_INGOT);
+	if (!gold_bar)
+		SendSysMessage (character, "You need a bar of gold to make a mana stone.");
+		return;
+	endif
+	if (!ReserveItem (gold_bar))
+		SendSysMessage (character, "You need a bar of gold to make a mana stone.");
+		return;
+	endif
+
+	PlaySoundEffect (character, 0x104);
+	sleep (3);
+
+	var mana_stone := CreateItemInContainer (FindCraftingBag (character), 0x17082, 1);
+	if (!mana_stone)
+		PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+		return;
+	endif
+
+	SubtractAmount (potion, 1);
+	SubtractAmount (gems, 10);
+	SubtractAmount (gold_bar, 1);
+
+endfunction
+
+
+
+
+///////////////////
+//  preserves the given head so that it doesn't decay
+///////////////////
+
+function MakePreservedHead (character, head)
+	if (!ReserveItem (head) )
+		SendSysMessage (character, "You can't use that right now!");
+		return;
+	endif
+	
+	var curepotion := FindObjtypeInContainer (character.backpack, UOBJ_GREATER_CURE_POTION);
+	if (!curepotion)
+		SendSysMessage (character, "You need a greater cure potion to preserve the head.");
+		return;
+	endif
+
+	if (!ReserveItem (curepotion))
+		SendSysMessage (character, "You need a greater cure potion to preserve the head.");
+		return;
+	endif
+
+	var straw := FindObjtypeInContainer (character.backpack, 0x100d);
+	if (!straw)
+		SendSysMessage (character, "You need some straw to preserve the head.");
+		return;
+	endif
+
+	if (!ReserveItem (straw))
+		SendSysMessage (character, "You need some straw to preserve the head.");
+		return;
+	endif
+	
+	SubtractAmount (straw, 1);
+	SubtractAmount (curepotion, 1);
+	if (!CheckSkill (character, SKILLID_TINKERING, -1, 0 ) )
+		SendSysMessage (character, "You fail to preserve the head.");
+		return;
+	endif
+
+	SendSysMessage (character, "You successfully preserve the head.");
+	SetObjProperty (head, "preserved", 1);
+	var tempstring := head.desc - "the head of ";
+	tempstring := "the preserved head of " + tempstring;
+	head.name := tempstring;
+endfunction
+
+
+
+
+///////////////////
+//  Searches the area around the character for an oven
+///////////////////
+
+function SearchForOvenInArea (character)
+	foreach item in ListItemsNearLocation (character.x, character.y, character.z, 2, character.realm)
+		if ((item.objtype >= 0x0461) and (item.objtype <= 0x046f))
+			return 1;
+		elseif ((item.objtype >= 0x092b) and (item.objtype <= 0x0934))
+			return 1;
+		endif
+	endforeach
+	return 0;
+endfunction
+

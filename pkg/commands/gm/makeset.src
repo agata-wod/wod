@@ -1,0 +1,41 @@
+use uo;
+use cfgfile;
+
+var setcfg := Readconfigfile("sets");
+
+program makeset( who, thesetname )
+	var startloc := targetcoordinates(who);
+	if (!startloc)
+		return;
+	endif
+	var elem := setcfg[thesetname];
+	if (!elem)
+		SendSysmessage(who, "Unknown set name " + thesetname);
+		return;
+	endif
+
+	var stuff := GetConfigStringArray( elem, "item" );
+
+	foreach item in stuff
+		var stuffelem := setcfg[item];
+		if (!stuffelem)
+			SendSysmessage(who, "Could not find entry for " + item);
+		endif
+		
+		createitematlocation(	
+			stuffelem.x + startloc.x,
+			stuffelem.y + startloc.y,
+			stuffelem.z + startloc.z,
+			stuffelem.objtype,
+			1, startloc.realm);
+	endforeach
+	stuff := GetConfigStringArray( elem, "setmobile" );
+	foreach item in stuff
+		var stuffelem := setcfg[item];
+		createnpcfromtemplate(
+			stuffelem.objtype,
+			stuffelem.x + startloc.x,
+			stuffelem.y + startloc.y,
+			stuffelem.z + startloc.z, 0, startloc.realm);
+	endforeach
+endprogram

@@ -1,0 +1,504 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/eventid";
+include "include/skills";
+include "include/attributes";
+include "../pkg/npcs/npcinfo";
+
+var gump_layout := array {
+	"page 0",
+	"nodispose",
+	"resizepic 0 50 2620 320 460",
+	"text 15 62 1 0"
+};
+
+var gump_data := array { "filler" };
+
+program merchant_training (parms)
+	var merchant := parms [1];
+	var player := parms [2];
+	var gold_amount := parms [3];
+
+	if(!GetObjProperty (player, "maxstr"))
+		PrintTextAbovePrivate (merchant, "I cannot train you until you choose specializations", player);
+		CreateItemInContainer (player.backpack, UOBJ_GOLD_COIN, gold_amount);
+		return;
+	endif
+
+	//make sure we can train them in something or other
+	if (!len(DetermineMerchantsSkills (merchant)))
+		PrintTextAbovePrivate (merchant, "There's nothing I can teach you.", player);
+		CreateItemInContainer (player.backpack, UOBJ_GOLD_COIN, gold_amount);
+		return;
+	endif
+
+	PrintTextAbovePrivate (merchant, "I can train you in a number of skills.", player);
+	gump_data[1]:="SKILLS: (Practicing for " + CINT(gold_amount/60) + " minutes)";
+
+	var current_base_skill, current_raw_skill, after_raw_skill, after_base_skill, projected_skill_gain_string, raw_skill_cap;
+	var current_y_pos := 90;
+	var string_counter := 1;
+
+	foreach skillid in DetermineMerchantsSkills (merchant)
+		current_base_skill := GetAttributeBaseValue (player, GetAttributeIDBySkillID (skillid));
+		current_raw_skill := BaseToRawSkill (current_base_skill);
+
+		raw_skill_cap := BaseToRawSkill (GetBaseSkillCap (player, skillid));
+		after_raw_skill := current_raw_skill + gold_amount*10 + CurrentlyPracticing (player, skillid)*10;
+		after_base_skill := RawToBaseSkill (after_raw_skill);
+
+		if (after_raw_skill <= raw_skill_cap)
+			projected_skill_gain_string := CSTR (" (" + SkillNumDisplay (after_base_skill - current_base_skill) + ")" );
+		else
+			projected_skill_gain_string := " (Skill Cap)";
+		endif
+
+		if (CurrentlyPracticing (player, skillid))
+			projected_skill_gain_string := projected_skill_gain_string + " (P)";
+		endif
+
+		if (current_raw_skill < raw_skill_cap)
+			var temp_raw_skill := current_raw_skill + CurrentlyPracticing (player, skillid)*10;
+			if (temp_raw_skill < raw_skill_cap)
+				gump_layout.append ("button 20 " + current_y_pos + " 2104 2103 1 0 " + (skillid+1));
+			endif
+		endif
+
+		gump_layout.append ("text 40 " + (current_y_pos - 5) + " 1102 " + string_counter);
+		gump_data.append (GetSkillName(skillid) + " " + projected_skill_gain_string);
+		string_counter := string_counter + 1;
+		current_y_pos := current_y_pos + 20;
+	endforeach
+
+	gump_layout.append ("button 240 465 2119 2120 1 0 0");
+	gump_layout.append ("text 20 465 1104 " + string_counter);
+	gump_data.append ("Select a skill");
+
+	var gump_return := SendDialogGump( player, gump_layout, gump_data );
+
+	//worthless event just so the merchant turns to look at the player
+	var ev := struct {};
+	ev.+type := EVID_MERCHANT_SOLD;
+	ev.+source := player;
+	ev.+amount := 0;
+	sendevent (merchant, ev);
+
+	if (!gump_return or !gump_return[0])
+		PrintTextAbovePrivate (merchant, "OK, never mind then.", player);
+		CreateItemInContainer (player.backpack, UOBJ_GOLD_COIN, gold_amount);
+		return;
+	endif
+
+	var chosen_skill := gump_return [0] - 1;
+	current_base_skill := GetAttributeBaseValue (player, GetAttributeIDBySkillID (chosen_skill));
+	current_raw_skill := BaseToRawSkill (current_base_skill);
+	raw_skill_cap := BaseToRawSkill (GetBaseSkillCap (player, chosen_skill));
+
+	var max_training := raw_skill_cap - current_raw_skill;
+	if (max_training <= 0)		//Shouldn't happen, but lets make sure...
+		PrintTextAbovePrivate (merchant, "Here's your gold back.", player);
+		CreateItemInContainer (player.backpack, UOBJ_GOLD_COIN, gold_amount);
+		return;
+	endif
+
+	var paid_for_training := gold_amount*10 + CurrentlyPracticing (player, chosen_skill)*10;
+	if (max_training < paid_for_training)
+		var refund := CINT ((paid_for_training - max_training)/10);
+		refund := (CINT (refund/100) ) * 100;
+		if (refund)
+			sleep (1);
+			PrintTextAbovePrivate (merchant, "Hmm, I think you gave me a bit too much.", player);
+			sleep (1);
+			PrintTextAbovePrivate (merchant, "Here's your " + refund + " gold back.", player);
+			CreateItemInContainer (player.backpack, UOBJ_GOLD_COIN, refund);
+		endif
+		paid_for_training := CINT (max_training/10) + 1;
+	else
+		paid_for_training := gold_amount + CurrentlyPracticing (player, chosen_skill);
+	endif
+
+	PrintTextAbovePrivate (merchant, "Watch closely...", player);
+	sleep(1);
+	PrintTextAbovePrivate (merchant, "Now practice "+GetSkillName (chosen_skill)+" in your spare time and you'll get better at it!", player);
+
+	var prac := GetObjProperty (player, "practicing");
+	if (!prac)
+		prac := array {};
+	endif
+
+	//check to see if we're already practicing this skill
+	var theskill := array {};
+	for i := 1 to len (prac)
+		theskill := prac[i];
+		if (theskill[1] == chosen_skill)
+			theskill[2] := paid_for_training;
+			prac[i] := theskill;
+			SetObjProperty (player, "practicing", prac);
+
+			if (!GetObjProperty (player, "lastpractice") )
+				SetObjProperty (player, "lastpractice", ReadGameClock() );
+			endif
+			return;
+		endif
+	endfor
+
+	//guess we're not already practicing that skill, so start anew
+	theskill[1] := chosen_skill;
+	theskill[2] := paid_for_training;
+
+	prac.append (theskill);
+	SetObjProperty (player, "practicing", prac);
+
+	if (!GetObjProperty (player, "lastpractice"))
+		SetObjProperty (player, "lastpractice", ReadGameClock() );
+	endif
+endprogram
+
+
+
+function SkillNumDisplay (skillval)
+
+	var str := cstr(skillval);
+	if (!len(str))
+		return "0.0";
+	endif
+	str[ len(str),1 ] := "."+ str[ len(str),1 ];
+	return str;
+
+endfunction
+
+function CurrentlyPracticing (player, skillid)
+	if (!GetObjProperty (player, "practicing") )
+		return 0;
+	endif
+
+	var prac := GetObjProperty (player, "practicing");
+	var theskill := array { };
+	for i := 1 to len (prac)
+		theskill := prac [i];
+		if (theskill[1] == skillid)
+			return theskill[2];
+		endif
+	endfor
+
+	return 0;
+endfunction
+
+
+
+///////////////////
+//  figures out what skills the NPC trains
+///////////////////
+
+function DetermineMerchantsSkills (byref merchant)
+
+	var skills_trained := array {};
+
+	case (TrimTemplate (merchant.npctemplate))
+		"bowyer":
+			skills_trained := array {
+				SKILLID_ARCHERY,
+				SKILLID_CARPENTRY,
+				SKILLID_LUMBERJACKING,
+				SKILLID_TACTICS,
+				SKILLID_CAMPING,
+				SKILLID_TRACKING,
+				SKILLID_FOCUS,
+				SKILLID_THROWING,
+				SKILLID_HEALING
+			};
+
+		"ranger":
+			skills_trained := array {
+				SKILLID_ARCHERY,
+				SKILLID_CARPENTRY,
+				SKILLID_CAMPING,
+				SKILLID_FISHING,
+				SKILLID_TRACKING,
+				SKILLID_ANIMALLORE,
+				SKILLID_TAMING,
+				SKILLID_CARTOGRAPHY,
+				SKILLID_FOCUS,
+				SKILLID_THROWING
+			};
+
+		"weaponsmith":
+			skills_trained := array {
+				SKILLID_BLACKSMITHY,
+				SKILLID_MINING,
+				SKILLID_TINKERING,
+				SKILLID_SWORDSMANSHIP,
+				SKILLID_FENCING,
+				SKILLID_MACEFIGHTING,
+				SKILLID_PARRY,
+				SKILLID_THROWING,
+				SKILLID_FOCUS,
+				SKILLID_TACTICS
+			};
+
+		"armorer":
+			skills_trained := array {
+				SKILLID_BLACKSMITHY,
+				SKILLID_MINING,
+				SKILLID_TINKERING,
+				SKILLID_SWORDSMANSHIP,
+				SKILLID_FENCING,
+				SKILLID_MACEFIGHTING,
+				SKILLID_PARRY,
+				SKILLID_THROWING,
+				SKILLID_FOCUS,
+				SKILLID_TACTICS
+			};
+
+		"fisherman":
+			skills_trained := array {
+				SKILLID_FISHING,
+				SKILLID_COOKING,
+				SKILLID_ANIMALLORE,
+				SKILLID_TAMING,
+				SKILLID_CAMPING,
+				SKILLID_CARTOGRAPHY,
+				SKILLID_WRESTLING
+			};
+
+		"farmer":
+			skills_trained := array {
+				SKILLID_FISHING,
+				SKILLID_COOKING,
+				SKILLID_LUMBERJACKING,
+				SKILLID_ANIMALLORE,
+				SKILLID_TAMING,
+				SKILLID_CAMPING,
+				SKILLID_TAILORING,
+				SKILLID_ARCHERY
+			};
+
+		"barkeep":
+			skills_trained := array {
+				SKILLID_COOKING,
+				SKILLID_HIDING,
+				SKILLID_STEALTH,
+				SKILLID_DETECTINGHIDDEN,
+				SKILLID_LOCKPICKING,
+				SKILLID_STEALING,
+				SKILLID_POISONING
+			};
+
+		"beekeep":
+			skills_trained := array {
+				SKILLID_ANIMALLORE,
+				SKILLID_TAMING,
+				SKILLID_LUMBERJACKING,
+				SKILLID_COOKING,
+				SKILLID_CAMPING,
+				SKILLID_ARCHERY,
+				SKILLID_TAILORING
+			};
+
+		"baker":
+			skills_trained := array {
+				SKILLID_COOKING,
+				SKILLID_CAMPING,
+				SKILLID_LUMBERJACKING,
+				SKILLID_HIDING,
+				SKILLID_STEALTH,
+				SKILLID_HEALING,
+				SKILLID_WRESTLING
+			};
+
+		"butcher":
+			skills_trained := array {
+				SKILLID_SWORDSMANSHIP,
+				SKILLID_FENCING,
+				SKILLID_TAMING,
+				SKILLID_ANIMALLORE,
+				SKILLID_CAMPING,
+				SKILLID_HIDING,
+				SKILLID_STEALTH,
+				SKILLID_THROWING,
+				SKILLID_FOCUS,
+				SKILLID_ANATOMY
+			};
+
+		"carpenter":
+			skills_trained := array {
+				SKILLID_CARPENTRY,
+				SKILLID_TINKERING,
+				SKILLID_LUMBERJACKING,
+				SKILLID_LOCKPICKING,
+				SKILLID_ARCHERY,
+				SKILLID_MACEFIGHTING,
+				SKILLID_PARRY
+			};
+
+		"tinker":
+			skills_trained := array {
+				SKILLID_TINKERING,
+				SKILLID_CARPENTRY,
+				SKILLID_BLACKSMITHY,
+				SKILLID_MINING,
+				SKILLID_LUMBERJACKING,
+				SKILLID_LOCKPICKING
+			};
+
+		"jeweler":
+		"jewler": // should be "jeweler", stupid typo in npctemplate from original scripter... can't help it unless I do a full NPC wipe and rebuild the world again
+			skills_trained := array {
+				SKILLID_TINKERING,
+				SKILLID_BLACKSMITHY,
+				SKILLID_MINING,
+				SKILLID_LOCKPICKING,
+				SKILLID_DETECTINGHIDDEN
+			};
+
+		"bard":
+			skills_trained := array {
+				SKILLID_DISCORDANCE,
+				SKILLID_MUSICIANSHIP,
+				SKILLID_PEACEMAKING,
+				SKILLID_PROVOCATION,
+				SKILLID_LEADERSHIP,
+				SKILLID_DETECTINGHIDDEN,
+				SKILLID_LOCKPICKING,
+				SKILLID_STEALING
+			};
+
+		"tailor":
+			skills_trained := array {
+				SKILLID_TAILORING,
+				SKILLID_LUMBERJACKING,
+				SKILLID_HEALING,
+				SKILLID_HIDING,
+				SKILLID_STEALTH
+			};
+
+		"leatherworker":
+			skills_trained := array {
+				SKILLID_TAILORING,
+				SKILLID_HEALING,
+				SKILLID_ANIMALLORE,
+				SKILLID_TAMING,
+				SKILLID_WRESTLING
+			};
+
+		"cobbler":
+			skills_trained := array {
+				SKILLID_TAILORING,
+				SKILLID_COOKING,
+				SKILLID_HIDING,
+				SKILLID_STEALTH,
+				SKILLID_ANIMALLORE,
+				SKILLID_TAMING
+			};
+
+		"mage":
+			skills_trained := array {
+				SKILLID_MAGERY,
+				SKILLID_INVOCATION,
+				SKILLID_SPIRITSPEAK,
+				SKILLID_MEDITATION,
+				SKILLID_ALCHEMY,
+				SKILLID_INSCRIPTION,
+				SKILLID_MAGICRESISTANCE,
+				SKILLID_MACEFIGHTING
+			};
+
+		"alchemist":
+			skills_trained := array {
+				SKILLID_MAGERY,
+				SKILLID_INVOCATION,
+				SKILLID_SPIRITSPEAK,
+				SKILLID_MEDITATION,
+				SKILLID_ALCHEMY,
+				SKILLID_INSCRIPTION,
+				SKILLID_MAGICRESISTANCE,
+				SKILLID_MACEFIGHTING
+			};
+
+		"scribe":
+			skills_trained := array {
+				SKILLID_MAGERY,
+				SKILLID_INVOCATION,
+				SKILLID_SPIRITSPEAK,
+				SKILLID_MEDITATION,
+				SKILLID_ALCHEMY,
+				SKILLID_INSCRIPTION,
+				SKILLID_MAGICRESISTANCE,
+				SKILLID_MACEFIGHTING
+			};
+
+		"apothecary":
+			skills_trained := array {
+				SKILLID_MAGERY,
+				SKILLID_INVOCATION,
+				SKILLID_SPIRITSPEAK,
+				SKILLID_MEDITATION,
+				SKILLID_ALCHEMY,
+				SKILLID_MAGICRESISTANCE,
+				SKILLID_HEALING,
+				SKILLID_ANATOMY
+			};
+
+		"provisioner":
+			skills_trained := array {
+				SKILLID_HEALING,
+				SKILLID_ANATOMY,
+				SKILLID_POISONING,
+				SKILLID_COOKING,
+				SKILLID_FISHING,
+				SKILLID_WRESTLING
+			};
+
+		"architect":
+			skills_trained := array {
+				SKILLID_CARTOGRAPHY,
+				SKILLID_CARPENTRY,
+				SKILLID_BLACKSMITHY,
+				SKILLID_TINKERING,
+				SKILLID_LUMBERJACKING,
+				SKILLID_LOCKPICKING,
+				SKILLID_MINING
+			};
+
+		"shipwright":
+			skills_trained := array {
+				SKILLID_FISHING,
+				SKILLID_CARTOGRAPHY,
+				SKILLID_COOKING,
+				SKILLID_ANIMALLORE,
+				SKILLID_TAMING,
+				SKILLID_CAMPING
+			};
+
+		"decorator":
+			skills_trained := array {
+				SKILLID_FISHING,
+				SKILLID_COOKING,
+				SKILLID_ANIMALLORE,
+				SKILLID_TAMING,
+				SKILLID_CAMPING,
+				SKILLID_CARTOGRAPHY
+			};
+		"magic_dealer":
+			skills_trained := array {
+				SKILLID_BLACKSMITHY,
+				SKILLID_MINING,
+				SKILLID_TINKERING,
+				SKILLID_IMBUING,
+				SKILLID_SWORDSMANSHIP,
+				SKILLID_FENCING,
+				SKILLID_MACEFIGHTING,
+				SKILLID_PARRY,
+				SKILLID_THROWING,
+				SKILLID_FOCUS,
+				SKILLID_TACTICS
+			};
+	endcase
+
+	return skills_trained;
+
+endfunction

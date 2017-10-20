@@ -1,0 +1,86 @@
+use uo;
+
+include "include/client";
+include "include/wodinc";
+
+program helpq (me)
+	if (!IsAGm (me))
+		var myhelppage := GetObjProperty (me, "HELP");
+		if (!myhelppage)
+			SendSysMessage (me, "You don't currently have a help page in the queue.");
+			return;
+		endif
+		var timer := GetObjProperty (me, "HELPTIMER");
+		var timerdesc := "Age unknown";
+		if (timer)
+			timerdesc := GetTimerDesc (timer);
+		endif
+			
+		SendSysMessage (me, timerdesc, FONT_NORMAL, 41);
+		foreach line in myhelppage
+			SendSysMessage (me, line, FONT_NORMAL, 41);
+		endforeach	
+		return;
+	endif
+
+	var whiners := 0;
+	Foreach plr in EnumerateOnlineCharacters();
+		if ( GetObjProperty (plr,"HELP") )
+			SendSysMessage (me, "HELP PAGE from :" + plr.name, FONT_NORMAL, 38 );
+			var timer := GetObjProperty (plr, "HELPTIMER");
+			var timerdesc := "Age unknown";
+			if (timer)
+				timerdesc := GetTimerDesc (timer);
+			endif
+				
+			SendSysMessage (me, timerdesc, FONT_NORMAL, 41);
+			var thehelppage := GetObjProperty (plr, "HELP");
+			foreach line in thehelppage
+				SendSysMessage (me, line, FONT_NORMAL, 41);
+			endforeach
+			whiners := whiners + 1;
+		endif
+	endforeach
+	SendSysMessage(me, whiners + " waiting for help." );
+
+endprogram
+
+function GetTimerDesc (timer)
+	var age := ReadGameClock () - timer;
+	if (!age or age < 0)
+		return "This is a brand new page.";
+	endif
+
+	var days := CINT (age/86400);
+	age := age - days*86400;
+	
+	var hours := CINT (age/3600);
+	age := age - hours*3600;
+	
+	var minutes := CINT (age/60);
+	
+	var tempstring := "";
+	if (days)
+		if (days > 1)
+			tempstring := CSTR ("This page is " + days + " days, " + hours + " hours and " + minutes + " minutes old.");
+		else
+			tempstring := CSTR ("This page is " + days + " day, " + hours + " hours and " + minutes + " minutes old.");
+		endif
+	elseif (hours)
+		if (hours > 1)
+			tempstring := CSTR ("This page is " + hours + " hours and " + minutes + " minutes old.");
+		else
+			tempstring := CSTR ("This page is " + hours + " hour and " + minutes + " minutes old.");
+		endif
+	elseif (minutes)
+		if (minutes > 1)
+			tempstring := CSTR ("This page is " + minutes + " minutes old.");
+		else
+			tempstring := CSTR ("This page is " + minutes + " minute old.");
+		endif
+	else
+		tempstring := "This page is brand new.";
+	endif
+	
+	return tempstring;
+endfunction

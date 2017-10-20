@@ -1,0 +1,72 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 6;
+
+program tranquility (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+
+	//set the caster as the script's controler and allow them to cast another spell
+	SetScriptController (caster);
+	EraseObjProperty (caster, "#castingdruidspell");
+	detach ();
+
+	//save the caster's position
+	var casterx := caster.x;
+	var castery := caster.y;
+
+	//store the caster's druid skill, to be used to determine their success rate
+	var caster_druid_skill := GetAttribute (caster, ATTRIBUTEID_ANIMALLORE);
+	if (!caster_druid_skill)
+		caster_druid_skill := 0;
+	endif
+
+	//create a peacemaking event
+	var event := struct;
+	event.+type := EVID_PEACEMADE;
+
+	//couple of other variables
+	var random_int;
+//	var mobile;
+	var i := 0;
+
+	//the main loop
+	repeat
+		//list all the mobiles withing druidskill/10 tiles
+		foreach mobile in ListMobilesNearLocation (caster.x, caster.y, caster.z, caster_druid_skill/10, caster.realm)
+			//make sure they're an actual NPC and in war mode
+			if (mobile.warmode and mobile.npctemplate)
+				//if so, attempt to peacemake them
+				if(!CheckSkill (mobile, SKILLID_MAGICRESISTANCE, caster_druid_skill, 0) )
+					SendEvent (mobile, event);
+				endif
+			endif
+		endforeach
+
+		//play a random sound effect (all effects are birds chirping)
+		random_int := RandomInt(3) + 1;
+		case (random_int)
+			1:	PlaySoundEffect (caster, 1);
+			2:	PlaySoundEffect (caster, 2);
+			3:	PlaySoundEffect (caster, 3);
+		endcase;
+
+		//increase the counter and sleep 5 seconds (which is about how long the birds singing
+		//sound effect lasts)
+		i := i + 1;
+		sleep(5);
+
+	//repeat until the caster moves or else the caster has done the peacemaking thing 5 times
+	until (i >= 5 or casterx != caster.x or castery != caster.y);
+	return 1;
+endprogram
+

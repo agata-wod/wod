@@ -1,0 +1,463 @@
+use uo;
+use os;
+use cfgfile;
+use math;
+
+include "../pkg/magic/necro/necro";
+
+var gump_layout := array;
+var gump_data := array;
+
+//the cfg file that contains information used to display reagent information
+var reagent_cfg := ReadConfigFile (":*:itemnames");
+//the cfg file that contains the spells
+var spell_cfg_file := ReadConfigFile (":*:spells");
+
+var xpos := 130;
+var ypos := 130;
+var codex_position;
+var big_move_mode := 1;
+  
+CONST MOVE_INCREMENT := 75;
+CONST MINI_MOVE_INCREMENT := 10;
+
+program codexdamnorum (character, book)
+	if (GetObjProperty (book, "#necrobookopen"))
+		if (GetProcess (GetObjProperty (book, "#necrobookopen")))
+			return;
+		endif
+	endif
+	SetObjProperty (book, "#necrobookopen", GetPid());
+
+	codex_position := GetObjProperty (character, "codex_position");
+	if (codex_position)
+		xpos := codex_position[1];
+		ypos := codex_position[2];
+	else
+		codex_position := {100, 100};
+	endif
+
+	var done := 0;
+	repeat
+		BuildBookGump (book);
+		var gump_return := SendDialogGump (character, gump_layout, gump_data);
+		if (!gump_return or !gump_return[0])
+			done := 1;
+
+		elseif (gump_return[9999])
+			DisplaySpecialInfoGump (character, book);
+			
+		else
+			if (character.hidden)
+				character.hidden := 0;
+			endif
+			CastNecroSpell (character, gump_return[0]);
+		endif
+	until (done or !character);
+	EraseObjProperty (book, "#necrobookopen");
+endprogram
+
+
+
+
+///////////////////
+//  builds the gump for the book
+///////////////////
+
+function BuildBookGump (book)
+
+	gump_layout := array {
+		"page 0",
+		"gumppic " + xpos + " " + ypos + " 2200",
+		"text " + (xpos+40) + " " + (ypos+10) + " 28 0",
+		"text  " + (xpos+200) + " " + (ypos+10) + " 28 1"
+	};
+
+	gump_data := array {
+		"Lesser Chants",
+		"Greater Chants"
+	};
+
+	var LSpellArray := array {78,65,66,67,68,69,80,77};
+	var GSpellArray := array {70,71,72,79,73,74,75,76};
+	var LesserSpellData := array {
+		"Darkness",
+		"Commune",
+		"Animate Dead",
+		"Control Undead",
+		"Sacrifice",
+		"Spectre's Touch",
+		"Wraith's Breath",
+		"Frost Field"
+	};
+
+	var GreaterSpellData := array {
+		"Kill",
+		"Raise Dead",
+		"Wraithform",
+		"Release",
+		"Transfusion",
+		"Summon Spirit",
+		"Lich",
+		"Plague"
+	};
+
+	var GreaterFlag := CINT (GetObjProperty (book, "Greater"));
+	var LesserFlag := CINT (GetObjProperty (book, "Lesser"));
+	var ypos_lesser := 40;
+	var ypos_greater := 40;
+	var stringcounter := 2;
+	for i := 1 to 8
+		if (FlagCheck (LesserFlag, i))
+			gump_layout.append ("button " + (xpos+30) + " " + (ypos+ypos_lesser) + " 2104 2103 1 0 " + LSpellArray[i]);
+			gump_layout.append ("text " + (xpos+45) + " " + (ypos+ypos_lesser-5) + " 0 " + stringcounter);
+			ypos_lesser := ypos_lesser + 20;
+			stringcounter := stringcounter + 1;
+			gump_data.append (LesserSpellData[i]);
+		endif
+		if (FlagCheck (GreaterFlag, i))
+			gump_layout.append ("button " + (xpos+190) + " " + (ypos+ypos_greater) + " 2104 2103 1 0 " + GSpellArray[i]);
+			gump_layout.append ("text " + (xpos+205) + " " + (ypos+ypos_greater-5) + " 0 " + stringcounter);
+			ypos_greater := ypos_greater + 20;
+			stringcounter := stringcounter + 1;
+			gump_data.append (GreaterSpellData[i]);
+		endif
+	endfor
+
+	gump_layout.append ("button " + (xpos+300) + " " + (ypos+180) + " 5411 5411 1 0 9999");
+
+
+endfunction
+
+
+
+
+///////////////////
+//  shows information about necro spells, including powerwords and reagents
+///////////////////
+
+function DisplaySpecialInfoGump (character, book)
+	var done := 0;
+	repeat
+		gump_layout := array {
+			"nodispose",
+			"page 0",
+			"gumppic " + (xpos) + " " + (ypos) + " 2200",
+			
+			"page 1",
+			"button " + (xpos+82) + " " + (ypos+62) + " 5600 5604 1 0 1001",
+			"button " + (xpos+82) + " " + (ypos+122) + " 5602 5606 1 0 1002",
+			"button " + (xpos+120) + " " + (ypos+92) + " 5601 5605 1 0 1003",
+			"button " + (xpos+45) + " " + (ypos+92) + " 5603 5607 1 0 1004",
+			"button " + (xpos+83) + " " + (ypos+94) + " 1210 1210 1 0 1005",
+
+			"tilepic " + (xpos+70) + " " + (ypos+60) + " 4071",
+			"tilepic " + (xpos+47) + " " + (ypos+63) + " 4070",
+			"tilepic " + (xpos+92) + " " + (ypos+63) + " 4072",
+			"tilepic " + (xpos+25) + " " + (ypos+80) + " 4073",
+			"tilepic " + (xpos+69) + " " + (ypos+80) + " 4074",
+			"tilepic " + (xpos+115) + " " + (ypos+80) + " 4075",
+			"tilepic " + (xpos+47) + " " + (ypos+103) + " 4076",
+			"tilepic " + (xpos+92) + " " + (ypos+102) + " 4078",
+			"tilepic " + (xpos+70) + " " + (ypos+125) + " 4077",
+
+			"button " + (xpos+294) + " " + (ypos+5) + " 2206 2206 0 2"
+		};
+	
+		gump_data := array {	};
+	
+		var LesserSpellData := array {
+			"Darkness",
+			"Commune",
+			"Animate Dead",
+			"Control Undead",
+			"Sacrifice",
+			"Spectre's Touch",
+			"Wraith's Breath",
+			"Frost Field"
+		};
+	
+		var GreaterSpellData := array {
+			"Kill",
+			"Raise Dead",
+			"Wraithform",
+			"Release",
+			"Transfusion",
+			"Summon Spirit",
+			"Lich",
+			"Plague"
+		};
+	
+		var LSpellArray := array {78,65,66,67,68,69,80,77};
+		var GSpellArray := array {70,71,72,79,73,74,75,76};
+	
+		var GreaterFlag := CINT (GetObjProperty (book, "Greater"));
+		var LesserFlag := CINT (GetObjProperty (book, "Lesser"));
+		var stringcounter := 0;
+		var pagecounter := 1;
+		var pageside := 1;
+		var stringypos := 60;
+		var stringxpos := 70;
+		var spellcounter := 1;
+
+	
+		//count how many spells there are in this codex
+		var total_spells := 0;
+		for i := 1 to 8
+			if (FlagCheck (LesserFlag, i))
+				total_spells := total_spells + 1;
+			endif
+		endfor
+		for i := 1 to 8
+			if (FlagCheck (GreaterFlag, i))
+				total_spells := total_spells + 1;
+			endif
+		endfor
+		
+		for i := 1 to 8
+			if (pageside == 2)
+				pagecounter := pagecounter + 1;
+				pageside := 0;
+				gump_layout.append ("page " + pagecounter);
+				if (pagecounter > 1)
+					gump_layout.append ("button " + (xpos+23) + " " + (ypos+6) + " 2205 2205 0 " + (pagecounter-1));
+				endif
+				if ((spellcounter+1) < total_spells)
+					gump_layout.append ("button " + (xpos+294) + " " + (ypos+5) + " 2206 2206 0 " + (pagecounter+1));
+				endif
+			endif
+			stringypos := 30;
+			if (FlagCheck (LesserFlag, i))
+				if (pageside)
+					stringxpos := 190;
+				else
+					stringxpos := 40;
+				endif
+	
+				gump_layout.append ("text " + (xpos+stringxpos) + " " + (ypos+stringypos) + " 32 " + stringcounter);
+				gump_data.append (LesserSpellData[i]);
+				stringypos := stringypos + 18;
+				stringcounter := stringcounter + 1;
+	
+				var spell_number := LSpellArray[i];
+				var current_spell := spell_cfg_file[spell_number];
+	
+				if (spell_number == 78)
+					gump_layout.append ("tilepic " + (xpos+stringxpos+60) +" " + (ypos+70) + " 7392");
+					gump_layout.append ("tilepic " + (xpos+stringxpos+75) +" " + (ypos+110) + " 4653");
+				elseif (spell_number == 65)
+					gump_layout.append ("tilepic " + (xpos+stringxpos+90) +" " + (ypos+31) + " 7341");
+					gump_layout.append ("tilepic " + (xpos+stringxpos+68) +" " + (ypos+48) + " 7342");
+					gump_layout.append ("tilepic " + (xpos+stringxpos+46) +" " + (ypos+70) + " 7343");
+				elseif (spell_number == 67)
+					gump_layout.append ("tilepic " + (xpos+stringxpos+90) +" " + (ypos+70) + " 4373");
+				elseif (spell_number == 69)
+					gump_layout.append ("tilepic " + (xpos+stringxpos+20) +" " + (ypos+70) + " 3791");
+					gump_layout.append ("tilepic " + (xpos+stringxpos+90) +" " + (ypos+50) + " 3811");
+				elseif (spell_number == 80)
+					gump_layout.append ("tilepic " + (xpos+stringxpos+70) +" " + (ypos+85) + " 3619");
+					gump_layout.append ("tilepic " + (xpos+stringxpos+90) +" " + (ypos+105) + " 3616");
+				endif
+	
+				gump_layout.append ("text " + (xpos+stringxpos+5) + " " + (ypos+stringypos) + " 0 " + stringcounter);
+				gump_data.append (current_spell.displaywords1);
+				stringypos := stringypos + 15;
+				stringcounter := stringcounter + 1;
+	
+				gump_layout.append ("text " + (xpos+stringxpos+5) + " " + (ypos+stringypos) + " 0 " + stringcounter);
+				gump_data.append (current_spell.displaywords2);
+				stringypos := stringypos + 15;
+				stringcounter := stringcounter + 1;
+	
+				gump_layout.append ("text " + (xpos+stringxpos+5) + " " + (ypos+stringypos) + " 0 " + stringcounter);
+				gump_data.append (current_spell.displaywords3);
+				stringypos := stringypos + 25;
+				stringcounter := stringcounter + 1;
+	
+				gump_layout.append ("text " + (xpos+stringxpos) + " " + (ypos+stringypos) + " 1322 " + stringcounter);
+				gump_data.append ("Reagents:");
+				stringypos := stringypos + 15;
+				stringcounter := stringcounter + 1;
+	
+				var reagent_array := GetConfigStringArray( current_spell, "reagent" );
+				foreach current_reagent in reagent_array
+					var temporary_string := DescribeReagent (current_reagent);
+					gump_data.append (temporary_string);
+					gump_layout.append ("text " + (xpos+stringxpos) + " " + (ypos+stringypos) + " 0 " + stringcounter );
+					stringcounter := stringcounter + 1;
+					stringypos := stringypos + 15;
+				endforeach
+	
+				pageside := pageside + 1;
+				spellcounter := spellcounter + 1;
+			endif
+		endfor
+	
+		for i := 1 to 8
+			if (pageside == 2)
+				pagecounter := pagecounter + 1;
+				pageside := 0;
+				gump_layout.append ("page " + pagecounter);
+				if (pagecounter > 1)
+					gump_layout.append ("button " + (xpos+23) + " " + (ypos+6) + " 2205 2205 0 " + (pagecounter-1));
+				endif
+				if ((spellcounter+1) < total_spells)
+					gump_layout.append ("button " + (xpos+294) + " " + (ypos+5) + " 2206 2206 0 " + (pagecounter+1));
+				endif
+			endif
+			stringypos := 30;
+			if (FlagCheck (GreaterFlag, i))
+				if (pageside)
+					stringxpos := 190;
+				else
+					stringxpos := 40;
+				endif
+	
+				gump_layout.append ("text " + (xpos+stringxpos) + " " + (ypos+stringypos) + " 32 " + stringcounter);
+				gump_data.append (GreaterSpellData[i]);
+				stringypos := stringypos + 18;
+				stringcounter := stringcounter + 1;
+	
+				var spell_number := GSpellArray[i];
+				var current_spell := spell_cfg_file[spell_number];
+	
+				if (spell_number == 76)
+					gump_layout.append ("tilepic " + (xpos+stringxpos+85) +" " + (ypos+80) + " 6233");
+				elseif (spell_number == 74)
+					gump_layout.append ("tilepic " + (xpos+stringxpos+85) +" " + (ypos+80) + " 6237");
+				elseif (spell_number == 73)
+					gump_layout.append ("tilepic " + (xpos+stringxpos+20) +" " + (ypos+60) + " 7572");
+					gump_layout.append ("tilepic " + (xpos+stringxpos+85) +" " + (ypos+80) + " 7405");
+					gump_layout.append ("tilepic " + (xpos+stringxpos+70) +" " + (ypos+90) + " 7407");
+					gump_layout.append ("tilepic " + (xpos+stringxpos+90) +" " + (ypos+95) + " 7408");
+				elseif (spell_number == 70)
+					gump_layout.append ("tilepic " + (xpos+stringxpos+85) +" " + (ypos+80) + " 3968");
+					gump_layout.append ("tilepic " + (xpos+stringxpos+70) +" " + (ypos+90) + " 3971");
+					gump_layout.append ("tilepic " + (xpos+stringxpos+90) +" " + (ypos+95) + " 3965");
+				elseif (spell_number == 79)
+					gump_layout.append ("tilepic " + (xpos+stringxpos+80) +" " + (ypos+70) + " 4475");
+				endif
+	
+				gump_layout.append ("text " + (xpos+stringxpos+5) + " " + (ypos+stringypos) + " 0 " + stringcounter);
+				gump_data.append (current_spell.displaywords1);
+				stringypos := stringypos + 15;
+				stringcounter := stringcounter + 1;
+	
+				gump_layout.append ("text " + (xpos+stringxpos+5) + " " + (ypos+stringypos) + " 0 " + stringcounter);
+				gump_data.append (current_spell.displaywords2);
+				stringypos := stringypos + 15;
+				stringcounter := stringcounter + 1;
+	
+				gump_layout.append ("text " + (xpos+stringxpos+5) + " " + (ypos+stringypos) + " 0 " + stringcounter);
+				gump_data.append (current_spell.displaywords3);
+				stringypos := stringypos + 25;
+				stringcounter := stringcounter + 1;
+	
+				gump_layout.append ("text " + (xpos+stringxpos) + " " + (ypos+stringypos) + " 1322 " + stringcounter);
+				gump_data.append ("Reagents:");
+				stringypos := stringypos + 15;
+				stringcounter := stringcounter + 1;
+	
+				var reagent_array := GetConfigStringArray( current_spell, "reagent" );
+				foreach current_reagent in reagent_array
+					var temporary_string := DescribeReagent (current_reagent);
+					gump_data.append (temporary_string);
+					gump_layout.append ("text " + (xpos+stringxpos) + " " + (ypos+stringypos) + " 0 " + stringcounter );
+					stringcounter := stringcounter + 1;
+					stringypos := stringypos + 15;
+				endforeach
+	
+				pageside := pageside + 1;
+				spellcounter := spellcounter + 1;
+			endif
+		endfor
+	
+		var gump_return := SendDialogGump (character, gump_layout, gump_data);
+		if (!gump_return and gump_return[0] != 0)
+			SendSysMessage (character, "You must close other gumps before you can use this.");
+			return;
+
+		//Move the minigump
+		elseif (gump_return[0] == 1001)
+			if (big_move_mode)
+				ypos := ypos - MOVE_INCREMENT;
+			else
+				ypos := ypos - MINI_MOVE_INCREMENT;
+			endif
+			if (ypos < 0)
+				ypos := 0;
+			endif
+			codex_position[2] := ypos;
+			SetObjProperty (character, "codex_position", codex_position);
+		//Move the minigump
+		elseif (gump_return[0] == 1002)
+			if (big_move_mode)
+				ypos := ypos + MOVE_INCREMENT;
+			else
+				ypos := ypos + MINI_MOVE_INCREMENT;
+			endif
+			codex_position[2] := ypos;
+			SetObjProperty (character, "codex_position", codex_position);
+		//Move the minigump
+		elseif (gump_return[0] == 1003)
+			if (big_move_mode)
+				xpos := xpos + MOVE_INCREMENT;
+			else
+				xpos := xpos + MINI_MOVE_INCREMENT;
+			endif
+			codex_position[1] := xpos;
+			SetObjProperty (character, "codex_position", codex_position);
+		//Move the minigump
+		elseif (gump_return[0] == 1004)
+			if (big_move_mode)
+				xpos := xpos - MOVE_INCREMENT;
+			else
+				xpos := xpos - MINI_MOVE_INCREMENT;
+			endif
+			if (xpos < 0)
+				xpos := 0;
+			endif
+			codex_position[1] := xpos;
+			SetObjProperty (character, "codex_position", codex_position);
+
+		//Toggle move modes
+		elseif (gump_return[0] == 1005)
+			if (big_move_mode)
+				big_move_mode := 0;
+			else
+				big_move_mode := 1;
+			endif
+		else
+			done := 1;
+		endif
+	until (done or !character);
+endfunction
+
+
+
+
+///////////////////
+//  this function looks at the reagent that was passed to it, and returns a string that best describes
+//  that reagent
+///////////////////
+
+function DescribeReagent (reagent)
+
+	var return_string := "";
+	var temp_split_words := splitwords(reagent);
+	var reagent_objtype := CINT (temp_split_words[1]);
+	if (!reagent_objtype)
+		reagent_objtype := GetObjtypeByName (temp_split_words[1]);
+	endif
+	var reagent_number := cint(temp_split_words[2]);
+
+	var reagent_cfg_elem := FindConfigElem ( reagent_cfg, reagent_objtype );
+
+	if (reagent_number == 1 or reagent_number == 0)
+		return_string := cstr ("1 " + reagent_cfg_elem.name);
+	else
+		return_string := cstr (reagent_number + " " + reagent_cfg_elem.plural);
+	endif
+
+	return return_string;
+endfunction

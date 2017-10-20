@@ -1,0 +1,14 @@
+use uo;
+use os;
+use basic;
+
+include "include/dotempmods";
+include "include/skills";
+
+program demod (parms)
+	if (parms[5] == "skillmod")
+		RemoveNPCSkillMod (parms);
+		return;
+	endif
+	RemoveNPCMod (parms);
+endprogram

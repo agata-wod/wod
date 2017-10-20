@@ -1,0 +1,167 @@
+use uo;
+use util;
+use os;
+use vitals;
+
+include "include/client";
+include "include/objtype";
+include "include/attributes";
+
+program UseWood (character, wood)
+
+	//Make sure we can use the wood
+	if (!ReserveItem (wood))
+		SendSysMessage (character, "Someone else is using that!");
+		return;
+	endif
+	if (!Accessible (character, wood))
+		PrintTextAbovePrivate (wood, "You can't reach that!", character);
+		return;
+	endif
+
+	
+	character.hidden := 0;
+	var x, y, z, rlm;
+	if (CheckSkill (character, SKILLID_CAMPING, 10, 0 ))
+		if (wood.container)
+			x := character.x;
+			y := character.y;
+			z := character.z;
+			rlm := character.realm;
+		else
+        	x := wood.x;
+        	y := wood.y;
+        	z := wood.z;
+       		rlm := wood.realm;
+			MoveItemToContainer (wood, character.backpack);
+		endif
+	else
+		PrintTextAbovePrivate (wood, "You couldn't manage to start the fire.", character);
+		return;
+	endif
+
+	var campfire := CreateItematLocation (x, y, z, UOBJ_CAMPFIRE, 1, rlm);
+	if (!campfire)
+		PrintTextAbovePrivate (wood, "You couldn't manage to start the fire.", character);
+		return;
+	endif
+	PlaySoundEffect (campfire, 0x226);
+	SubtractAmount (wood, 1);
+	sleep(1);
+	if (wood)
+		ReleaseItem (wood);
+	endif
+
+	if (!CheckSkill (character, SKILLID_CAMPING, -1, 0))
+		SendSysMessage (character, "That's not a very good campfire...");
+		sleep (60);
+		BurnOut (campfire);
+		return;
+	endif
+	
+	var campskill := GetAttribute (character, ATTRIBUTEID_CAMPING);
+
+	//Higher skill levels give better regeneration rates
+	var healamount := 1;
+	if ( campskill > 80 )
+		healamount := 7;
+	elseif (campskill > 60)
+		healamount := 5;
+	elseif (campskill > 40)
+		healamount := 3;
+	endif
+	
+	//You get a larger range of effect with greater camping skill
+	var range := 3;
+	if (campskill > 85)
+		range := 4;
+	elseif (campskill > 95)
+		range := 6;
+	elseif (campskill > 105)
+		range := 7;
+	endif
+
+	PrintTextAbove (campfire, "Now that's a fire!");
+	for i := 1 to 60
+		foreach mobile in ListMobilesNearLocation (x, y, z, 8, rlm)
+			if (mobile.npctemplate and mobile.warmode)
+				PrintTextAbove (campfire, mobile.name + " disturbs the camp!");
+				SetObjProperty (campfire, "#disturbed", 1);
+				sleep (60-i);
+				BurnOut (campfire);
+				return;
+			endif
+		endforeach
+		
+		if (GetObjProperty (campfire, "#disturbed"))
+			sleep (60-i);
+			BurnOut (campfire);
+			return;
+		endif
+
+		foreach mobile in ListMobilesNearLocation (x, y, z, range, rlm)
+			foreach hostilemob in ListHostiles (mobile, 20, LH_FLAG_LOS);
+				PrintTextAbove (campfire, hostilemob.name + " disturbs the camp!");
+				SetObjProperty (campfire, "#disturbed", 1);
+				sleep (60-i);
+				BurnOut (campfire);
+				return;
+			endforeach
+		
+			var camp := 1;
+			if (GetObjProperty (mobile, "#camping"))
+				var othercampfireserial := GetObjProperty (mobile, "#camping");
+				if (othercampfireserial != campfire.serial)
+					var othercampfire := SystemFindObjectBySerial (othercampfireserial);
+					if (othercampfire and Distance (mobile, othercampfire) < 5)
+						if (!GetObjProperty (othercampfire, "#disturbed"))
+							camp := 0;
+						endif
+					endif
+				endif
+			endif
+		
+			if (camp)
+				SetObjProperty (mobile, "#camping", campfire.serial);
+				if (GetVital (mobile, "Life") < GetVitalMaximumValue (mobile, "Life"))
+					SetVital (mobile, "Life", GetVital (mobile, "Life") + healamount*100);
+					if (GetVital (mobile, "Life") > GetVitalMaximumValue (mobile, "Life"))
+						SetVital (mobile, "Life", GetVitalMaximumValue (mobile, "Life"));
+					endif
+				endif
+				if (GetVital (mobile, "Mana") < GetVitalMaximumValue (mobile, "Mana"))
+					SetVital (mobile, "Mana", GetVital (mobile, "Mana") + healamount*100);
+					if (GetVital (mobile, "Mana") > GetVitalMaximumValue (mobile, "Mana"))
+						SetVital (mobile, "Mana", GetVitalMaximumValue (mobile, "Mana"));
+					endif
+				endif
+				if (GetVital (mobile, "Stamina") < GetVitalMaximumValue (mobile, "Stamina"))
+					SetVital (mobile, "Stamina", GetVital (mobile, "Stamina") + healamount*100);
+					if (GetVital (mobile, "Stamina") > GetVitalMaximumValue (mobile, "Stamina"))
+						SetVital (mobile, "Stamina", GetVitalMaximumValue (mobile, "Stamina"));
+					endif
+				endif
+			endif
+		endforeach
+		sleep (1);
+	endfor
+	BurnOut (campfire);
+endprogram
+
+
+
+
+///////////////////
+//  changes the graphic of the campfire to embers, then destroys it
+///////////////////
+
+function BurnOut (campfire)
+	SetObjProperty (campfire, "#disturbed", 1);
+	sleep (5);
+
+	campfire.graphic := 0xde9;
+	sleep (20);
+	campfire.graphic := 0xdea;
+	sleep (30);
+	DestroyItem (campfire);
+endfunction

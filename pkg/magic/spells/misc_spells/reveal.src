@@ -1,0 +1,52 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 6;
+
+program reveal_hider (parms, spellid)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+
+	var range := CINT (caster_magery/10 ) - 5;
+	if (range < 1)
+		range := 1;
+	endif
+
+	var hiders := ListMobilesNearLocationEx (caster.x, caster.y, caster.z, range, LISTEX_FLAG_HIDDEN, caster.realm);
+	var numfound := 0;
+
+	if(len(hiders) > 0)
+		foreach mobile in hiders
+			if (!GetObjProperty (mobile, "#specialhidden_nodamage"))
+				if (Found (mobile))
+					numfound := 1;
+					mobile.hidden := 0;
+					PrintTextAbovePrivate (mobile , "You have been revealed!" , mobile);
+					PrintTextAbovePrivate (mobile , "Ah ha!!" , caster);
+					PlaySoundEffect(mobile, SFX_1FE);
+				endif
+			endif
+		endforeach
+	endif
+	if (!numfound)
+    		PrintTextAbovePrivate( caster , "You didnt find any anyone." , caster );
+ 	endif
+	return 1;
+endprogram
+
+
+function Found (hider)
+	var resist := GetAttribute (hider, ATTRIBUTEID_MAGICRESISTANCE);
+	if (resist > caster_evalint)
+		return 0;
+	else
+		return 1;
+	endif
+endfunction

@@ -1,0 +1,129 @@
+use uo;
+use os;
+use http;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/string";
+include "include/www";
+
+WriteHTML ("<html><head><title>Search for items by serial number</title></head>");
+WriteHTML ("<body bgcolor=\"#dcdeed\">");
+
+var serialnumber := CINT (QueryParam ("serial"));
+if (!serialnumber)
+	WriteHTML ("Please enter a serial number");
+	WriteHTML ("<form method=GET action=item_search.ecl>");
+	WriteHTML ("Serial: <input name=serial>");
+	WriteHTML ("<input id=submit1 name=submit1 type=submit value=Search>");
+	WriteHTML ("</body></html>");
+	return;
+endif
+
+var searchpid := GetGlobalProperty ("#searchitempid");
+if (searchpid)
+	if (GetProcess (searchpid))
+		WriteHTML ("There is another search already going on.  Because searching for items by serial number is ");
+		WriteHTML ("very stressing on the server, only one search can be performed at a time. ");
+		WriteHTML ("Try again in a minute.</body></html>");
+		return;
+	endif
+endif
+SetGlobalProperty ("#searchitempid", GetPid());
+
+var findcharacter := FindOnlineAccountByIP (QueryIP());
+var account, player;
+foreach acctname in ListAccounts ()
+	account := FindAccount (acctname);
+	if (account)
+		for counter := 1 to 7
+			player := account.GetCharacter (counter);
+			if (player)
+				if (player.serial == serialnumber)
+					WriteHTML ("Player character: " + player.name + "<br>");
+					WriteHTML ("Account: " + acctname + "</body></html>");
+					return;
+				endif
+				foreach item in EnumerateItemsInContainer (player.backpack)
+					if (item.serial == serialnumber)
+						if (QueryParam ("getitem"))
+							var character := FindOnlineAccountByIP (QueryIP());
+							if (character and character.cmdlevel)
+								MoveItemToContainer (item, character.backpack);
+								WriteHTML ("Item moved.</body></html>");
+								return;
+							endif
+						endif
+
+						WriteHTML ("Found " + item.desc  + " in backpack of: " + player.name + "<br>");
+						WriteHTML ("Account: " + acctname + "</body></html>");
+						if (findcharacter)
+							WriteHTML ("<br><a href=item_search.ecl?serial=" + serialnumber + "&getitem=1>Move item to my backpack</a>");
+						endif
+						return;
+					endif
+				endforeach
+			endif
+		endfor
+		var bankbox := FindBankBox (acctname, 1);
+		if (bankbox)
+			foreach item in EnumerateItemsInContainer (bankbox)
+				if (item.serial == serialnumber)
+					if (QueryParam ("getitem"))
+						var character := FindOnlineAccountByIP (QueryIP());
+						if (character and character.cmdlevel)
+							MoveItemToContainer (item, character.backpack);
+							WriteHTML ("Item moved.</body></html>");
+							return;
+						endif
+					endif
+
+					WriteHTML ("Found " + item.desc  + " in bankbox of: " + acctname + "</body></html>");
+						if (findcharacter)
+							WriteHTML ("<br><a href=item_search.ecl?serial=" + serialnumber + "&getitem=1>Move item to my backpack</a>");
+						endif
+					return;
+				endif
+			endforeach
+		endif
+	endif
+	sleepms (1);
+endforeach
+
+var item := SystemFindObjectBySerial (serialnumber);
+if (item)
+	if (QueryParam ("getitem"))
+		var character := FindOnlineAccountByIP (QueryIP());
+		if (character and character.cmdlevel)
+			MoveItemToContainer (item, character.backpack);
+			WriteHTML ("Item moved.</body></html>");
+			return;
+		endif
+	endif
+
+	WriteHTML ("Found " + item.desc  + " at: <br>");
+	if (item.container)
+		while (item.container)
+			item := item.container;
+		endwhile
+	endif
+	
+	WriteHTML ("X = " + item.x  + "<br>");
+	WriteHTML ("Y = " + item.y  + "<br>");
+	if (findcharacter)
+		WriteHTML ("<br><a href=item_search.ecl?serial=" + serialnumber + "&getitem=1>Move item to my backpack</a>");
+	endif
+	return;
+endif
+
+
+
+WriteHTML ("Unable to find item.</body></html>");
+
+
+
+
+
+

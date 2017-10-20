@@ -1,0 +1,132 @@
+use uo;
+use util;
+use cfgfile;
+use os;
+
+include "include/wodinc";
+include "include/poison";
+include "include/dotempmods";
+
+Const SOUND_EFFECT_EAT1 := 0x3b;      
+Const SOUND_EFFECT_EAT2 := 0x3c;  
+Const SOUND_EFFECT_EAT3 := 0x3d;  
+Const ACTION_EAT := 0x22;
+
+program eat_food (character, food)
+	//don't eat locked down food
+	if (food.movable == 0)
+		SendSysmessage (character, "You can't eat that.");
+		return;
+	endif
+	
+	//don't eat giant cakes - they need to be sliced
+	if (food.objtype == 0x28aa)
+		SendSysMessage (character, "That's a bit large.  Why don't you slice it first?");
+		return;
+	endif
+
+	//reserve the food
+	if (!ReserveItem (food) )
+		SendSysMessage (character, "You can't eat that.");
+		return;
+	endif
+
+	//open the cooking itemdesc file to find the nutritional value of the food being eaten
+	var cfgfile := ReadConfigFile ("itemdesc");
+	var elem := FindConfigElem (cfgfile, food.objtype);
+	var foodvalue := GetConfigInt (elem, "nutrition");
+	if (!foodvalue)
+		foodvalue := 1;
+	endif
+
+	//temporary message string
+	var themsg := "";
+
+	//Send a message based on the food value and play a sound effect
+	var random_number := RandomInt(3) + 1;
+	if (foodvalue <= 0)
+		case (random_number)
+			1:	PlaySoundEffect(character,SOUND_EFFECT_EAT1); 
+				themsg := "Yuk!";
+			2:	PlaySoundEffect(character,SOUND_EFFECT_EAT2); 
+				themsg := "Gross!";
+			3:	PlaySoundEffect(character,SOUND_EFFECT_EAT3);
+				themsg := "Disgusting!";
+		endcase
+	elseif (foodvalue <=3)
+		case (random_number)
+			1:	PlaySoundEffect(character,SOUND_EFFECT_EAT1); 
+				themsg := "Good!";
+
+			2:	PlaySoundEffect(character,SOUND_EFFECT_EAT2); 
+				themsg := "Yum!";
+
+			3:	PlaySoundEffect(character,SOUND_EFFECT_EAT3);
+				themsg := "Tasty!"; 
+		endcase
+	elseif (foodvalue <=6)
+		case (random_number)
+			1:	PlaySoundEffect(character,SOUND_EFFECT_EAT1); 
+				themsg := "Delicious!";
+
+			2:	PlaySoundEffect(character,SOUND_EFFECT_EAT2); 
+				themsg := "Great!";
+
+			3:	PlaySoundEffect(character,SOUND_EFFECT_EAT3);
+				themsg := "Very tasty!"; 
+		endcase
+	else
+		case (random_number)
+			1:	PlaySoundEffect(character,SOUND_EFFECT_EAT1); 
+				themsg := "Absolutely delicious!";
+
+			2:	PlaySoundEffect(character,SOUND_EFFECT_EAT2); 
+				themsg := "That was fabulous!";
+
+			3:	PlaySoundEffect(character,SOUND_EFFECT_EAT3);
+				themsg := "That tasted wonderful!"; 
+		endcase
+	endif
+
+	//Find out how hungry the character is
+	var hunger := GetObjProperty(character, "hunger");
+	if (!hunger) 
+		hunger := 0;
+	endif
+
+	//If they're not hungry, change the message to reflect that
+	if ((!hunger) or (hunger < 1))
+		themsg := "You're stuffed!";
+		hunger := 0;
+	endif
+
+	//do the eating motion and send the message
+	PerformAction(character, ACTION_EAT);
+	SendSysmessage (character, themsg);
+
+	//check to see if the food was poisoned
+	var poison := Cint(GetObjProperty (food, "poison_level"));
+	if ( poison > 0 )
+		SetPoison (character, poison, "You've been poisoned!");
+	endif
+
+	//destroy what was eaten, in certain cases returning another item
+	case (food.objtype)
+		0x097e:		CreateItemInBackpack (character, 0x097d, 1);
+		0x097d:		CreateItemInBackpack (character, 0x097c, 1);
+		0xc914:		CreateItemInBackpack (character, 0x15f8, 1);
+	endcase
+	SubtractAmount (food, 1);
+
+	//reduce the character's hunger, but not below 0
+	hunger := hunger - foodvalue;
+	if (hunger < 0)
+		hunger := 0;
+	endif
+	SetObjProperty (character, "hunger", hunger);
+	DoPersistedMod (character, "stamina_regen_rate", (foodvalue*1200), 0, 3600, "Food");
+	
+	RecalcVitals (character);
+endprogram
+
+

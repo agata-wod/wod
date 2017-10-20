@@ -1,0 +1,54 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/eventid";
+include "include/client";
+include "include/magic";
+include "include/utility";
+include "../pkg/magic/druid/druid";
+
+
+program cast_druid_spell (parms)
+	var spell_cfg_file := ReadConfigFile ("spells");
+	var caster := parms [1];
+	var staff := parms [2];
+	var spellid := parms [3];
+
+	//check to see if they're already casting another spell
+	var castingdruidspell := GetObjProperty (caster, "#castingdruidspell");
+	if (castingdruidspell and castingdruidspell > ReadGameClock())
+		SendSysMessage (caster, "You're already casting another spell!");
+		return;
+	endif
+
+	//search to see if the player has the rune for that spell
+	if (!SearchBackpackForRune (caster, spell_cfg_file[spellid].rune_objtype) )
+		SendSysMessage (caster, "You don't have the rune for that spell.");
+		return;
+	endif
+
+	//this is what really casts the spell
+	if (!castdruidspell (caster, staff, spellid))
+		EraseObjProperty (caster, "#castingdruidspell");
+		Fizzle(caster);
+	endif
+endprogram
+
+
+
+
+///////////////////
+//  searches the characters backpack for each druid rune bag they have and checks them until it
+//  finds one that contains the given rune
+///////////////////
+
+function SearchBackpackForRune (character, rune_objtype )
+	foreach bag in ListRootItemsInContainerOfObjtype (character.backpack, 0x1706b)
+		if (CheckForRuneInBag (bag, rune_objtype) )
+			return 1;
+		endif
+	endforeach
+
+	return 0;
+endfunction

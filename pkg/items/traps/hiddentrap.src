@@ -1,0 +1,23 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/wodinc";
+
+program walk_on_trap( mobile, trap )
+
+   var itemdesc := ReadConfigFile( "itemdesc" );
+   var elem := FindConfigElem( itemdesc , trap.objtype );
+   var effect := GetConfigInt( elem , "Effect" );
+
+   var dieroll := GetConfigString( elem, "Damage" );
+
+   PlayStationaryEffect( trap.x, trap.y, trap.z, effect, 0xa, 0xb, 0, trap.realm );
+
+   var dam := RandomDiceRoll( dieroll );  
+   DoDamageByType (0, mobile, dam, DAMAGETYPE_PHYSICAL);
+endprogram
+
+
+

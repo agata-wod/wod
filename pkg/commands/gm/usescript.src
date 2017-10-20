@@ -1,0 +1,19 @@
+//
+// Destroy an item
+//
+
+use uo;
+
+program textcmd_destroy( who, text )
+
+	var item := Target( who );
+
+	if (item)
+		if (len(text))
+            		item.usescript := text;
+		else
+			item.usescript := "";
+		endif
+    	endif
+
+endprogram

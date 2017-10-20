@@ -1,0 +1,126 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/math";
+include "include/gumps";
+include "../pkg/npcs/townfolk/auctioneer/auctioneer";
+
+var gump_layout := array{};
+var gump_data := array{};
+var string_counter := 1;
+
+var itembox, current_item_num, current_item;
+var players_gold_held;
+var players_gold_available;
+
+program display_forsale_items (player, text)
+	if (GetObjProperty (player, "#auctioneerwindow"))
+		if (GetProcess (GetObjProperty (player, "#auctioneerwindow")))
+			return;
+		endif
+	endif
+	SetObjProperty (player, "#auctioneerwindow", GetPid());
+
+	var category := SelectAuctionBuyCategory (player);
+	if (!category)
+		EraseObjProperty (player, "#auctioneerwindow");
+		return;
+	elseif (category == "auction_search")
+		DoAuctionSearch (player);
+		EraseObjProperty (player, "#auctioneerwindow");
+		return;
+	endif
+
+	itembox := find_or_create_item (storage, category, UOBJ_BANKBOX);
+	var items := ListRootItemsInContainer (itembox);
+	if (!len (items))
+		SendSysMessage (player, "There are no items in that category");
+		EraseObjProperty (player, "#auctioneerwindow");
+		return;
+	endif
+
+	current_item_num := GetObjProperty (player, "#auction_item_num");
+	if (!current_item_num or current_item_num > len (items))
+		current_item_num := 1;
+	endif
+	
+	DisplayAuctionItems (player, 0, items, current_item_num);
+	EraseObjProperty (player, "#auctioneerwindow");
+	if (text)
+	endif
+endprogram
+
+
+
+
+///////////////////
+//  Lets the player search for items
+///////////////////
+
+function DoAuctionSearch (player)
+	var search_term := SendTextEntryGump (player, "Search for:", TE_CANCEL_DISABLE, TE_STYLE_NORMAL, 20, "");
+	search_term := Lower (search_term);
+	if (!search_term)
+		SendSysMessage (player, "Canceled.");
+		return;
+	endif
+
+	var items := array{};
+	var item_name;
+	foreach category in ListCategoryNames ()
+		itembox := find_or_create_item (storage, category, UOBJ_BANKBOX);
+		if (!itembox)
+			SendSysMessage (player, "Ack!  Bad!");
+			return;
+		endif
+		
+		foreach item in EnumerateItemsInContainer (itembox)
+			if (item.container == itembox)
+				item_name := Lower (item.desc);
+				if (item_name[search_term])
+					items.append (item);
+				endif
+			endif
+		endforeach
+	endforeach
+
+	if (!len (items))
+		SendSysMessage (player, "No items match that search.");
+		EraseObjProperty (player, "#auctioneerwindow");
+		return;
+	endif
+	
+	current_item_num := GetObjProperty (player, "#auction_item_num");
+	if (!current_item_num or current_item_num > len (items))
+		current_item_num := 1;
+	endif
+
+	DisplayAuctionItems (player, 0, items, current_item_num);
+	EraseObjProperty (player, "#auctioneerwindow");
+endfunction
+
+
+
+
+///////////////////
+//  builds the gump for the category selection menu
+///////////////////
+
+function SelectAuctionBuyCategory (player, message := "Select a category:")
+	var cat_list := ListCategoryDescriptions ();
+	cat_list.append ("Search Auctions");
+
+	var cat_select := DisplayMenuSelectionGump (player, message, cat_list);
+	if (!cat_select)
+		return 0;
+	elseif (cat_select == cat_list.size())
+		return "auction_search";
+	endif
+
+	var category_names := ListCategoryNames ();
+	return category_names[cat_select];
+endfunction

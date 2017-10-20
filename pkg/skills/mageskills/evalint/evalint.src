@@ -1,0 +1,74 @@
+use uo;
+use os;
+use attributes;
+use vitals;
+
+include "include/client";
+
+program evalint( character )
+	if (GetObjProperty (character, "#useskill"))
+		if (GetProcess (GetObjProperty (character, "#useskill")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#useskill", GetPid());
+   
+	SendSysMessage (character, "Select a target." );
+	var subject := Target (character);
+	if (!subject)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (!GetAttribute (subject, "Intelligence"))
+		SendSysmessage (character, "Invalid selection.");
+		return;
+	endif
+
+	if (subject.dead)
+		SendSysMessage (character, "It looks rather dead...");
+		return;
+	endif
+
+	if (!CheckSkill (character, SKILLID_EVALINT, -1, 0))
+		SendSysmessage (character, "You're not sure . . .");
+		return;
+	endif
+
+	var intdesc := "";
+	if (GetAttribute (subject, "Intelligence") <= 20)
+		intdesc := "about as smart as a rock";
+	elseif (GetAttribute (subject, "Intelligence") <= 40) 
+		intdesc := "pretty dumb";
+	elseif (GetAttribute (subject, "Intelligence") <= 60)
+		intdesc := "not very bright";
+	elseif (GetAttribute (subject, "Intelligence") <= 90)
+		intdesc := "of average intelligence";
+	elseif (GetAttribute (subject, "Intelligence") <= 120)
+		intdesc := "rather bright";
+	elseif (GetAttribute (subject, "Intelligence") <= 160)
+		intdesc := "extremely intelligent";
+	else
+		intdesc := "superhumanly intelligent";
+	endif
+
+	var percentmana := CINT (100 * GetVital (subject, "Mana") / GetVitalMaximumValue (subject, "Mana"));
+	var manadesc := "";
+	if (percentmana <= 10)
+		manadesc := "completely drained";
+	elseif (percentmana <= 20) 
+		manadesc := "quite exhausted";
+	elseif (percentmana <= 40 )
+		manadesc := "somewhat tired";
+	elseif (percentmana <= 60 )
+		manadesc := "alert";
+	elseif (percentmana <= 80 )
+		manadesc := "very alert";
+	else  
+		manadesc := "completely alert";
+	endif
+
+	SendSysMessage (character, "It apprears to be " + intdesc + " and " + manadesc + ".");
+
+endprogram

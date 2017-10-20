@@ -1,0 +1,105 @@
+use uo;
+include "include/gumps";
+include "../pkg/items/housing/house";
+
+Const UOBJECT_BRASS_SIGN := 0x0bd2;
+Const UOBJECT_WOOD_SIGN := 0x0bd0;
+
+program customhouse_commit ( who, house, houseelemarray )
+	var components := GetObjProperty (house, "components");
+	var lockid := 0;
+	var sign := 0;
+	foreach compo in (components)
+		sign := SystemFindObjectBySerial(compo);
+		if (sign.objtype == UOBJECT_BRASS_SIGN or sign.objtype == UOBJECT_WOOD_SIGN)
+			lockid := GetObjProperty (sign, "lockid");
+			break;
+		endif
+	endforeach
+	var housevalue := GetHouseValueOfSign (sign);
+	var price := GetObjProperty (sign, "houseprice");
+	if (!price)
+		price := GetDefaultHousePrice (housevalue);
+	endif
+	var newprice := ((houseelemarray.size() + house.components.size())*500);
+	var totalcost := newprice + 10000 - price;
+	SendSysMessage (who, "The new house price will be " + newprice + " gold!");
+	SendSysMessage (who, "The current house price is " + price + " gold!");
+	if (totalcost >= 0)
+		SendSysMessage (who, "The cost of building this house is " + totalcost + " gold!");
+		if (!YesNo (who, "Build it?"))
+			house.acceptcommit(who, 0);
+			SendSysMessage (who, "Canceled.");
+			return;
+		endif
+		if (!who.spendgold (totalcost))
+			house.acceptcommit(who, 0);
+			SendSysMessage (who, "You don't have enough money");
+			return;
+		endif
+	else
+		var refund := 0-totalcost;
+		SendSysMessage (who, "You get a refund of " + refund + " gold.");
+		if (!YesNo (who, "Build it?"))
+			house.acceptcommit(who, 0);
+			SendSysMessage (who, "Canceled.");
+			if (who.concealed < 2)
+				who.concealed := 0;
+			endif
+			return;
+		endif
+		while (refund > 60000)
+			if (CreateItemInContainer (who.backpack, UOBJ_GOLD_COIN, 60000))
+				refund := refund - 60000;
+			else
+				SendSysMessage (who, "Error creating gold!  You'll have to page a GM...");
+				SetObjProperty (who, "OWEDGOLD", refund);
+				refund := 0;
+			endif
+		endwhile
+		CreateItemInContainer (who.backpack, UOBJ_GOLD_COIN, refund);
+	endif
+	SetObjProperty (sign, "houseprice", newprice);
+	house.acceptcommit(who, 1);
+	var teleporters := array{};
+	foreach item in (house.components)
+		if (item.isa (POLCLASS_DOOR))
+			item.locked := 1;
+			SetObjProperty (item, "lockid", lockid);
+		elseif (item.objtype >= 0x181d and item.objtype <= 0x1828)
+			teleporters.append(item);
+		endif
+	endforeach
+	foreach tele in teleporters
+		foreach nexttele in teleporters
+			if (_nexttele_iter <= _tele_iter)
+				continue;
+			endif
+			if (tele.objtype == nexttele.objtype)
+				SetObjProperty (tele, "DestX", nexttele.x);
+				SetObjProperty (tele, "DestY", nexttele.y);
+				SetObjProperty (tele, "DestZ", nexttele.z);
+				SetObjProperty (tele, "DestR", nexttele.realm);
+				break;
+			endif
+		endforeach
+		if (!GetObjProperty (tele, "DestX"))
+			foreach nexttele in teleporters
+				if (_nexttele_iter >= _tele_iter)
+					break;
+				endif
+				if (tele.objtype == nexttele.objtype)
+					SetObjProperty (tele, "DestX", nexttele.x);
+					SetObjProperty (tele, "DestY", nexttele.y);
+					SetObjProperty (tele, "DestZ", nexttele.z);
+					SetObjProperty (tele, "DestR", nexttele.realm);
+					break;
+				endif
+			endforeach
+		endif
+	endforeach
+	SendSysMessage (who, "This house has " + house.components.size() + " components.");
+	if (who.concealed < 2)
+		who.concealed := 0;
+	endif
+endprogram

@@ -1,0 +1,88 @@
+use uo;
+use os;
+
+var x_offset := 0;
+var y_offset := 0;
+var z_offset := 0;
+
+
+program copy_item (character, text)
+	SendSysMessage (character, "What item should be copied?");
+	var what := Target (character);
+	if (!what)
+		return;
+	endif
+
+	var done := 0;
+	var options := SplitWords (text);
+	for i := 1 to len(options)
+		if (options[i] == "px")
+			x_offset := CINT (options[i+1]);
+			if (!x_offset)
+				if (options[i+1] and options[i+1] == "0")
+					x_offset := 0;
+				else
+					x_offset := 1;
+				endif
+			endif
+		elseif (options[i] == "mx")
+			x_offset := 0-CINT (options[i+1]);
+			if (!x_offset)
+				if (options[i+1] and options[i+1] == "0")
+					x_offset := 0;
+				else
+					x_offset := 0-1;
+				endif
+			endif
+		elseif (options[i] == "py")
+			y_offset := CINT (options[i+1]);
+			if (!y_offset)
+				if (options[i+1] and options[i+1] == "0")
+					y_offset := 0;
+				else
+					y_offset := 1;
+				endif
+			endif
+		elseif (options[i] == "my")
+			y_offset := 0-CINT (options[i+1]);
+			if (!y_offset)
+				if (options[i+1] and options[i+1] == "0")
+					y_offset := 0;
+				else
+					y_offset := 0-1;
+				endif
+			endif
+		elseif (options[i] == "pz")
+			z_offset := CINT (options[i+1]);
+			if (!z_offset)
+				if (options[i+1] and options[i+1] == "0")
+					z_offset := 0;
+				else
+					z_offset := 1;
+				endif
+			endif
+		elseif (options[i] == "mz")
+			z_offset := 0-CINT (options[i+1]);
+			if (!z_offset)
+				if (options[i+1] and options[i+1] == "0")
+					z_offset := 0;
+				else
+					z_offset := 0-1;
+				endif
+			endif
+		endif
+	endfor
+
+	repeat
+		SendSysMessage (character, "Where should it be copied to?");
+		var location := TargetCoordinates (character);
+		if (!location)
+			return;
+		endif
+		
+		var item := CreateItemAtLocation (location.x + x_offset, location.y + y_offset, location.z + z_offset, what.objtype, 1, location.realm);
+		item.movable := what.movable;
+		item.color := what.color;
+	until (done or !character);
+
+endprogram

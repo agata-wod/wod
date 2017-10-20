@@ -1,0 +1,165 @@
+use uo;
+use os;
+
+include "include/client";
+
+program use_chargedspellitem (user, item)
+
+	if (CINT (GetObjProperty (user, "#useitem")) > ReadGameClock())
+		SendSysmessage (user, "You must wait to use that!");
+		return;
+	endif
+
+	var charges := Cint (GetObjProperty(item, "charges"));
+	var spellname := GetObjProperty (item, "spellname");
+
+	//temp code to fix old spellname's:
+	if (!spellname[":"])
+		spellname := GetNewSpellName( spellname );
+		setobjproperty( item, "spellname", spellname );
+	endif
+
+	var tgtopt := GetObjProperty(item, "tgtopt");
+
+	if (!IsWandEquipped (user,item))
+		return;
+	endif
+
+	SetObjProperty(user, "#useitem",readgameclock() + 5);
+
+	if (charges)
+        	charges := charges - 1;
+        	SetObjProperty(item, "charges", charges);
+        	DoSpell( user, spellname, tgtopt );
+    	else
+        	PrintTextAbovePrivate( item, "That is out of charges", user );
+    	endif
+	detach();
+	sleep(5);
+	EraseObjProperty(user, "#useitem");
+
+endprogram
+
+function DoSpell(caster,spellname,tgtopt)
+
+	var cast_on;
+
+	if (tgtopt == "NOTARGET")
+		cast_on := caster;
+	elseif (tgtopt == "TARGETAREA")
+		cast_on := TargetCoordinates( caster );
+	elseif (tgtopt == "TGTOPT_CHECK_LOS+TGTOPT_HELPFUL")
+		cast_on := Target( caster, TGTOPT_CHECK_LOS+TGTOPT_HELPFUL );
+	elseif (tgtopt == "TGTOPT_CHECK_LOS+TGTOPT_HARMFUL")
+		cast_on := Target( caster, TGTOPT_CHECK_LOS+TGTOPT_HARMFUL );
+	else
+		cast_on := Target( caster, TGTOPT_CHECK_LOS );
+	endif
+
+	if (!cast_on)
+		return;
+	endif
+
+	var parms := array;
+	parms[1] := "#MOB";
+	parms[2] := caster;
+	parms[3] := cast_on;
+
+	start_script( spellname, parms ); 
+
+endfunction
+
+function IsWandEquipped (character, wand)
+
+	if (wand.objtype >= 0x0DF2 and wand.objtype <= 0x0DF5)
+		var weapon := GetEquipmentByLayer (character, LAYER_HAND1);
+		if (weapon)
+			MoveItemToContainer (weapon, character.backpack);
+		endif
+
+		var shield := GetEquipmentByLayer (character, LAYER_HAND2);
+		if (shield)
+			MoveItemToContainer (shield, character.backpack);
+		endif
+
+		if (!EquipItem (character, wand))
+			SendSysMessage (character, "Can't equip wand!");
+			return 0;
+		endif
+
+		return 1;
+	endif
+
+	return 1;
+
+endfunction
+
+function GetNewSpellName( spellname )
+
+	case (spellname)
+	"heal":
+	"nightsight":
+	"gheal":
+	"manadrain":
+	"reflect":
+	"invisibility":
+	"reveal":
+	"manavamp":
+	"resurrect":
+		return (":misc_spells:"+spellname);
+	"magicarrow":
+	"harm":
+	"fireball":
+	"lightning":
+	"mindblast":
+	"ebolt":
+	"explosion":
+	"chain_lightning":
+	"fstrike":
+	"meteor_swarm":
+	"earthquake":
+		return (":damage_spells:"+spellname);
+	"polymorph":
+	"masscurse":
+	"paralyze":
+	"clumsy":
+	"feeblemind":
+	"reactivearmor":
+	"weaken":
+	"agility":
+	"cunning":
+	"protection":
+	"strength":
+	"bless":
+	"archprot":
+	"curse":
+		return (":statmod_spells:"+spellname);
+	"cure":
+	"poison":
+	"archcure":
+		return (":poison_spells:"+spellname);
+	"teleport":
+	"recall":
+	"gate":
+		return (":travel_spells:"+spellname);
+	"wallofstone":
+	"firefield":
+	"dispel_field":
+	"poisonfield":
+	"parafield":
+	"energy_field":
+		return (":field_spells:"+spellname);
+	"blade_spirit":
+	"summon_creature":
+	"dispel":
+	"massdispel":
+	"vortex":
+	"summon_air":
+	"summon_daemon":
+	"summon_earth":
+	"summon_fire":
+	"summon_water":
+		return (":summoning_spells:"+spellname);
+	endcase
+
+endfunction

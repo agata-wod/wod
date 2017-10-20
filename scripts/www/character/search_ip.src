@@ -1,0 +1,60 @@
+use uo;
+use os;
+use http;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/string";
+include "include/accounts";
+include "../pkg/items/housing/house";
+
+program search_ip_addresses ()
+	WriteHTML ("<html><head><title>Account Search</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+	
+	var ip_address := QueryParam ("ip_address");
+	if (!ip_address)
+		WriteHTML ("Please enter the IP address to search for");
+		WriteHTML ("<form method=GET action=search_ip.ecl>");
+		WriteHTML ("IP Address: <input name=ip_address>");
+		WriteHTML ("<input id=submit1 name=submit1 type=submit value=Search>");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	
+	var logon_record, logon_keys, dict_elem;
+	if (logon_keys)
+	endif
+	var found := 0;
+	foreach searchacctname in ListAccounts ()
+		logon_record := GetAccountProperty (searchacctname, "logon_record");
+		if (logon_record)
+			var logon_keys := logon_record.keys();
+			if (logon_keys.size())
+				foreach key in logon_keys
+					dict_elem := logon_record[key];
+					if (dict_elem[2] == ip_address)
+						if (!found)
+							WriteHTML ("<table cellpadding=2>");
+						endif
+						WriteHTML ("<tr><td><li><a href=account_info.ecl?acctname=" + searchacctname + ">" + searchacctname + "</a></td></tr>");
+						found := found + 1;
+						break;
+					endif
+				endforeach
+			endif
+		endif
+	endforeach
+	
+	if (found)
+		WriteHTML ("</table>");
+	else
+		WriteHTML ("<p>No matches found");
+	endif
+	WriteHTML ("</body></html>");
+endprogram
+
+
+

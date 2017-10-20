@@ -1,0 +1,27 @@
+use uo;
+use os;
+
+program set_daily_message (character)
+	var msg, themessage := "";
+	var previous_line := "Enter the text to add:";
+	repeat
+		msg := SendTextEntryGump (character, previous_line,
+			TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "Enter a blank line to end");
+		if (msg)
+			previous_line := msg;
+			themessage := themessage + " " + msg;
+		endif
+	until (!msg);
+	if (!themessage)
+		SendSysMessage (character, "Daily message erased");
+		EraseGlobalProperty ("daily_message");
+		return;
+	endif
+	
+	var daily_message := array{};
+	daily_message [1] := ReadGameClock();
+	daily_message [2] := themessage;
+	
+	SetGlobalProperty ("daily_message", daily_message);
+	SendSysMessage (character, "The logon message is now:" + daily_message[2]);
+endprogram

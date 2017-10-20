@@ -1,0 +1,237 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/gumps";
+include "../pkg/npcs/npc_util";
+
+Const FIGHTTYPE_BASIC_PVM		:= 1001;
+Const FIGHTTYPE_BASIC_PVP		:= 1002;
+
+program ArenaRegistryControl (character, arena_stone)
+	if (!ReserveItem (arena_stone))
+		SendSysMessage (character, "There's another fight going on right now.  Try again later.");
+		return;
+	endif
+	detach ();
+	
+	var fight_option := SelectFightType (character);
+	if (!fight_option)
+		return;
+	endif
+
+	case (fight_option)
+		FIGHTTYPE_BASIC_PVM:
+			DoBasicPVMBattle (character, arena_stone);
+		FIGHTTYPE_BASIC_PVP:
+			DoBasicPVPBattle (character, arena_stone);
+		default:
+			SendSysMessage (character, "Error: unknown option");
+	endcase
+endprogram
+
+
+function SelectFightType (character)
+	var gump_layout := array {
+		"nodispose",
+		"page 0",
+		"resizepic 30 30 83 320 240",
+		"button 50 100 2104 2103 1 0 " + FIGHTTYPE_BASIC_PVM,
+		"button 50 120 2104 2103 1 0 " + FIGHTTYPE_BASIC_PVP,
+
+		"text 110 40 1322 0",
+		"text 50 65 35 1",
+		"text 70 95 35 2",
+		"text 70 115 35 3",
+		"button 150 230 2119 2120 1 0 0"
+	};
+
+	var gump_data := array {
+		"Welcome to the arena!",
+		"What do you want to do?",
+		"Basic PvM fight",
+		"Basic PvP fight"
+	};
+
+	var gump_return := SendDialogGump (character, gump_layout, gump_data);
+	if (!gump_return or !gump_return[0])
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	return gump_return[0];
+endfunction
+
+
+
+
+///////////////////
+//  Basic PvP fight
+///////////////////
+
+function DoBasicPVMBattle (character, arena_stone)
+	var groupmenu := CreateMenu ("Select a creature category:");
+	AddMenuItem (groupmenu, 0, "Weak monsters");
+	AddMenuItem (groupmenu, 0, "Average monsters");
+	AddMenuItem (groupmenu, 0, "Strong monsters");
+	AddMenuItem (groupmenu, 0, "Humans");
+	var groupselection := SelectMenuItem2 (character, groupmenu);
+	groupselection := groupselection.index;
+	if (!groupselection)
+		SendSysMessage (character, "Canceled");
+		if (arena_stone)
+		endif
+		return;
+	endif
+	
+	var cfgfile := ReadConfigFile (":arena:arena");
+	var elem;
+	case (groupselection)
+		1:	elem := FindConfigElem (cfgfile, "weakmonsters");
+		2:	elem := FindConfigElem (cfgfile, "averagemonsters");
+		3:	elem := FindConfigElem (cfgfile, "strongmonsters");
+		4:	elem := FindConfigElem (cfgfile, "humans");
+		default:
+			SendSysMessage (character, "What you selected doesn't exist");
+			return;
+	endcase
+	
+	var NPCmenu := CreateMenu ("Select a creature to fight");
+	foreach npcstring in GetConfigStringArray (elem, "monster")
+		var npcelem := FindConfigElem (cfgfile, npcstring);
+		if (npcelem)
+			AddMenuItem (NPCmenu, 0, npcelem.name);
+		endif
+	endforeach
+	
+	var npcselection := SelectMenuItem2 (character, NPCmenu);
+	npcselection := npcselection.index;
+	if (!npcselection)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+	
+	var npcarray := GetConfigStringArray (elem, "monster");
+	var npcelem := FindConfigElem (cfgfile, npcarray[npcselection]);
+	var npctemplate := npcelem.npctemplate;
+	
+	var opponent := CreateNPCFromTemplate (npctemplate, 1406, 3751, -21, 0, REALM_BRITANNIA);
+	if (!opponent)
+		SendSysMessage (character, "Error creating NPC.");
+		return;
+	endif
+	
+	SetObjProperty (opponent, "guardkill", 1);
+	SetObjProperty (opponent, "summoned", 1);
+	SendSysMessage (character, "Prepare to fight!");
+	sleep (4);
+	foreach item in ListEquippedItems (opponent)
+		item.newbie := 1;
+	endforeach
+	MoveObjectToLocation( character, 1392, 3734, -21, _DEFAULT_REALM, MOVEOBJECT_FORCELOCATION );
+	MoveObjectToLocation( opponent, 1406, 3751, -21, _DEFAULT_REALM, MOVEOBJECT_FORCELOCATION );
+	
+	while (1)
+		if (!character or !character.ip or character.dead or LeftTheArena (character))
+			SendSysMessage (character, "Better luck next time.");
+			KillNPC (opponent);
+			return;
+		endif
+		if (!opponent or opponent.dead or LeftTheArena (opponent))
+			SendSysMessage (character, "Congratulation!");
+			KillNPC (opponent);
+			return;
+		endif
+		sleep (3);
+	endwhile
+	KillNPC (opponent);
+	return;
+endfunction
+
+
+
+
+///////////////////
+//  Basic PvP fight
+///////////////////
+
+function DoBasicPVPBattle (character, arena_stone)
+	SendSysMessage (character, "Select another player to challenge.");
+	var opponent := Target (character);
+	if (!opponent)
+		SendSysMessage (character, "Canceled.");
+		if (arena_stone)
+		endif
+		return;
+	endif
+	if (!opponent.acctname)
+		SendSysMessage (character, "But that's not a player!");
+		return;
+	endif
+	if (opponent.dead)
+		SendSysMessage (character, "He wouldn't be much of a challenge, considering that he's already dead.");
+		return;
+	endif
+	if (opponent == character)
+		SendSysMessage (character, "Feeling suicidal?");
+		return;
+	endif
+
+	SendSysMessage (character, "Challenging opponent:");
+	SendSysMessage (opponent, character.name + " has challenged you to a duel.");
+	if (!YesNo (opponent, "Accept?"))
+		SendSysMessage (character, "Your opponent has declined the challenge.");
+		return;
+	endif
+	
+	SendSysMessage (character, "Your challenge has been accepted!");
+	SendSysMessage (character, "Prepare for the duel!");
+	SendSysMessage (opponent, "Prepare for the duel!");
+	SendSysMessage (character, "Rules: The player who dies loses.  In addition, leaving");
+	SendSysMessage (opponent, "Rules: The player who dies loses.  In addition, leaving");
+	SendSysMessage (character, "the area during the fight will result in disqualification.");
+	SendSysMessage (opponent, "the area during the fight will result in disqualification.");
+	sleep (5);
+
+	MoveObjectToLocation( character, 1392, 3734, -21, _DEFAULT_REALM, MOVEOBJECT_FORCELOCATION );
+	MoveObjectToLocation( opponent,1406,3751, -21, _DEFAULT_REALM, MOVEOBJECT_FORCELOCATION );
+	
+	while (1)
+		if (!character or !character.ip or character.dead or LeftTheArena (character))
+			SendSysMessage (opponent, "Congratulation!");
+			SendSysMessage (character, "Better luck next time.");
+			return;
+		endif
+		if (!opponent or !opponent.ip or opponent.dead or LeftTheArena (opponent))
+			SendSysMessage (character, "Congratulation!");
+			SendSysMessage (opponent, "Better luck next time.");
+			return;
+		endif
+		sleep (5);
+	endwhile
+	return;
+endfunction
+
+
+
+
+///////////////////
+//  Makes sure that the given player hasn't left the arena
+///////////////////
+
+function LeftTheArena (player)
+	if (player.x < 1385 or player.x > 1412)
+		return 1;
+	elseif (player.y < 3729 or player.y > 3758)
+		return 1;
+	elseif (player.z > 0)
+		return 1;
+	elseif (player.realm != _DEFAULT_REALM)
+		return 1;
+	endif
+	return 0;
+endfunction
+
+

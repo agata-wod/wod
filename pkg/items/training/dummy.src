@@ -1,0 +1,75 @@
+use uo;
+use os;
+use cfgfile;
+use util;
+use attributes;
+
+include "include/client";
+include "include/objtype";
+include "include/newperformaction";
+
+program training_dummy (character, dummy)
+	var skillid := character.weapon.skillid;
+	if (!skillid)
+		//Must be wrestling
+		skillid := SKILLID_WRESTLING;
+	elseif (skillid == SKILLID_ARCHERY)
+		SendSysMessage (character, "You can't practice archery on this!");
+		return;
+	endif
+	
+	if (!ReserveItem (dummy) or dummy.movable)
+		SendSysMessage (character, "You can't use this right now!");
+		return;
+	endif
+
+	var itemdesc := ReadConfigFile (":weapons:itemdesc");
+	var elem := FindConfigElem (itemdesc, character.weapon.objtype);
+	var newanim := 0;
+	var animation := GetConfigInt (elem, "anim");
+	if (!animation)
+		case (skillid)
+			SKILLID_MACEFIGHTING:
+				newanim := NPA_ATTACK_1HMACE;
+			SKILLID_FENCING: 
+				newanim := NPA_ATTACK_1HFENCING;
+			SKILLID_SWORDSMANSHIP: 
+				newanim := NPA_ATTACK_1HSWORD;
+			default: 
+				newanim := NPA_ATTACK_1HSWORD;
+		endcase
+	else
+		case (animation)
+			0x09:  newanim := NPA_ATTACK_1HSWORD;
+			0x0A: newanim := NPA_ATTACK_1HFENCING;
+			0x0B: newanim := NPA_ATTACK_1HMACE;
+			0x0C: newanim := NPA_ATTACK_2HMACE;
+			0x0D: newanim := NPA_ATTACK_2HSWORD;
+			0x0E: newanim := NPA_ATTACK_2HFENCING;
+			0x12: newanim := NPA_ATTACK_BOW;
+			0x13: newanim := NPA_ATTACK_CROSSBOW;
+			0x1A: newanim := NPA_ATTACK_2HSWORD;
+			default: newanim := NPA_ATTACK_PUNCH;
+		endcase
+	endif
+	NewPerformAction(character, NPA_ANIM_ATTACK, newanim, RandomInt(4));
+
+	sleep (1);
+	if (!CheckSkill (character, skillid, 10, 0) )
+		PlaySoundEffect (character, SFX_239);
+		sleep (2);
+		return;
+	endif
+
+	PlaySoundEffect (character, SFX_13C);
+	if (dummy.objtype == UOBJ_DUMMYFREEZE_NS)
+		dummy.graphic := UOBJ_DUMMYSWING_NS;
+		sleepms (3600);
+		dummy.graphic := UOBJ_DUMMYFREEZE_NS;
+	elseif ( dummy.objtype == UOBJ_DUMMYFREEZE_EW )
+		dummy.graphic := UOBJ_DUMMYSWING_EW;
+		sleepms (3600);
+		dummy.graphic := UOBJ_DUMMYFREEZE_EW;
+	endif
+endprogram
+

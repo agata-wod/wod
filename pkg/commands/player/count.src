@@ -1,0 +1,36 @@
+use uo;
+
+program textcmd_count (character, textline)
+	if (textline == "help")
+		SendSysMessage (character, "COUNT:  Counts the number of items inside of a container.");
+		return;
+	elseif (textline)
+		SendSysMessage (character, "Unknown .count option.  Use '.count help' for instructions on using this dot command.");
+		return;
+	endif
+
+	var num := 0;
+	var totalnum := 0;
+
+	SendSysMessage (character, "Count what?");
+	var it := Target (character);
+	if (!it)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+
+	if (it.backpack)
+		it := it.backpack;
+	endif
+
+	foreach item in enumerateitemsincontainer(it)
+		if (item.container == it)
+			num := num + 1;
+		endif
+		totalnum := totalnum + 1;
+	endforeach
+
+	SendSysMessage (character, "Top items: " + num);
+	SendSysMessage (character, "Total items: " + totalnum);
+	SendSysMessage (character, "Weight: " + it.weight);
+endprogram

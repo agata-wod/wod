@@ -1,0 +1,203 @@
+use os;
+use uo;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/spawn";
+include "include/attributes";
+include "../pkg/npcs/npc_util";
+
+program unshrink_npcs (character, dolly)
+	SendSysMessage (character, "Un-shrink where?" );
+	var where := TargetCoordinates (character);
+	if (!where)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	var npctemplate := GetObjProperty (dolly, "npctemplate");
+	var mobile := SpawnNPCAtLocation (npctemplate, where.x, where.y, where.z, 0, where.realm);
+	if (!mobile)
+		SendSysMessage (character, "Error creating NPC");
+		return;
+	endif
+
+	foreach property in GetObjPropertyNames (dolly)
+		//not all property should be passed on:  Some are put on the doll by the shrink script.
+		//Ignore those
+		case (property)
+			"script":
+			"graphic":
+			"skills":
+			"equippack":
+			"lootbag":
+			"str":
+			"int":
+			"dex":
+			"str_mod":
+			"int_mod":
+			"dex_mod":
+			"ar_mod":
+			"gender":
+			"npctemplate":
+			"title_prefix":
+			"title_suffix":
+			"title_race":
+			"title_guild":
+			
+				var ignorethis;
+				ignorethis := 1;
+			default:
+				var value := GetObjProperty (dolly, property);
+				SetObjProperty (mobile, property, value);
+		endcase
+	endforeach
+
+	mobile.script := GetObjProperty (dolly, "script");
+	RestartScript (mobile);
+	if (!mobile.backpack)
+		var newbackpack := CreateItemAtLocation (5288 , 1176 , 0, UOBJ_BACKPACK,1, REALM_BRITANNIA);
+		if (!EquipItem (mobile, newbackpack));
+			DestroyItem (newbackpack);
+		endif
+	endif
+
+	mobile.name := dolly.name;
+	if (mobile.name["<random>"])
+		var tempstring := mobile.name;
+		tempstring["<random>"] := RandomName (mobile);
+		mobile.name := tempstring;
+	endif
+	
+	if (GetObjProperty (dolly, "title_prefix"))
+		mobile.title_prefix := GetObjProperty (dolly, "title_prefix");
+	endif
+	if (GetObjProperty (dolly, "title_suffix"))
+		mobile.title_suffix := GetObjProperty (dolly, "title_suffix");
+	endif
+	if (GetObjProperty (dolly, "title_race"))
+		mobile.title_race := GetObjProperty (dolly, "title_race");
+	endif
+	if (GetObjProperty (dolly, "title_guild"))
+		mobile.title_guild := GetObjProperty (dolly, "title_guild");
+	endif
+
+	if (GetObjProperty (dolly, "ar_mod"))
+		mobile.ar_mod := GetObjProperty (dolly, "ar_mod");
+	endif
+
+	mobile.graphic := getobjproperty (dolly, "graphic");
+	mobile.color := dolly.color;
+	setobjproperty (mobile, "color", mobile.color);
+
+	SetAttributeBaseValue (mobile, "Strength", GetObjProperty (dolly, "str") * 10);
+	SetAttributeBaseValue (mobile, "Intelligence", GetObjProperty (dolly, "int") * 10);
+	SetAttributeBaseValue (mobile, "Dexterity", GetObjProperty (dolly, "dex") * 10);
+
+	SetAttributeTemporaryMod (mobile, "Strength", CINT (GetObjProperty (dolly, "str_mod")) * 10);
+	SetAttributeTemporaryMod (mobile, "Intelligence", CINT (GetObjProperty (dolly, "int_modt")) * 10);
+	SetAttributeTemporaryMod (mobile, "Dexterity", CINT (GetObjProperty (dolly, "dex_mod")) * 10);
+
+	RecalcVitals (mobile);
+
+	SetVital (mobile, "Life", GetVitalMaximumValue (mobile, "Life"));
+	SetVital (mobile, "Mana", GetVitalMaximumValue (mobile, "Mana"));
+	SetVital (mobile, "Stamina", GetVitalMaximumValue (mobile, "Stamina"));
+
+	var equippackserial := GetObjProperty (dolly, "equippack");
+	var equippack := 0;
+	foreach item in ListRootItemsInContainer (dolly)
+		if (item.serial == equippackserial)
+			equippack := item;
+		endif
+	endforeach
+	if (equippack)
+		foreach item in ListRootItemsInContainer (equippack)
+			var newitem := CopyItem (item, mobile.backpack);
+			if (!EquipItem (mobile, newitem))
+				DestroyItem (newitem);
+			endif
+		endforeach
+	endif
+
+	var lootbagserial := Getobjproperty (dolly, "lootbag");
+	var lootbag := 0;
+	foreach item in ListRootItemsInContainer(dolly)
+		if ( item.serial == lootbagserial )
+			lootbag := item;
+		endif
+	endforeach
+	if ( lootbag )
+		foreach item in ListRootItemsInContainer(lootbag)
+			CopyItem (item, mobile.backpack);
+		endforeach
+	endif
+
+	var skills := GetObjProperty (dolly, "skills");
+	for i := 0 to 48
+		SetAttributeBaseValue (mobile, GetAttributeIDBySkillID (i), skills[i]*10);
+	endfor
+
+	if ( GetObjProperty (dolly, "gender") )
+		mobile.gender := GetObjProperty (dolly, "gender");
+	endif
+endprogram
+
+function CopyItem (item, container)
+	var newitem := CreateItemInContainer (container, item.objtype, item.amount);
+	if (!newitem)
+		return 0;
+	endif
+	newitem.color := item.color;
+	newitem.graphic := item.graphic;
+	newitem.newbie := item.newbie;
+	newitem.movable := item.movable;
+
+	if (item.name)
+		newitem.name := item.name;
+	endif
+	if (item.quality)
+		newitem.quality := item.quality;
+	endif
+	if (item.maxhp_mod)
+		newitem.maxhp_mod := item.maxhp_mod;
+	endif
+	if (item.hp)
+		newitem.hp := item.hp;
+	endif
+	if (item.dmg_mod)
+		newitem.dmg_mod := item.dmg_mod;
+	endif
+	if (item.ar_mod)
+		newitem.ar_mod := item.ar_mod;
+	endif
+	if (item.usescript)
+		newitem.usescript := item.usescript;
+	endif
+	if (item.hitscript)
+		newitem.hitscript := item.hitscript;
+	endif
+	if (item.locked)
+		newitem.locked := item.locked;
+	endif
+	foreach property in GetObjPropertyNames (item)
+		var value := GetObjProperty (item, property);
+		SetObjProperty (newitem, property, value);
+	endforeach
+	
+	Syslog ("Checking " + newitem.desc + " to see if its a container");
+	//recurse to copy subitems
+	if (newitem.isa (POLCLASS_CONTAINER) or newitem.objtype == UOBJ_SPELLBOOK)
+		Syslog (item.desc + " is a container!");
+		foreach subitem in ListRootItemsInContainer (item)
+			CopyItem (subitem, newitem);
+		endforeach
+	endif
+
+	return newitem;
+endfunction
+
+
+

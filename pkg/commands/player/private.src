@@ -1,0 +1,13 @@
+use uo;
+
+program textcmd_private(me)
+
+	if ( GetObjProperty(me,"private") )
+		SendSysMessage (me, "No longer in Privacy mode");
+		EraseObjProperty(me,"private");
+	else
+		SendSysMessage (me, "Privacy mode enabled");
+		SetObjProperty(me,"private",1);
+	endif
+
+endprogram

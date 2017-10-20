@@ -1,0 +1,67 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 7;
+
+program mana_drain ( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	var tempvar := cast_on;
+	cast_on := CheckMagicReflection (caster, cast_on);
+	if (!cast_on)
+		return 0;
+	elseif (cast_on == caster)
+		caster := tempvar;
+	endif
+
+	if (cast_on.script["tamed"])
+		SendSysMessage (caster, "That's not a valid target!");
+		return 0;
+	endif
+
+	var diff := (GetAttribute (caster, "Intelligence") - GetAttribute (cast_on, "Intelligence"));
+	if (diff > 40)
+		diff := 40;
+	elseif (diff < (0-40))
+		diff := (0-40);
+	endif
+
+	if (cast_on.npctemplate)
+		diff := diff + CINT (GetAttribute (caster, ATTRIBUTEID_MEDITATION)/3);
+	endif
+
+	diff := Resisted (caster, cast_on, diff);
+	if ( diff <= 0 )
+		if (caster != cast_on)
+			PrintTextAbovePrivate( caster , cast_on.name + "'s will is too strong!" , caster );
+		endif
+		return 1;
+	endif
+
+	PlaySoundEffect (caster, SFX_SPELL_MANA_VAMPIRE);
+	PlayObjectCenteredEffect (cast_on, FX_GLOW, 7, 0x10);
+
+	if ( diff > CINT (GetVital (cast_on, "Mana")/100))
+		diff := CINT (GetVital (cast_on, "Mana")/100);
+	endif
+
+	ConsumeVital (cast_on, "Mana", diff*100);
+	SetVital (caster, "Mana", GetVital (caster, "Mana") + diff*100 + 4000);
+	if (GetVital (caster, "Mana") > GetVitalMaximumValue (caster, "Mana"))
+		SetVital (caster, "Mana", GetVitalMaximumValue (caster, "Mana"));
+	endif
+	PrintTextAbovePrivate (caster, "You drained " + diff + " mana", caster);
+	return 1;
+endprogram

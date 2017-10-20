@@ -1,0 +1,30 @@
+use uo;
+use os;
+
+program maskclaimdeed (character, deed)
+	if (!ReserveItem (deed) )
+		return;
+	endif
+
+	var select_menu := CreateMenu ("Select a mask:");
+	AddMenuItem (select_menu, 0x141B, "Orc Mask");
+	AddMenuItem (select_menu, 0x1545, "Bear Mask");
+	AddMenuItem (select_menu, 0x1547, "Deer Mask");
+	AddMenuItem (select_menu, 0x1549, "Tribal Mask");
+	AddMenuItem (select_menu, 0x154B, "Tribal Mask");
+
+	var selected_item := SelectMenuItem2 (character, select_menu);
+	if (!selected_item)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	var mask := CreateItemInBackpack (character, selected_item.objtype, 1);
+	if (!mask)
+		return;
+	endif
+
+	SendSysMessage (character, "Happy Halloween!");
+	DestroyItem (deed);
+
+endprogram

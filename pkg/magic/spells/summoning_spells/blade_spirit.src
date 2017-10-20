@@ -1,0 +1,30 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 5;
+
+program summon_bladespirit( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_loc := GetSpellCastOn (caster, parms);
+	if (!cast_loc)
+		return 0;
+	endif
+
+	var duration;
+	if (!caster_magery or caster_magery < 50)
+		duration := 60;
+	else
+		duration := caster_magery + RandomInt (caster_magery);
+	endif
+
+	SummonCreature (caster, "bladespirit", cast_loc, duration, 0);
+	return 1;
+endprogram

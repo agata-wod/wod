@@ -1,0 +1,38 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 5;
+
+program summon_wolves (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+	var cast_loc := GetSpellCastOn (caster, parms);
+	if (!cast_loc)
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+
+	//set the caster as the script controler and allow them to cast the next spell
+	SetScriptController (caster);
+	EraseObjProperty (caster, "#castingdruidspell");
+	detach ();
+
+	var amount := RandomDiceRoll("1d2") + CINT(GetAttribute (caster, ATTRIBUTEID_ANIMALLORE)/33);
+	if (amount > 4)
+		amount := 4;
+	endif
+	var duration := 60 + GetAttribute (caster, ATTRIBUTEID_ANIMALLORE);
+
+	for i := 1 to amount
+		SummonCreature (caster, "spiritwolf", cast_loc, duration, 1, "spirit wolf", 0x7cf8);
+	endfor
+	return 1;
+endprogram

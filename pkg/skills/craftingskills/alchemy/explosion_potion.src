@@ -1,0 +1,92 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/wodinc";
+include "include/eventid";
+
+Const MOVING_EFFECT_PURPLE_POTION	:= 0x0F0D; 
+Const SOUND_EFFECT_EXPLOSION		:= 0x208; 
+Const EFFECT_EXPLOSION 			:= 0x36b0;
+
+program use_explosion (character, potion)
+	var potion_strength := 1;
+	case (potion.objtype)
+		0xdc08:	potion_strength := 1;
+		0xdc09:	potion_strength := 2;
+		0xdc07:	potion_strength := 4;
+	endcase;
+
+	var last_explosion := GetObjProperty (character, "#lastexplosionpotion");
+	if (last_explosion and last_explosion + 6 > ReadGameClock())
+		SendSysMessage (character, "You can't throw another one yet!");
+		return;
+	endif
+
+	if (!Accessible (character, potion))
+		SendSysmessage (character, "You reach that!");
+		return;
+	endif
+
+	if (!ReserveItem (potion) or !potion.movable)
+		SendSysMessage (character, "You can't use that right now!");
+		return;
+	endif
+
+	SetObjProperty (character, "#lastexplosionpotion", ReadGameClock());
+
+	SendSysmessage (character, "Select a target");
+	var cast_on := TargetCoordinates( character );
+	if (!cast_on)
+		SendSysmessage(character, "Canceled.");
+		EraseObjProperty (character, "#lastexplosionpotion");
+		return;
+	endif
+
+	if (!CheckLosAt (character, cast_on.x, cast_on.y, cast_on.z))
+		SendSysmessage(character, "You can't see that!");
+		EraseObjProperty (character, "#lastexplosionpotion");
+ 		return;
+	endif
+
+	character.hidden := 0;
+	SubtractAmount (potion, 1);    
+	Detach();
+
+	PlayMovingEffectXYZ (character.x, character.y, character.z+15,
+				cast_on.x, cast_on.y, cast_on.z,
+				MOVING_EFFECT_PURPLE_POTION, 8, 0, 0, character.realm );
+
+	Sleep (2);
+
+	var lookout := CreateItemAtLocation( cast_on.x, cast_on.y, cast_on.z, 0x0f0d, 1, cast_on.realm );
+	lookout.movable := 0;
+
+	PrintTextAbove( lookout, "3");
+	sleep(1);
+	PrintTextAbove( lookout, "2");
+	sleep(1);
+	PrintTextAbove( lookout, "1");
+	sleep(1);
+
+	PlayStationaryEffect (lookout.x, lookout.y, lookout.z, EFFECT_EXPLOSION, 7, 0x10, 0, lookout.realm);
+	PlaySoundEffect (lookout, 0x208);
+	var ev := struct;
+	ev.+type := EVID_ENGAGED;
+	ev.+source := character;
+
+	foreach critter in ListMobilesNearLocationEx (lookout.x, lookout.y, lookout.z, potion_strength, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, lookout.realm );
+		if (!GetObjProperty (critter, "#specialhidden_nodamage"))
+			SendEvent (critter, ev);
+			PlayObjectCenteredEffect (critter, EFFECT_EXPLOSION, 7, 0x10);
+			var dmg := (Randomint(11) + 5) * potion_strength;
+			DoDamageByType (character, critter, dmg, DAMAGETYPE_FIRE);
+		endif
+	endforeach
+
+	DestroyItem (lookout);
+	sleep (6);
+	EraseObjProperty (character, "#lastexplosionpotion");
+endprogram
+

@@ -1,0 +1,191 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/mainloop_killpcs_normal";
+include "../pkg/npcs/main_ai/main/sleepmode_normal";
+include "../pkg/npcs/main_ai/combat/fightmode_smart";
+include "../pkg/npcs/main_ai/combat/closedistance_spellcaster";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/hostiles/vampires/vampires";
+
+const HALT_THRESHOLD := 8; // how close before he attacks?
+drop_anchor();
+
+program KillPlayers ()
+	if (!me.backpack)
+		DoOnCreationSetup ();
+
+	  	EquipFromTemplate (me, "Vampire");
+		foreach item in ListEquippedItems (me)
+			if (item != me.backpack)
+				item.newbie := 1;
+			endif
+		endforeach
+	endif
+	DoStartupSetup ();
+	VampireSetup ();
+
+
+	if (getobjproperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	post_combat ();
+	main_AI_loop ();
+endprogram
+
+
+
+
+///////////////////
+//  steals some of the opponents HP and adds it to the vampire's own
+///////////////////
+
+function SuckBlood (byref opponent)
+	if (Distance (me, opponent) > 4)
+		return 0;
+	endif
+
+	if (GetObjProperty (me, "#nextbreath") and GetObjProperty (me, "#nextbreath") > ReadGameClock())
+		return 0;
+	endif
+
+	SetObjProperty (me, "#nextbreath", ReadGameClock() + 10);
+	PerformAction (me, 0xc3);
+	PlaySoundEffect (me, 0xfc);
+	PlayObjectCenteredEffect (opponent, FX_GLOW_SPIKE, 0x0a, 0x1e);
+	sleep (1);
+
+	//if we're pretty close to full health and opponent has mana and isn't close to death, drain mana instead
+	if (GetVital (me, "Life") > CINT (GetVitalMaximumValue (me, "Life")*0.8)
+				and GetVital (opponent, "Life") > CINT (GetVitalMaximumValue (opponent, "Life")*0.2)
+				and GetVital (me, "Mana") > 1000)
+		var damage_done := RandomInt (vampire_drain) + vampire_drain;
+		var total_mana := GetVital (me, "Mana") + damage_done * 100;
+		if (total_mana > GetVitalMaximumValue (me, "Mana"))
+			total_mana := GetVitalMaximumValue (me, "Mana");
+		endif
+		
+		SetVital (me, "Mana", total_mana);
+		ConsumeVital (opponent, "Mana", damage_done*100);
+		PrintTextAbovePrivate (me, me.name + " drains your mana!", opponent);
+		return 1;
+	endif
+
+	var damage_done := RandomInt (vampire_drain) + vampire_drain;
+	var total_hp := GetVital (me, "Life") + damage_done * 100;
+	if (total_hp > GetVitalMaximumValue (me, "Life"))
+		total_hp := GetVitalMaximumValue (me, "Life");
+	endif
+	
+	SetVital (me, "life", total_hp);
+	DoDamageByType (me, opponent, damage_done, DAMAGETYPE_MAGIC);
+	PrintTextAbovePrivate (me, me.name + " drains your health!", opponent);
+	return 1;
+endfunction
+
+
+function process_combat_event (byref ev)
+	if (!SuckBlood (ev.source))
+		SpellAttack (ev.source);
+	endif
+
+	case (ev.type)
+		EVID_DAMAGED:
+			if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/2))
+				CastSpell (me, me,":misc_spells:gheal");
+				if( me.poisoned )
+					CastSpell (me, me, ":poison_spells:cure");
+					CastSpell (me, ev.source, ":poison_spells:poison");
+				endif
+			endif
+	endcase
+endfunction
+
+function spellattack (byref opponent)
+
+	if (!GetObjProperty(me,"#lastspell"))
+		SetObjProperty(me,"#lastspell",ReadGameClock() + 2);
+	endif
+
+	if (GetObjProperty(me,"#lastspell") > ReadGameClock() )
+		return;
+	endif
+
+	if (RandomInt(3))
+		sleep(1);
+		cast_offensive_spell(me,opponent);
+		SetObjProperty(me,"#lastspell",ReadGameClock() + 4);
+	endif
+
+endfunction
+
+function in_combat_event_loop (byref opponent)
+
+	if (!SuckBlood (opponent))
+		spellattack(opponent);
+	endif
+
+endfunction
+
+function prepare_for_fight (byref opponent)
+	if (GetObjProperty (me, "mr"))
+		CastSpell (me, me, ":misc_spells:reflect");
+	endif
+	if (opponent)
+	endif
+
+	DisableMainEvents();
+	EnableCombatEvents();
+
+	//only change form if we're human
+	if (me.graphic == 400 or me.graphic == 401)
+		set_critical (1);
+		//move our deathrobe and shoes to our backpack
+		foreach item in ListEquippedItems (me)
+			if (item.objtype == 0x204e or item.objtype == 0x170f)
+				item.newbie := 1;
+				MoveItemToContainer (item, me.backpack);
+			endif
+		endforeach
+		me.color := 0x4001;	
+		me.graphic := me.objtype;
+		SetObjProperty (me, "color", 0x4001);
+		set_critical (0);
+	endif
+
+endfunction
+
+function post_combat()
+	if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/2))
+		CastSpell(me,me,":misc_spells:gheal");
+	endif
+
+	DisableCombatEvents();
+	EnableMainEvents();
+
+	SetWarMode( 0 );
+	sleep(1);
+	look_around();
+  
+	sleep (3);
+
+	set_critical (1);
+	me.graphic := 400;
+	me.color := 0;
+	SetObjProperty (me, "color", 0);
+	
+	foreach item in EnumerateItemsInContainer (me.backpack)
+		if (item.objtype == 0x204e or item.objtype == 0x170f)
+			if (item.newbie)
+				EquipItem (me, item);
+			endif
+		endif
+	endforeach
+	set_critical (0);
+
+endfunction

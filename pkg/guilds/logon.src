@@ -1,0 +1,10 @@
+use uo;
+use os;
+
+include "../pkg/npcs/npc_util";
+include "../pkg/guilds/guilds";
+
+program login (player)
+	EraseObjProperty (player, "guildbuywindow");
+	AddGuildRankingPoints (player, 0, "adventurers_guild");
+endprogram

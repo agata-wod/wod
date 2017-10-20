@@ -1,0 +1,25 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/itemtypes";
+include "include/utility";
+include "../pkg/items/housing/house";
+
+const FLUSH_TIME_SECONDS := 300;
+
+program oninsert_chest (character, container, movetype, null_value, item, existing_stack, amt_to_add)
+	if (amt_to_add and existing_stack and null_value and item and character and movetype)
+	endif
+	SetObjProperty (container, "#nextflush", ReadGameClock() + FLUSH_TIME_SECONDS);
+	if (GetObjProperty (container, "#nextspam") < ReadGameClock())
+		SetObjProperty (container, "#nextspam", ReadGameClock() + 60);
+		PrintTextAbove (container, "This trash barrel will be cleared in 5 minutes");
+	endif
+	container.name := container.desc;
+	return 1;
+	
+endprogram

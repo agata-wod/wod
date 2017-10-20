@@ -1,0 +1,25 @@
+The guardspawner stores all information about the guards and their
+routes in the :guardspawner:guardspawn datafile.  It checks what
+guards need to be respawned by checking the serial numbers in the
+global property "global_guard_list", which is a dictionary.  The
+keys of the dictionary are the names of the datafile elements, and
+the values is the serial number of that guard.
+
+Each datafile element should look something like:
+
+df (name)
+{
+	npctemplate	(template)
+	spawnloc		(array, {x, y, z})
+	route		(dictionary, see below)
+}
+
+The route is a dictionary used in the guard AI.  The keys of the dictionary
+are integers that define the path the guard should take (1, 2, 3, etc).  The
+values of the dictionary are an array.  Each array has at least 1 value.  The
+possible values of that first value are:
+
+"go" - this is the next location to go to.  In this case, the array has 3 more elements
+	that define the x, y, z location of the next stop point
+"wait" - stop and look around.
+"door" - try to open doors at this location, then move on

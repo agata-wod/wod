@@ -1,0 +1,48 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "../pkg/items/housing/house";
+
+program caninsert_quiver (character, container, movetype, inserttype, item, existing_stack, amt_to_add)
+	if (amt_to_add and existing_stack and item and inserttype)
+	endif
+	if (movetype != MOVETYPE_PLAYER)
+		return 1;
+	endif
+	
+	if (container.locked)
+		if (!GetObjProperty (container, "lostandfound"))
+			if (!GetObjProperty (container, "secured"))
+				PrintTextAbovePrivate (container, "*Locked!*", character);
+				return 0;
+			endif
+		endif
+	elseif (GetObjProperty (container, "displaycontainer"))
+		return 0;
+	endif
+	
+	case (item.objtype)
+		UOBJ_ARROW:
+		UOBJ_FIRE_ARROW:
+		UOBJ_FROST_ARROW:
+		UOBJ_BOLT:
+		UOBJ_FIRE_BOLT:
+		UOBJ_FROST_BOLT:
+		UOBJ_DART:
+		UOBJ_FIRE_DART:
+		UOBJ_FROST_DART:
+		UOBJ_SHURIKEN:
+		UOBJ_FIRE_SHURIKEN:
+		UOBJ_FROST_SHURIKEN:
+		UOBJ_THROWINGAXE:
+		UOBJ_FIRE_THROWINGAXE:
+		UOBJ_FROST_THROWINGAXE:
+			return 1;
+	endcase
+	SendSysMessage (character, "You can only store ammunition in this container.");
+	return 0;
+endprogram

@@ -1,0 +1,76 @@
+//
+// Destroy an item
+//
+
+use uo;
+use boat;
+
+program textcmd_destroy (who, text)
+	if (text)
+		if (text == "many")
+			DestroyMany (who);
+			return;
+		elseif (text == "boat")
+			DestroyBoat (who);
+			return;
+		endif
+	endif
+	SendSysMessage (who, "Please target something to destroy");
+	var tgt := TargetCoordinates( who );
+	if (tgt)
+		if (tgt.item)
+			DestroyItem( tgt.item );
+		else
+			SendSysMessage( who, "You can only destroy items" );
+		endif
+	endif
+endprogram
+
+
+
+function DestroyMany (who)
+	var done := 0;
+	repeat
+		SendSysMessage (who, "Please target something to destroy");
+		var tgt := TargetCoordinates( who );
+		if (tgt)
+			if (tgt.item)
+				DestroyItem( tgt.item );
+			else
+				SendSysMessage( who, "You can only destroy items" );
+			endif
+		else
+			done := 1;
+		endif
+	until (done);
+endfunction
+
+
+function DestroyBoat (character)
+	SendSysMessage (character, "Target the tillerman or hold.  The mast may also work.");
+	var mast := TargetCoordinates (character);
+	if (!mast)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+
+	var res := DestroyMulti (BoatFromItem(mast.item));
+	if (!res or res == error)
+		SendSysMessage (character, "Basic destroy failed:  trying second method");
+		var sh := GetStandingHeight (mast.x, mast.y, mast.z, mast.realm);
+		var themulti := sh.multi;
+		if (!themulti)
+			sh := GetStandingHeight (mast.x, mast.y, -2, mast.realm);
+			themulti := sh.multi;
+			SendSysMessage (character, "No Multi detected");
+			return;
+		endif
+		
+		var res := DestroyMulti (themulti);
+		if (!res or res == error)
+			SendSysMessage (character, "Nope, didn't work either.");
+			return;
+		endif
+	endif
+	SendSysMessage (character, "Done");
+endfunction

@@ -1,0 +1,81 @@
+use uo;
+use os;
+
+include "include/client";
+
+program equip_chargedspellitem (parms)
+
+	var character := parms[1];
+	var item := parms[2];
+	var time := parms[3];
+
+	repeat
+		if (!GetObjProperty (character, "mr"))
+			if (!UseCharge (item, character))
+				return;
+			else
+				PlaySoundEffect (character, SFX_SPELL_MAGIC_REFLECTION);
+				PlayObjectCenteredEffect (character, FX_CURSE_EFFECT, 10, 10);
+				SetObjProperty (character, "mr", "1");
+			endif
+		endif
+
+		if (!IsEquipped (character, item, time) )
+			return;
+		endif
+
+		sleep(3);				
+	until (!character);
+endprogram
+
+
+function UseCharge(item, character)
+	var charges := CINT (GetObjProperty (item, "charges"));
+
+	if (charges > 1)
+		charges := charges - 1;
+		SetObjProperty (item, "charges", charges);
+		return 1;
+	else
+		EraseObjProperty (item, "charges");
+		EraseObjProperty (item, "equipspell");
+		PrintTextAbovePrivate (item, item.desc + " is out of charges", character );
+
+		var spellname := GetObjProperty (item, "itemspellname");
+		if (spellname)
+			var itemname := item.desc;
+			if (itemname[CSTR ("of " + spellname)])
+				itemname[CSTR ("of " + spellname)] := "";
+			else
+				itemname[CSTR ("and " + spellname)] := "";
+			endif
+			item.name := itemname;
+		endif
+		if (GetObjProperty (item, "oldname") )
+			var itemname := GetObjProperty (item, "oldname");
+			if (itemname[CSTR ("of " + spellname)])
+				itemname[CSTR ("of " + spellname)] := "";
+			else
+				itemname[CSTR ("and " + spellname)] := "";
+			endif
+			SetObjProperty (item, "oldname", itemname);
+		endif
+		return 0;
+	endif
+endfunction
+
+function IsEquipped (character, what, time)
+
+	if ( Getobjproperty (what,"equiptime") != time )
+		return 0;
+	endif
+
+	foreach item in ListEquippedItems (character)
+		if (item == what)
+			return 1;
+		endif
+	endforeach
+
+	return 0;
+
+endfunction

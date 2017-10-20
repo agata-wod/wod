@@ -1,0 +1,61 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/skills";
+include "include/magicitems";
+include "../pkg/character/virtue/virtue";
+include ":weapons:abilityIcons";
+
+var itemdesc := ReadConfigFile (":*:itemdesc");
+
+program unequip (who, item)
+	//death robe
+	if (item.graphic == 0x204E)
+		item.graphic := 0x1F03;
+	//studded pants
+	elseif (GetObjProperty (item, "equipitemgraphic"))
+		item.graphic := GetObjProperty (item, "equipitemgraphic");
+		EraseObjProperty (item, "equipitemgraphic");
+	endif
+
+	var skilladv := GetObjProperty (item, "skilladv");
+	if (skilladv or skilladv == 0)
+		UnequipItemWithSkillMod (who, item);
+	endif
+
+	UnDoStatAdvance (who, item);
+	if (item.isa (POLCLASS_WEAPON))
+		EraseObjProperty (who, "#weaponability");
+		ResetWeaponAbilities (who);
+	endif
+	return 1;
+endprogram
+
+function UnDoStatAdvance( who, it )
+	if (GetObjProperty (it, "str"))
+		var newstrmod := GetAttributeTemporaryMod (who, "Strength") - CINT (GetObjProperty (it, "str") * 10);
+		SetAttributeTemporaryMod (who, "Strength", newstrmod);
+		RecalcVitals (who);
+	endif
+
+	if (GetObjProperty (it, "int"))
+		var newintmod := GetAttributeTemporaryMod (who, "Intelligence") - CINT (GetObjProperty (it, "int") * 10);
+		SetAttributeTemporaryMod (who, "Intelligence", newintmod);
+		RecalcVitals (who);
+	endif
+
+	if ( GetObjProperty(it,"dex") )
+		var newdexmod := GetAttributeTemporaryMod (who, "Dexterity") - CINT (GetObjProperty (it, "dex") * 10);
+		SetAttributeTemporaryMod (who, "Dexterity", newdexmod);
+		RecalcVitals (who);
+	endif
+	
+	var penalty := CINT (itemdesc[it.objtype].DexPenalty);
+	if (penalty)
+		var newdexmod := GetAttributeTemporaryMod (who, "Dexterity") + penalty * 10;
+		SetAttributeTemporaryMod (who, "Dexterity", newdexmod);
+		RecalcVitals (who);
+	endif
+endfunction

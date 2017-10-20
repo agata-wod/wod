@@ -1,0 +1,213 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/string";
+include "include/skills";
+
+var specs := array {};
+var gump_data := array {""};
+var gump_layout := array {
+	"nodispose",
+	"page 0",
+	"gumppic 0 50 500"
+};
+
+//var skillmastercfg := ReadConfigFile(":skills:skillmaster");
+var skills := array {};
+const LASTPAGE := 3;
+
+program SkillWindow (me, text)
+	if (text)
+	endif
+	if (GetObjProperty (me, "#logon_noskillwin"))
+		EraseObjProperty (me, "#logon_noskillwin");
+		return;
+	endif
+
+	LoadSpecs (me);
+	LoadSkillArrayByValue (me);
+	
+	foreach skill in skills
+		gump_data.append (GetSkillValDisplay (me, skill));
+		gump_data.append (getskillname (skill));
+	endforeach
+
+	//finish loading gump_layout
+	for pagenum := 1 to LASTPAGE
+		LoadPageArray (pagenum);
+		for i := 1 to 7
+			var button := ( (pagenum - 1) * 14 ) + i;
+			LoadLeftPageArray (button, i, skills[button]);
+		endfor
+		for i := 8 to 14
+			var button := ( (pagenum - 1) * 14 ) + i;
+			LoadRightPageArray (button, i-7, skills[button]);
+		endfor
+	endfor
+
+	var sreturn := SendDialogGump( me, gump_layout, gump_data );
+	if (sreturn[0])
+		LaunchSkillScript(me, skills[sreturn[0]]);
+	endif
+endprogram
+
+
+function LoadPageArray ( pagenum )
+
+	if ( pagenum == 1 )
+		gump_layout.append ("page 1");
+		gump_layout.append ("button 356 50 502 502 0 2");//next page
+	elseif ( pagenum == LASTPAGE )
+		gump_layout.append ("page " + cstr(LASTPAGE));
+		gump_layout.append ("button 0 50 501 501 0 "+ cstr(LASTPAGE-1));//previous page
+	else
+		gump_layout.append ("page " + cstr(pagenum));
+		gump_layout.append ("button 0 50 501 501 0 " + cstr(pagenum - 1));//next
+		gump_layout.append ("button 356 50 502 502 0 "+ cstr(pagenum + 1));//previous
+	endif
+
+endfunction
+
+function LoadLeftPageArray (button, i, skillid)
+
+	var skillvaltext := cstr((button*2)-1);
+	var skillnametext := cstr(button*2);
+	if ( GetSkillName(skillid) == "None" )
+		skillvaltext := " 0";
+		skillnametext := " 0";
+	endif
+
+	gump_layout.append ("text 50 " + cstr(70 + (22*i)) + " 2400 " + skillvaltext);
+	gump_layout.append ("text 100 " + cstr(70 + (22*i)) + " 0 " + skillnametext);
+	if (IsAction(skillid))
+		gump_layout.append ("button 35 " + cstr(75 + (22*i)) + " 2104 2103 1 0 " + cstr( button ));
+	endif
+
+endfunction
+
+function LoadRightPageArray(button, i, skillid)
+
+	var skillvaltext := cstr((button*2)-1);
+	var skillnametext := cstr(button*2);
+	if ( GetSkillName(skillid) == "None" )
+		skillvaltext := " 0";
+		skillnametext := " 0";
+	endif
+
+	gump_layout.append ("text 240 " + cstr(70 + (22*i)) + " 2400 " + skillvaltext);
+	gump_layout.append ("text 290 " + cstr(70 + (22*i)) + " 0 " + skillnametext);
+	if (IsAction(skillid))
+		gump_layout.append ("button 225 " + cstr(75 + (22*i)) + " 2104 2103 1 0 " + cstr( button ));
+	endif
+
+endfunction
+
+function IsAction(skillid)
+
+	var skillmastercfgf := ReadConfigFile(":skills:skillmaster");
+	var skillelem := FindConfigElem(skillmastercfgf, skillid);
+	if (len(skillelem.script))
+		return 1;
+	else
+		return 0;
+	endif
+
+endfunction
+
+function SortValue (byref me, skillid)
+
+	var adjustval := 1;//make sure real skills sort ahead of disabled ones
+	if ( GetSkillName(skillid) = "None" )
+		return 0;//sort disabled skills to the end
+	else
+		//sort the specs in order:
+		if (skillid == specs[1])
+			adjustval := 10000;
+		elseif (skillid == specs[2])
+			adjustval := 9000;
+		elseif (skillid == specs[2])
+			adjustval := 8000;
+		elseif (skillid == specs[3])
+			adjustval := 7000;
+		elseif (skillid == specs[4])
+			adjustval := 6000;
+		elseif (skillid == specs[5])
+			adjustval := 5000;
+		elseif (skillid == specs[6])
+			adjustval := 4000;
+		elseif (skillid == specs[7])
+			adjustval := 3000;
+		endif
+	endif
+
+	var attribute := GetAttributeIDBySkillID (skillid);
+	var value := GetAttributeBaseValue (me, attribute) + GetAttributeTemporaryMod (me, attribute);
+	return value;
+endfunction
+
+function LoadSkillArrayByValue (me)
+	var skillvals := array {};
+	for i := 0 to 57
+		skillvals[i+1] := GetSortValue (me, i);
+	endfor
+	skillvals[59] := -1;		//dummy for comparisons
+
+
+	var chosenskill := 59;
+	for i := 1 to 58
+		chosenskill := 59;
+		for j := 1 to 58
+			if (skillvals[j] > skillvals[chosenskill])
+				chosenskill := j;
+			endif
+		endfor
+		if (skillvals[chosenskill] >= 0)
+			skillvals[chosenskill] := -1;
+			skills[i] := chosenskill - 1;
+		endif
+	endfor
+endfunction 
+
+function GetSortValue (byref me, skillid)
+	if ( GetSkillName(skillid) == "None" )
+		return -1;//sort disabled skills to the end
+	else
+		//sort the specs in order:
+		if (skillid == specs[1])
+			return 10000;
+		elseif (skillid == specs[2])
+			return 9000;
+		elseif (skillid == specs[3])
+			return 8000;
+		elseif (skillid == specs[4])
+			return 7000;
+		elseif (skillid == specs[5])
+			return 6000;
+		elseif (skillid == specs[6])
+			return 5000;
+		elseif (skillid == specs[7])
+			return 4000;
+		elseif (skillid == specs[8])
+			return 3000;
+		endif
+	endif
+	
+	var attributeid := GetAttributeIDBySkillID (skillid);
+
+	return (GetAttributeBaseValue (me, attributeid) + GetAttributeTemporaryMod (me, attributeid));
+endfunction
+
+function LoadSpecs (byref character)
+
+	specs[1] := GetObjProperty (character, "primary1");
+	specs[2] := GetObjProperty (character, "primary2");
+	specs[3] := GetObjProperty (character, "primary3");
+	specs[4] := GetObjProperty (character, "secondary1");
+	specs[5] := GetObjProperty (character, "secondary2");
+	specs[6] := GetObjProperty (character, "secondary3");
+	specs[7] := GetObjProperty (character, "tradeskill");
+	specs[8] := GetObjProperty (character, "compskill");
+
+endfunction

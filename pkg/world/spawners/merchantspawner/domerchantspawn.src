@@ -1,0 +1,45 @@
+use os;
+use uo;
+
+include "include/spawn";
+
+program SpawnThatStuff ()
+//	Syslog ("Merchant spawner running");
+	set_critical (1);
+	var merchants_to_respawn := GetGlobalProperty ("respawnmerchants");
+	if (!merchants_to_respawn)
+		return;
+	endif
+
+	EraseGlobalProperty ("respawnmerchants");
+	foreach merchant in merchants_to_respawn
+		var x := merchant[1];
+		var y := merchant[2];
+		var z := merchant[3];
+		var rlm := merchant[4];
+		var npctemplate := merchant[5];
+		var npc := SpawnNPCAtLocation (npctemplate, x, y, z, 0, rlm);
+		if (!npc)
+			LogBadMerchantSpawn (npctemplate, x, y, rlm);
+		endif
+	endforeach
+	set_critical(0);
+endprogram
+
+
+function LogBadMerchantSpawn (npctemplate, x, y, rlm)
+	var log := array { };
+	var prop:= struct {};
+
+    	prop.+name := "Unable to spawn:";
+    	prop.+value := npctemplate;
+	log[1] := prop;
+
+    	prop.+name := "Location:";
+    	prop.+value := x + ", " + y + ", " + rlm;
+	log[2] := prop;
+
+	AppendConfigFileElem (":merchantspawner:merchantspawner", "Merchant", "spawner", log);
+	UnloadConfigFile (":merchantspawner:merchantspawner");
+
+endfunction

@@ -1,0 +1,55 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 8;
+
+program summon_wolves (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+	var cast_loc := GetSpellCastOn (caster, parms);
+	if (!cast_loc)
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+
+	//set the caster as the script controler and allow them to cast the next spell
+	SetScriptController (caster);
+	EraseObjProperty (caster, "#castingdruidspell");
+	detach ();
+
+	//replace evalint with animal lore because this is a druid spell
+	caster_evalint := GetAttribute (caster, ATTRIBUTEID_ANIMALLORE);
+	
+	if (caster.acctname)
+		//players can only have 1 pet of a type
+		var summoned_serial := GetObjProperty (caster, "#summoned_treant");
+		if (summoned_serial)
+			var summoned := SystemFindObjectBySerial (summoned_serial);
+			if (summoned)
+				SendSysMessage (caster, "You already have a treant!");
+				return 0;
+			endif
+		endif
+
+		var duration := 20 + 2 * caster_magery + (4 * caster_evalint);
+		if (caster_evalint > 95)
+			SummonCreature (caster, "summoned_treant_3", cast_loc, duration, 1, 0, 0, "#summoned_treant");
+		elseif (caster_evalint > 75)
+			SummonCreature (caster, "summoned_treant_2", cast_loc, duration, 1, 0, 0, "#summoned_treant");
+		else
+			SummonCreature (caster, "summoned_treant_1", cast_loc, duration, 1, 0, 0, "#summoned_treant");
+		endif
+	else
+		var duration := 20 + caster_magery + caster_evalint;
+		SummonCreature (caster, "ent", cast_loc, duration, 1, "treant");
+	endif
+	return 1;
+endprogram

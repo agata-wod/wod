@@ -1,0 +1,31 @@
+use os;
+use uo;
+use http;
+
+include "include/www";
+include "include/clock";
+
+program ViewOnlineCharacterList ()
+	LogWWWPageAccess (QueryIP());
+
+	WriteHTML ("<html><head><title>POL Server Performance Center</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+	
+	if (!len (EnumerateOnlineCharacters()))
+		WriteHTML ("There's no on online.");
+		WriteHTML ("<body></html>");
+		return;
+	endif
+	
+	WriteHTML ("<table width=80% border=1");
+	foreach chr in EnumerateOnlineCharacters()
+		WriteHTML ("<tr><td><a href=/character/character_info.ecl?serial=" + chr.serial + ">" + chr.name + "</a></td>" );
+		WriteHtml ("<td><a href=/character/account_info.ecl?acctname="+ chr.acctname + ">" + chr.acctname + "</a></td>");
+		WriteHTML ("<td>" + chr.clientversion + "</td>" );
+		WriteHTML ("<td><a href=/character/search_ip.ecl?ip_address=" + chr.ip + ">" + chr.ip + "</a></td></tr>" );
+	endforeach
+	
+	
+	WriteHtml( "</table>" );
+	WriteHTML ("</body></html>");
+endprogram

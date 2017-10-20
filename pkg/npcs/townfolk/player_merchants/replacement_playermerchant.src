@@ -1,0 +1,88 @@
+use os;
+use uo;
+use npc;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/eventid";
+include "include/utility";
+
+var inv_fs, inv_pb;
+var me := Self();
+var masterserial := CINT (GetObjProperty (me, "master"));
+var masteracctname := GetObjProperty (me, "masteracctname");
+
+
+program merchant ()
+	//these merchants are obsolete.  all this AI script does is replace the merchant with the 'real' one
+	//in the new playermerchant package
+	
+	var newmerchant := CreateNpcFromTemplate (":playermerchants:playermerchant", me.x, me.y, me.x, 0, me.realm);
+	if (!newmerchant)
+		Syslog ("Error:  Unable to create new NPC");
+		return;
+	endif
+	
+	newmerchant.color := me.color;
+	newmerchant.name := me.name;
+	newmerchant.gender := me.gender;
+	newmerchant.graphic := me.graphic;
+
+	var storage := FindStorageArea ("Merchant Storage");
+	if (!storage)
+		Syslog ("Unable to find merchant storage!");
+		return;
+	endif
+
+	inv_fs := find_or_create_item (storage, me.serial + " FS", 0xE7C);
+	inv_pb := find_or_create_item (storage, me.serial + " PB", 0xE7C);
+	inv_fs := find_or_create_item (storage, me.serial + " 1C", 0xE7C);
+	if (!inv_fs or !inv_pb)
+  		Syslog ("Error:  Unable to find my storage areas!");
+  		exit;
+	endif
+
+	var newmerchant_inv_fs := find_or_create_item (storage, me.serial + " FS", 0xE7C);
+	var newmerchant_inv_pb := find_or_create_item (storage, me.serial + " PB", 0xE7C);
+	newmerchant_inv_fs := find_or_create_item (storage, me.serial + " 1C", 0xE7C);
+	if (!newmerchant_inv_fs or !newmerchant_inv_pb or !newmerchant_inv_fs)
+  		Syslog ("Error:  Unable to create new merchant storage areas!");
+  		return;
+	endif
+
+	foreach item in ListRootItemsInContainer (inv_fs)
+		MoveItemToContainer (item, newmerchant_inv_fs);
+	endforeach
+
+	foreach item in ListRootItemsInContainer (inv_pb)
+		MoveItemToContainer (item, newmerchant_inv_pb);
+	endforeach
+
+	foreach item in ListEquippedItems (me)
+        	EquipItem (newmerchant, item);
+	endforeach
+	
+	var mygold := CINT (GetObjProperty (me, "g"));
+	if (mygold)
+		SetObjProperty (newmerchant, "g", mygold);
+	endif
+	
+	SetObjProperty (newmerchant, "cont", GetObjProperty (me, "cont"));
+	SetObjProperty (newmerchant, "buylist", GetObjProperty (me, "buylist"));
+	SetObjProperty (newmerchant, "buyprice", GetObjProperty (me, "buyprice"));
+	SetObjProperty (newmerchant, "buyobj", GetObjProperty (me, "buyobj"));
+	SetObjProperty (newmerchant, "messagelog", GetObjProperty (me, "messagelog"));
+	SetObjProperty (newmerchant, "master", GetObjProperty (me, "master"));
+	
+	RevokePrivilege (me, "invul");
+	
+	
+endprogram
+
+
+
+
+
+
+

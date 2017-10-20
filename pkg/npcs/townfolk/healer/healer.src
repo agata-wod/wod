@@ -1,0 +1,129 @@
+use os;
+use uo;
+use npc;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/sleepmode_normal";
+include "../pkg/npcs/main_ai/combat/fightmode_normal_default";
+include "../pkg/npcs/main_ai/combat/closedistance_default";
+include "../pkg/npcs/main_ai/combat/combatevent_default";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/main_ai/combat/spellcasting";
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/npc_util";
+include "../pkg/npcs/npcinfo";
+include "../pkg/npcs/speech";
+include "include/eventid";
+include "include/utility";
+
+Const HALT_THRESHOLD := 2;
+
+program HealerAI()
+	if (me.name ["<random>"])
+		DoOnCreationSetup ();
+	endif
+
+	GrantPrivilege( me, "seeghosts" );
+	me.enable( "seeghosts" );
+	GrantPrivilege( me, "hearghosts" );
+	me.enable( "hearghosts" );
+	speech := 99;
+
+	if (getobjproperty(me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	EnableMainEvents ();
+	SetWarMode( 0 );
+	WalkHome ();
+	var next_wander := ReadGameClock() + 10;
+
+	var ev;
+	while (me)
+		ev := os::wait_for_event( 10 );
+		if (ev)
+			repeat
+				case (ev.type)
+					EVID_SPEECH:
+						next_wander := readgameclock()+60;
+						check_speech (ev.text, ev.source);
+						HealerStuff (ev.source);
+					EVID_ENGAGED:
+					EVID_DAMAGED:
+						if (ev.source)
+							Fight (ev.source);
+							WalkHome ();
+						endif
+					EVID_ENTEREDAREA:
+						if (!ev.source.npctemplate)
+							HealerStuff(ev.source);
+						endif
+					EVID_ITEM_GIVEN:
+						next_wander := readgameclock()+60;
+						TakeItem (ev.source, ev.item);
+				endcase
+				ev := os::wait_for_event(4);
+			until (!ev);
+		endif
+		if (ReadGameClock() >= next_wander)
+			wander();
+			next_wander := ReadGameClock() + 10;
+		endif
+	endwhile
+endprogram
+
+
+function HealerStuff (byref mobile)
+	if (!mobile.warmode and mobile.dead)
+		Say ("You must manifest so that I can see you, ghost.");
+		SendSysMessage (mobile, "As a ghost, you are normally invisible.  In order for the healer");
+		SendSysMessage (mobile, "to see and resurrect you, you must manifest (by entering war mode.)");
+		return;
+	endif
+
+	if (len(ListHostiles (me)) > 0 )
+		Say("I cannot help thee until I escape this danger!");
+		return;
+	endif
+
+	if (!CheckLoSAt (me, mobile.x, mobile.y, mobile.z))
+		return;
+	endif
+
+	if (mobile.dead)
+		TurnToward (mobile);
+		Say ("Live again by the Virtues!");
+		CastSpell (me, mobile, ":misc_spells:resurrect");
+		return;
+	endif
+
+	if (mobile.poisoned)
+		TurnToward (mobile);
+		Say ("Sacrifice Purifies the Body and Soul!");
+		CastSpell (me, mobile, ":poison_spells:cure" );
+		return;
+	endif
+
+	if (GetVital (mobile, "Life") < GetVitalMaximumValue (mobile, "Life"))
+		TurnToward (mobile);
+		Say ("Compassion heals all!");
+		CastSpell (me, mobile, ":misc_spells:gheal");
+	endif
+endfunction
+
+function look_around ()
+	return;
+endfunction
+
+function EnableMainEvents()
+	DisableEvents (SYSEVENT_LEFTAREA + SYSEVENT_DISENGAGED + SYSEVENT_OPPONENT_MOVED );
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_ENTEREDAREA, HALT_THRESHOLD);
+	EnableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN, 3);
+endfunction
+
+function DisableMainEvents()
+	DisableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED + SYSEVENT_ENTEREDAREA);
+	DisableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN);
+endfunction

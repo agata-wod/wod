@@ -1,0 +1,52 @@
+use os;
+use uo;
+
+include "include/client";
+include "include/objtype";
+include "include/itemtypes";
+include "include/utility";
+include "include/magicitems";
+
+program findjunk (character)
+	SendSysMessage (character, "Select a bag to yoink all the junk into:");
+	var bag := Target (character);
+	if (!bag)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (!bag.isa (POLCLASS_CONTAINER))
+		SendSysMessage (character, "That's not a bag!.");
+		return;
+	endif
+
+	var x, y, z;
+	for( x := 6144 ; x > 16 ; x := x  - 128)
+		SendSysMessage (character, "Searching near X=" + x );
+		for (y := 16; y < 4096; y := y + 128)
+			for (z := -120; z <= 120; z := z + 30)
+				foreach item in ListItemsNearLocation (x, y, z, 64, REALM_BRITANNIA)
+					if (item.movable)
+						if (IsStackableItem (item) )
+							if (CreateItemInContainer (bag, item.objtype, item.amount) )
+								DestroyItem (item);
+							else
+								PrintTextAbovePrivate (character, "*That container is full!*", character);
+								SendSysMessage (character, "Item is at " + item.x + ", " + item.y);
+								return;
+							endif
+						elseif (!MoveItemToContainer (item, bag))
+							PrintTextAbovePrivate (character, "*That container is full!*", character);
+							SendSysMessage (character, "Item is at " + item.x + ", " + item.y);
+							return;
+						endif
+					endif
+				endforeach
+			endfor
+		endfor
+		sleep (1);
+		SendSysMessage (character, "Done!");
+	endfor
+endprogram
+
+

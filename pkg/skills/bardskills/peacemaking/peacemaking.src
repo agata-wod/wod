@@ -1,0 +1,80 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/eventid";
+include "include/attributes";
+include "../pkg/npcs/npcinfo";
+include "../pkg/skills/bardskills/bard";
+include "../pkg/character/skillcheck/skillcheck";
+
+program bard_peacemake (character)
+	if (GetObjProperty (character, "#useskill"))
+		if (GetProcess (GetObjProperty (character, "#useskill")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#useskill", GetPid());
+
+	if (!can_sing (character, 1)) 
+		return;
+	endif
+
+	var instrument := FindInstrument (character);
+	if (!instrument)
+		SendSysmessage (character, "You don't have an instrument to play!");
+		return;
+	endif
+
+	var range := CINT (GetAttribute (character, ATTRIBUTEID_PEACEMAKING)/10);
+	var ev := struct;
+	ev.+type := EVID_PEACEMADE;
+
+	var elem, difficulty;
+	var succeeded := 0;
+	set_critical (1);
+	foreach mobile in ListMobilesNearLocation (character.x, character.y, character.z, range, character.realm)
+		if (mobile.warmode and mobile.npctemplate and !GetObjProperty (mobile, "master"))
+			var last_peacemade := GetObjProperty (mobile, "#peacemade");
+			if (!last_peacemade)
+				last_peacemade := 0;
+			endif
+
+			if (last_peacemade + 20 < ReadGameClock())
+				if (!GetObjProperty (mobile, "nopeacemake") )
+					elem := GetNpcTemplateElem (mobile.npctemplate);
+					if (elem and elem.provoke)
+						//difficulty := -1;
+						difficulty := elem.provoke - GetDiscordanceMod (mobile);
+					else
+						difficulty := 100 - GetDiscordanceMod (mobile);
+					endif
+
+					if (CheckSkillWithItem (character, instrument, SKILLID_PEACEMAKING, difficulty)
+							and CheckSkillWithItem (character, instrument, SKILLID_MUSICIANSHIP, -1))
+						SendEvent (mobile, ev);
+						PrintTextAbove (mobile, "*Dazzled!*");
+						SetObjProperty (mobile, "#peacemade", ReadGameClock() );
+						succeeded := 1;
+					endif
+				endif
+			endif
+		endif
+	endforeach
+
+	set_critical (0);
+	if (!succeeded)
+		PrintTextAbove (character, "*"+ character.name + " plays a musical instrument.*");
+		playnoise (character, instrument, -1, SNDTYPE_PEACEMAKING);
+	else
+		playnoise (character, instrument, 0, SNDTYPE_PEACEMAKING);
+	endif
+
+	detach();
+	sleep (5);
+	EraseObjProperty (character, "#useskill");
+endprogram 

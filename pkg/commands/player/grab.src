@@ -1,0 +1,439 @@
+use uo;
+use os;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+include "include/itemtypes";
+include "include/utility";
+include "include/magicitems";
+
+Const GRAB_RANGE			:= 3;
+
+var lootbag := 0;
+var grabmystuff := 0;
+var allmyjunk := array{};
+var forcebag := 0;
+
+program grab_nearby_items (me, textline)
+	if (me.dead)
+		SendSysMessage (me, "Whadya know?  You really can't take it with you!");
+		return;
+	endif
+
+	if (me.x >= 1385 and me.x <= 1414 and me.y >= 3729 and me.y <= 3758 and me.realm == REALM_BRITANNIA)
+		SendSysMessage (me, "No fair looting in the arena!");
+		return;
+	endif
+
+	//make sure they're not already grabbing
+	if (GetObjProperty (me, "#looting"))
+		if (GetProcess (GetObjProperty (me, "#looting")))
+			SendSysmessage (me, "You are already looting!");
+			return;
+		endif
+	endif
+	SetObjProperty (me, "#looting", GetPid());
+
+	if (textline and textline != "1" and textline != "2")
+		textline := Lower (textline);
+		if (textline == "bag")
+			SetLootBag (me);
+		elseif (textline == "autostack")
+			if (GetObjProperty (me, "grabautostack") )
+				EraseObjProperty (me, "grabautostack");
+				SendSysMessage (me, "Items .grab'ed will no longer autostack with others in your backpack.");
+			else
+				SetObjProperty (me, "grabautostack", 1);
+				SendSysMessage (me, "Items .grab'ed will now autostack with others in your backpack.");
+			endif
+		elseif (textline == "autocarve")
+			if (GetObjProperty (me, "grabautocarve") )
+				EraseObjProperty (me, "grabautocarve");
+				SendSysMessage (me, "You will no longer automatically carve corpses.");
+			else
+				SetObjProperty (me, "grabautocarve", 1);
+				SendSysMessage (me, "You will now automatically carve corpses.");
+				SendSysMessage (me, "Keep a dagger or skinningknife in your main backpack for this to work.");
+			endif
+		elseif (textline == "help")
+			SendSysMessage (me, "GRAB dot command:");
+			SendSysMessage (me, "Picks up items in the nearby area or on nearby corpses and places them");
+			SendSysMessage (me, "in your backpack or preset grab bag.");
+			SendSysMessage (me, "Available options:");
+			SendSysMessage (me, "BAG: Select a bag into which .grab'ed items will be placed");
+			SendSysMessage (me, "AUTOSTACK: Automatically stacks stackable items with others in your backpack");
+			SendSysMessage (me, "AUTOCARVE: Automatically carve nearby corpses, taking ribs, hides, etc");
+			SendSysMessage (me, "HELP:  This menu");
+		else
+			SendSysMessage (me, "Unknown .grab option.  Use '.grab help' for a list of available options.");
+		endif
+		EraseObjProperty (me, "#looting");
+		return;
+	endif
+
+	//check to see if there's anything worth grabbing before doing anything else - this
+	//significantly reduces the CPU cycles of this command
+	if (!FindSomethingWorthGrabbing (me))
+		SendSysMessage (me, "Hmm... looks like you got it all!");
+		EraseObjProperty (me, "#looting");
+		return;
+	endif
+
+	if (!lootbag)
+		FindLootBag (me);
+	endif
+
+	if (CINT(textline) == 1)
+		grabmystuff := 1;
+	elseif (CINT(textline) == 2)
+		forcebag := 1;
+		SendSysMessage (me, "Loot into what?");
+		lootbag := Target (me);
+		if (!lootbag or !Accessible (me, lootbag))
+			SendSysMessage (me, "Canceled.");
+			return;
+		endif
+	else
+		ListMyStuff (me);
+	endif
+
+	foreach item in ListItemsNearLocation (me.x, me.y, me.z, GRAB_RANGE, me.realm)
+		if (CorpseOrChest (me, item))
+			foreach thingie in ListRootItemsInContainer (item)
+				if (me.dead)
+					SendSysMessage (me, "Whadya know?  You really can't take it with you!");
+					EraseObjProperty (me, "#looting");
+					return;
+				endif
+				if (Distance (me, item) > GRAB_RANGE)
+					SendSysMessage (me, "You're too far away to continue looting.");
+					EraseObjProperty (me, "#looting");
+					return;
+				endif
+				Grabit (me, thingie);
+				item.name := item.desc;
+			endforeach
+		elseif (item.movable)
+			if (me.dead)
+				SendSysMessage (me, "Whadya know?  You really can't take it with you!");
+				EraseObjProperty (me, "#looting");
+				return;
+			endif
+			if (Distance (me, item) > GRAB_RANGE)
+				SendSysMessage (me, "You're too far away to continue looting.");
+				EraseObjProperty (me, "#looting");
+				return;
+			endif
+			Grabit(me, item);
+		endif
+		lootbag.name := lootbag.desc;
+		me.backpack.name := me.backpack.desc;
+	endforeach
+
+	SendSysMessage (me, "Hmm... looks like you got it all!");
+	EraseObjProperty (me, "#looting");
+endprogram
+
+
+
+
+///////////////////
+//  does the actual grabbing, checking if the item can be grabbed
+///////////////////
+
+Function grabit (byref me, byref it)
+	if (!ReserveItem (it))
+		return;
+	endif
+	ReleaseItem (it);
+	
+	if (!it.movable)
+		return;
+	endif
+
+	if (!accessible (me, it))
+		return;
+	endif
+
+	if ((it.objtype >= UOBJ_STARTHAIR) and (it.objtype <= UOBJ_ENDHAIR))
+		return;
+	endif
+
+	//.grab 2 forces all items to go into the selected bag.
+	if (forcebag)
+		if (MoveItemToContainer (it, lootbag, 1, 1 ))
+			if (GetObjProperty (it, "ownerserial"))
+				PrintTextAbove (me, "*"+GetObjProperty(it, "oldname")+" owned by "+GetObjProperty (it, "ownername")+"*");
+			elseif (IsMagicalItem (it) )
+				PrintTextAbove (me, "*"+it.desc+"*");
+			elseif (GetObjProperty (it, "questitem"))
+				PrintTextAbove (me, "*"+it.desc+"*");
+			elseif (it.objtype >= 0x16003 and it.objtype <= 0x16007)
+				PrintTextAbove (me, "*"+it.desc+"*");
+			elseif (it.desc["treasure"] or it.desc["glowing"])
+				PrintTextAbove (me, "*"+it.desc+"*");
+			else
+				PrintTextAbove (me, "*yoink*");
+			endif
+			sleepms(200);
+		else
+			PrintTextAbovePrivate (me, "*That container is full!*", me);
+		endif
+		lootbag.name := lootbag.desc;
+		return;
+	endif
+
+	//Items with owner's marks automatically go into the top level backpack.  Makes things easier to sort out if
+	//someone yoinks someone else's stuff during a quest or something
+	var targetbag := lootbag;
+	if (GetObjProperty (it, "ownerserial") )
+		targetbag := me.backpack;
+	endif
+
+	//if they're just grabbing their .own'ed stuff, check to see if this is a .owned item
+	if (grabmystuff)
+		var ownerserial := GetObjProperty (it, "ownerserial");
+		if (ownerserial and ownerserial == me.serial)
+			if (MoveItemToContainer (it, targetbag, 1, 1 ))
+				PrintTextAbove (me,"*yoink*");
+				sleepms(200);
+			else
+				PrintTextAbovePrivate (me, "*That container is full!*", me);
+			endif
+			targetbag.name := targetbag.desc;
+		endif
+		return;
+	endif
+
+	//If its a non-stackable item, just move it to the bag
+	if (!IsStackableItem (it) )
+		if (MoveItemToContainer (it, targetbag, 1, 1 ))
+			if (GetObjProperty (it, "ownerserial"))
+				PrintTextAbove (me, "*"+GetObjProperty(it, "oldname")+" owned by "+GetObjProperty (it, "ownername")+"*");
+			elseif (IsMagicalItem (it) )
+				PrintTextAbove (me, "*"+it.desc+"*");
+			elseif (GetObjProperty (it, "questitem"))
+				PrintTextAbove (me, "*"+it.desc+"*");
+			elseif (it.objtype >= 0x16003 and it.objtype <= 0x16007)
+				PrintTextAbove (me, "*"+it.desc+"*");
+			elseif (it.desc["treasure"] or it.desc["glowing"])
+				PrintTextAbove (me, "*"+it.desc+"*");
+			else
+				PrintTextAbove (me, "*yoink*");
+			endif
+			sleepms(200);
+		else
+			PrintTextAbovePrivate (me, "*That container is full!*", me);
+		endif
+		targetbag.name := targetbag.desc;
+		return;
+	endif
+
+	//Otherwise, its stackable.  See if they have autostack turned on, and if so, try to find another item
+	//of the same type in their backpack
+	if (GetObjProperty (me, "grabautostack") )
+		foreach item in allmyjunk
+			if (item.objtype == it.objtype)
+				if (item.color == it.color)
+					if (AddAmount (item, it.amount) )
+						if (!DestroyItem (it))
+							SubtractAmount (item, it.amount);
+							targetbag.name := targetbag.desc;
+							return;
+						endif
+						PrintTextAbove (me, "*yoink*");
+						targetbag.name := targetbag.desc;
+						sleepms(200);
+						return;
+					elseif (CreateItemInContainer (targetbag, it.objtype, it.amount))
+						if (!DestroyItem (it))
+							SubtractAmount (item, it.amount);
+							targetbag.name := targetbag.desc;
+							return;
+						endif
+						PrintTextAbove (me, "*yoink*");
+						targetbag.name := targetbag.desc;
+						sleepms(200);
+						return;
+					else
+						PrintTextAbovePrivate (me, "*That container is full!*", me);
+						return;
+					endif
+				endif
+			endif
+		endforeach
+	endif
+
+	//Ok, they don't have any other items of that type (or autostack is turned off.)  Recreate
+	//the item so that it may stack with others in the grab bag (for when autostack is off.)
+	var newitem := CreateItemInContainer (targetbag, it.objtype, it.amount);
+	if (newitem)
+		if (!DestroyItem (it))
+			SubtractAmount (newitem, it.amount);
+			targetbag.name := targetbag.desc;
+			return;
+		endif
+		PrintTextAbove (me, "*yoink*");
+		sleepms(200);
+	else
+		PrintTextAbovePrivate (me, "*That container is full!*", me);
+	endif
+	targetbag.name := targetbag.desc;
+	return;
+endfunction
+
+
+
+
+///////////////////
+//  figure out if the item is a container or chest that can be looted out of
+///////////////////
+
+function CorpseOrChest (byref me, byref it)
+	if (it.locked or it.script)
+		return 0;
+	endif
+
+	if (it.objtype == UOBJ_CORPSE)
+		if (!GetObjProperty (it, "skinned"))
+			var parms := array{};
+			parms[1] := me;
+			parms[2] := it;
+			parms[3] := lootbag;
+			start_script (":drocket:carvecorpse", parms);
+		endif
+
+		foreach item in ListItemsNearLocationOfType (it.x, it.y, it.z, 0, UOBJ_BLOOD, me.realm)
+			if (item)
+			endif
+			return 1;
+		endforeach
+		CreateItemAtLocation (it.x, it.y, it.z, UOBJ_BLOOD, 1, it.realm);
+		return 1;
+	elseif (GetObjProperty (it, "level") )
+		return 1;
+	elseif ( GetObjProperty (it, "spawnchest") )
+		return 1;
+	endif
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Makes a list of all the item types in the player's inventory
+///////////////////
+
+function ListMyStuff (byref me)
+	foreach item in EnumerateItemsInContainer (me.backpack)
+		if (!item.isa (POLCLASS_EQUIPMENT))
+			if (item.objtype == UOBJ_SPELLBOOK)
+				foreach scroll in EnumerateItemsInContainer (item)
+					if (scroll.amount > 1)
+						CreateItemInContainer (me.backpack, scroll.objtype, (scroll.amount - 1) );
+						SubtractAmount( scroll, (scroll.amount - 1) );
+					endif
+				endforeach
+			elseif (item.container.objtype != UOBJ_SPELLBOOK and item.container.objtype != UOBJ_TRASHBARREL)
+				if (!item.container.locked)
+					if (item.objtype != UOBJ_GOLD_COIN)
+						if (IsStackableItem (item))
+							allmyjunk.append (item);
+						endif
+					endif
+				endif
+			endif
+		endif
+	endforeach
+endfunction
+
+
+
+
+///////////////////
+//  This function just checks to see if there's anything that can be .grab'ed.  Its used near the beginnning
+//  of the script and is a CPU saver
+///////////////////
+
+function FindSomethingWorthGrabbing (me)
+	foreach item in ListItemsNearLocation (me.x, me.y, me.z, GRAB_RANGE, me.realm)
+		if (item.objtype == UOBJ_CORPSE)
+			if (!GetObjProperty (item, "skinned"))
+				if (!lootbag)
+					FindLootBag (me);
+				endif
+				var parms := array{};
+				parms[1] := me;
+				parms[2] := item;
+				parms[3] := lootbag;
+				start_script (":drocket:carvecorpse", parms);
+			endif
+			return 1;
+		elseif (CorpseOrChest (me, item))
+			foreach thingie in ListRootItemsInContainer (item)
+				if (thingie)
+				endif
+				return 1;
+			endforeach
+		elseif (item.movable)
+			return 1;
+		endif
+	endforeach
+	return 0;
+endfunction
+
+
+
+///////////////////
+//  set the bag into which the character will loot
+///////////////////
+
+function SetLootBag (byref me)
+	SendSysMessage (me, "Select a container");
+	var bag := Target(me);
+	if (!bag)
+		SendSysMessage (me, "Canceled.");
+		return;
+	endif
+	
+	if (!bag.isa (POLCLASS_CONTAINER) )
+		SendSysMessage (me, "You can't loot into that!");
+		return;
+	endif
+
+	if (!InInventory (me.backpack, bag) )
+		SendSysMessage (me, "That is not in your inventory.");
+		EraseObjProperty (me, "#looting");
+		return;
+	endif
+
+	SetObjProperty (me, "grabbag", bag.serial);
+	EraseObjProperty (me, "#looting");
+	SendSysMessage (me, "You will now loot into this bag.");
+endfunction
+
+
+
+
+///////////////////
+//  Decided which bag should be looted into (global variable lootbag)
+///////////////////
+
+function FindLootBag (character)
+	lootbag := character.backpack;
+	if (GetObjProperty (character, "grabbag") )
+		var bagserial := GetObjProperty (character, "grabbag");
+		foreach item in EnumerateItemsInContainer (lootbag)
+			if (item.serial == bagserial)
+				lootbag := item;
+				break;
+			endif
+		endforeach
+		if (lootbag == character.backpack)
+			EraseObjProperty (character, "grabbag");
+			SendSysMessage (character, "Previously selected grab bag not found.  Your grab bag is now your backpack.");
+		endif
+	endif
+endfunction

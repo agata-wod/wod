@@ -1,0 +1,206 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/magic";
+include "include/wodinc";
+
+program do_spell_statmod (parms)
+	var cast_on := parms [1];
+	var mod_type := parms[2];
+	var mod_amount := parms[3];
+	var duration := parms[4];
+	var description := parms[5];
+
+	if (!cast_on or !mod_type or !mod_amount or !duration)
+		return;
+	endif
+	
+	if (!description)
+		description := "unknown";
+	endif
+
+	case (mod_type)
+		STATMOD_PARALYZE:
+			if (cast_on.enable ("invul"))
+				return;
+			endif
+			if (GetObjProperty (cast_on, "prot_paralyze_potion") )
+				SendSysMessage (cast_on, "You've been protected from being paralyzed!");
+				sleepms (100);
+				EraseObjProperty (cast_on, "prot_paralyze_potion");
+				return;
+			endif
+			DoTempMod (cast_on, "p", mod_amount, duration, description);
+		STATMOD_STR:
+			if (mod_amount < 0)
+				DoTempMod (cast_on, "cstr", mod_amount, duration, description);
+			else
+				DoTempMod (cast_on, "str", mod_amount, duration, description);
+			endif
+		STATMOD_INT:
+			if (mod_amount < 0)
+				DoTempMod (cast_on, "cint", mod_amount, duration, description);
+			else
+				DoTempMod (cast_on, "int", mod_amount, duration, description);
+			endif
+		STATMOD_DEX:
+			if (mod_amount < 0)
+				DoTempMod (cast_on, "cdex", mod_amount, duration, description);
+			else
+				DoTempMod (cast_on, "dex", mod_amount, duration, description);
+			endif
+		STATMOD_ALL:
+			if (mod_amount < 0)
+				DoTempMod (cast_on, "call", mod_amount, duration, description);
+			else
+				DoTempMod (cast_on, "all", mod_amount, duration, description);
+			endif
+		STATMOD_AR:
+			if (mod_amount < 0)
+				DoTempMod (cast_on, "car", mod_amount, duration, description);
+			else
+				DoTempMod (cast_on, "ar", mod_amount, duration, description);
+			endif
+		STATMOD_INCOGNITO:
+			DoIncognitoStuff (cast_on, duration, description);
+		default:
+			Syslog ("Tried to do an invalid statmod!");
+	endcase;
+endprogram
+
+
+
+
+function DoIncognitoStuff (cast_on, duration, description)
+	var newgender := RandomInt(2);
+	var newgraphic := 400+newgender;
+	DoPersistedMod (cast_on, "gender", newgender, cast_on.gender, duration, description);
+	DoPersistedMod (cast_on, "graphic", newgraphic, cast_on.graphic, duration, description);
+
+	var newname := AssignName (cast_on);
+	if (!len(newname)) return; endif
+	PrintTextAbovePrivate (cast_on,"Your new name is " + newname, cast_on);
+
+	DoPersistedMod(cast_on, "name", newname, cast_on.name, duration, description);
+	DoPersistedMod(cast_on, "title_suffix", GetTitle(), cast_on.title_suffix, duration, description);
+	DoPersistedMod(cast_on, "title_prefix", "", cast_on.title_prefix, duration, description);
+
+	var haircolor := RandomHairColor();
+	var oldhair := GetEquipmentByLayer( cast_on, LAYER_HAIR );
+	if (!oldhair) oldhair := 0; endif
+	if (!getobjproperty(cast_on,"haircolor"))
+		if (oldhair) 
+			SetObjProperty(cast_on,"haircolor",oldhair.color);
+		else
+			SetObjProperty(cast_on,"haircolor",haircolor);
+		endif
+	endif
+	var oldbeard := GetEquipmentByLayer( cast_on, LAYER_BEARD );
+	if (!oldbeard); oldbeard:= 0; endif
+	if (!getobjproperty(cast_on,"beardcolor"))
+		if (oldbeard) 
+			SetObjProperty(cast_on,"beardcolor",oldbeard.color);
+		else
+			SetObjProperty(cast_on,"beardcolor",haircolor);
+		endif
+	endif
+	if (oldhair) oldhair := oldhair.objtype; endif
+	if (oldhair) oldbeard := oldbeard.objtype; endif
+
+	DoPersistedMod(cast_on, "hair", RandomHair(cast_on), oldhair, duration, description);
+	DoPersistedMod(cast_on, "beard", RandomBeard(cast_on), oldbeard, duration, description);
+endfunction
+
+function AssignName( me )
+
+	var index := "MALE";
+	if (me.graphic == 401)
+		index := "FEMALE";
+	endif
+
+	var cfg := ReadConfigFile( "incognito" );
+	var elem := FindConfigElem( cfg , index );
+	var number := GetConfigInt( elem , "Count" );
+	if (!number)
+		SendSysMessage(me,"Unable to read incognito.cfg count");
+		return;
+	endif
+
+	var dice_str := "1d" + cstr(number);
+
+	var choice := RandomDiceRoll( dice_str );
+	var entry := "Name" + choice;
+
+	var str := GetConfigString (elem, entry);
+	return str;
+
+endfunction
+
+function GetTitle()
+
+	case (RandomInt(20)) 
+		1: return " the townsperson";
+		2: return " the farmer";
+		3: return " the sailor";
+		4: return " the drunkard";
+		5: return " the wanderer";
+		6: return " the villager";
+		7: return " the gypsie";
+		8: return " the vagabond";
+		9: return " the laborer";
+		default: return "";
+	endcase
+
+endfunction
+
+function RandomHair(me)
+
+	if (!me.gender)
+		case (RandomInt(11))
+			0: return 0x203b;
+			1: return 0x203b;
+			2: return 0x203C;
+			3: return 0x203d;
+			4: return 0x2044;
+			5: return 0x2045;
+			6: return 0x2047;
+			7: return 0x2048;
+			8: return 0x204a;
+			9: return 0x203b;
+			10: return 0;
+		endcase
+	else
+		case (RandomInt(10))
+			0: return 0x203b;
+			1: return 0x203C;
+			2: return 0x203C;
+			3: return 0x203d;
+			4: return 0x2045;
+			5: return 0x2046;
+			6: return 0x2047;
+			7: return 0x2049;
+			8: return 0x204a;
+			9: return 0x203C;
+		endcase
+	endif
+
+endfunction
+
+function RandomBeard(me)
+
+	if (me.gender) return 0; endif
+	case (RandomInt(18))
+	0: return 0x203e;//longbeard
+	1: return 0x203f;//shorbeard
+	2: return 0x2040;//goatee
+	3: return 0x2041;//mustache
+	4: return 0x204b;//shortbeardnstache
+	5: return 0x204c;//longbeardnstache
+	6: return 0x204d;//vandyke
+	7: return 0x2041;//mustache
+	8: return 0x204b;//shortbeardnstache
+	9: return 0x204d;//vandyke
+	default: return 0;
+	endcase
+endfunction

@@ -1,0 +1,130 @@
+use uo;
+use util;
+use http;
+include "include/accounts";
+
+program account_add()
+	WriteHTML ("<html><head><title>Create New Account</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+
+	var acctname := QueryParam ("acctname");
+	if (!acctname)
+		WriteHTML ("<form method=GET action=createaccount.ecl>");
+		WriteHTML ("Please enter the information for the new account:");
+		WriteHTML ("<br>Accounttname: <input name=acctname>");
+		WriteHTML ("<br>Password: <input name=acctpass> (leave blank for random password)");
+		WriteHTML ("<br>Email address: <input name=acctemail>");
+		WriteHTML ("<br><input id=submit1 name=submit1 type=submit value=Ok>");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+
+	var acct := FindAccount (acctname);
+	if (acct)
+		WriteHTML ("An account by that name already exists.  Please go back and try a different one.");
+		return;
+	endif	
+
+	var acctpass := QueryParam ("acctpass");
+	if (!acctpass)
+		acctpass := CreateNewPassword ();
+	endif
+	
+	var acctemail := QueryParam ("acctemail");
+	while (acctemail [" "])
+		acctemail [" "] := "";
+	endwhile;
+
+	var confirmcreate := QueryParam ("confirmcreate");
+	if (!confirmcreate)
+		WriteHTML ("Please confirm this account information:");
+		WriteHTML ("<p>Email Address: " + acctemail);
+		WriteHTML ("<br>Account Name: " + acctname);
+		WriteHTML ("<br>Password: " + acctpass);
+		WriteHTML ("<p><a href=createaccount.ecl?acctemail=" + acctemail + "&acctname=" + acctname + "&acctpass=" + acctpass + "&confirmcreate=1>");
+		WriteHTML ("Confirm information and create account</a>");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	
+	var ret := CreateAccount (acctname, acctpass, 1);
+	if (ret == error)
+		writehtml("Sorry, account creation failed.<P>");
+		writehtml("Error: " + ret.errortext );
+		writehtml("</body></html>");
+		return;
+	endif
+
+	SetAccountProperty (acctname, "account_email", acctemail);
+	ret.set_uo_expansion("HSA");
+
+		
+	writehtml("Account added successfully. Press the link and attach login.cfg file to email player");
+	writehtml("<br><a href=\"mailto:" + acctemail + "?subject=Welcome to the World of Dreams\">email player</a>");
+
+	writehtml("<p>You've been accepted!");
+	writehtml("Here is your account information for The World of Dreams :");
+	writehtml("<br>accountname: " + acctname);
+	writehtml("<br>password: " + acctpass);
+	writehtml("<br><br>To connect you will need two things:");
+	writehtml("<br>a. The current WoD client files (found in the files section on our website at www.theworldofdreams.com )");
+	writehtml("<br>b. The current WoD wodli.cfg  (see attachment)");
+	writehtml("<br><br>To log into the WoD:");
+	writehtml("<br>1. Install and start UO but DO NOT patch fully with OSI servers. (Patching will cause the wodclient to crash.)");
+	writehtml("<br>2.  Extract/unzip the wod_files into your UO folder and put the wodli.cfg file into your UO folder, too.");
+	writehtml("<br>3. Run the wodlclient.exe file to connect to WoD.");
+	writehtml("<br>Welcome to the World of Dreams!");
+	writehtml("</body></html>");
+endprogram
+
+
+
+function CreateNewPassword ()
+	var newstring := GetRandomCharacter () + GetRandomCharacter () + GetRandomCharacter ();
+	newstring := newstring + CSTR (RandomInt (10000));
+	return newstring;
+endfunction
+
+
+function GetRandomCharacter ()
+	case (RandomInt (26))
+		0:	return "a";
+		1:	return "b";
+		2:	return "c";
+		3:	return "d";
+		4:	return "e";
+		5:	return "f";
+		6:	return "g";
+		7:	return "h";
+		8:	return "i";
+		9:	return "j";
+		10:	return "k";
+		11:	return "l";
+		12:	return "m";
+		13:	return "n";
+		14:	return "o";
+		15:	return "p";
+		16:	return "q";
+		17:	return "r";
+		18:	return "s";
+		19:	return "t";
+		20:	return "u";
+		21:	return "v";
+		22:	return "w";
+		23:	return "x";
+		24:	return "y";
+		25:	return "z";
+	endcase;
+	return "icky";
+endfunction
+
+
+
+
+
+
+
+
+
+
+

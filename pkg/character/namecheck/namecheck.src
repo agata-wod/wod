@@ -1,0 +1,70 @@
+use os;
+use uo;
+use cfgfile;
+
+program namecheck (character)
+	if (character.cmdlevel or !GetObjProperty (character, "newcharacter"))
+		return;
+	endif
+
+	sleep (3);
+	var charactername := character.name;
+	while (charactername["  "])
+		charactername["  "] := " ";
+	endwhile
+	character.name := charactername;
+
+	var badnamereason := IsABadName (character, character.name);
+	if (!badnamereason)
+		return;
+	endif
+
+	var newname;
+	while (character)
+		newname := Sendtextentrygump (character, badnamereason, 
+				TE_CANCEL_DISABLE, TE_STYLE_NORMAL, 20, "Please select a new name");
+		badnamereason := IsABadName (character, newname);
+			
+		if (!badnamereason)
+			SendSysmessage (character, "Good choice, " + newname + "!");
+			EraseObjProperty (character, "newcharacter");
+			character.name := newname;
+			return;
+		endif
+	endwhile
+endprogram
+
+
+
+
+function IsABadName (character, name)
+	if (Lower (name) == name)
+		return "Character names must be capitalized!";
+	endif
+	
+	name:= Lower (name);
+	if (!name)
+		return "Please enter a name";
+	elseif (name["lord"] or name["queen"] or name["king"] or name["gm"] or name["seer"])
+		return "Names may not contain honorary titles.";
+	endif
+	
+	var acct, player;
+	set_script_option (SCRIPTOPT_CAN_ACCESS_OFFLINE_MOBILES, 1);
+	foreach acctname in ListAccounts ()
+		acct := FindAccount (acctname);
+		if (acct and acct != character.acct)
+			for counter := 1 to 7
+				player := acct.GetCharacter (counter);
+				if (player)
+					if (Lower (player.name) == name)
+						if (player.serial < character.serial)
+							return "You have selected a name that is already in use.";
+						endif
+					endif
+				endif
+			endfor
+		endif
+	endforeach
+	return 0;
+endfunction

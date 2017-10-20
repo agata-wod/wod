@@ -1,0 +1,25 @@
+use os;
+use uo;
+
+program walk_on_moongate ( mobile, gate )
+	set_critical (1);
+	if (!gate or GetObjProperty( mobile, "#justgated" ))
+		EraseObjProperty( mobile, "#justgated" );
+		return;
+	endif
+
+	var x := GetObjProperty (gate, "DestX");
+	var y := GetObjProperty (gate, "DestY");
+	var z := GetObjProperty (gate, "DestZ");
+	var rlm := GetObjProperty (gate, "DestR");
+	if (!rlm)
+		rlm := REALM_BRITANNIA;
+	endif
+
+	if(MoveObjectToLocation( mobile, x, y, z, rlm, MOVEOBJECT_NORMAL ))
+		SetObjProperty (mobile, "#justgated", 1);
+		set_critical (0);
+		sleep (1);
+		EraseObjProperty (mobile, "#justgated");
+	endif
+endprogram

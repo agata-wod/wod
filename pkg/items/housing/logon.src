@@ -1,0 +1,26 @@
+use os;
+use uo;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "../pkg/items/housing/house";
+
+program logon ( who )
+	var sign := FindHouseSignAtLocation (who.x, who.y, who.realm);
+	if (sign)
+		if (!IsAFriend (sign, who))
+			//some signs are inside of the house, so they have to have an outside location set
+			//with .house login
+			if (GetObjProperty (sign, "loginx"))
+				var targx := GetObjProperty (sign, "loginx");
+				var targy := GetObjProperty (sign, "loginy");
+				var targz := GetObjProperty (sign, "loginz");
+				MoveObjectToLocation( who, targx, targy, targz, sign.realm, MOVEOBJECT_NORMAL );
+			else
+				MoveObjectToLocation( who, sign.x, sign.y, sign.z, sign.realm, MOVEOBJECT_NORMAL );
+			endif
+		endif
+	endif
+endprogram
+

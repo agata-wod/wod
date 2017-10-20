@@ -1,0 +1,95 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+program test_lighting (character)
+	return 1;
+
+	character.SetLightLevel (20, 0);
+	if (GetObjProperty (character, "#faminelight"))
+		if (GetProcess (GetObjProperty (character, "#faminelight")))
+			return;
+		endif
+	endif
+	
+	set_critical (1);
+	SetObjProperty (character, "#faminelight", GetPID());
+	var charx := character.x;
+	var chary := character.y;
+	var charz := character.z;
+	var charr := character.realm;
+	
+	var light1 := CreateItemAtLocation (charx, chary, charz + 1, 0x1706c, 1, charr);
+	light1.graphic := 0x1647;
+	light1.facing := 29;
+	light1.movable := 0;
+	var light2 := CreateItemAtLocation (charx, chary, charz + 1, 0x1706c, 1, charr);
+	light2.graphic := 0x1647;
+	light2.facing := 36;
+	light2.movable := 0;
+
+	set_critical (0);
+	
+	repeat
+		if (charx != character.x or chary != character.y)
+			set_critical (1);
+			charx := character.x;
+			chary := character.y;
+			charz := character.z;
+			charr := character.realm;
+		
+			light1.movable := 1;
+			MoveObjectToLocation( light1, charx + 2, chary + 2,charz + 1 , charr, MOVEOBJECT_FORCELOCATION );
+			light1.movable := 0;
+
+			light2.movable := 1;
+			MoveObjectToLocation( light2, charx + 2, chary - 2,charz + 1 , charr, MOVEOBJECT_FORCELOCATION );
+			light2.movable := 0;
+
+			set_critical (0);
+		endif
+	
+		sleepms (100);
+		if (!GetObjProperty (character, "#faminelight"))
+			EraseObjProperty (character, "#faminelight");
+			DestroyItem (light1);
+			DestroyItem (light2);
+			if (character.race == RACE_ELF)
+				character.setlightlevel (0, -1);
+			endif
+			return;
+		endif
+		if (!CheckIfInFamine (character))
+			EraseObjProperty (character, "#faminelight");
+			DestroyItem (light1);
+			DestroyItem (light2);
+			if (character.race == RACE_ELF)
+				character.setlightlevel (0, -1);
+			endif
+			return;
+		endif
+	until (!character);
+	EraseObjProperty (character, "#faminelight");
+	DestroyItem (light1);
+	DestroyItem (light2);
+endprogram
+
+
+function CheckIfInFamine (character)
+	if (character.realm != REALM_BRITANNIA)
+		return 0;
+	elseif (character.x > 5260 and character.x < 5340 and character.y > 1870 and character.y < 1940)
+		return 1;
+	elseif (character.x > 5670 and character.x < 5870 and character.y > 780 and character.y < 1010)
+		return 1;
+	elseif (character.x > 5240 and character.x < 5280 and character.y > 1740 and character.y < 1780)
+		return 1;
+	elseif (character.x > 5190 and character.x < 5230 and character.y > 1720 and character.y < 1765)
+		return 1;
+	endif
+	return 0;
+endfunction
+
+
+

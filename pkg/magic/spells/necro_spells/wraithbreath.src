@@ -1,0 +1,43 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 5;
+
+program cast_wraithbreath (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		return 0;
+	endif
+
+	var CasterSkill := cint((GetAttribute(caster, ATTRIBUTEID_MAGERY) + GetAttribute (caster, ATTRIBUTEID_NECROMANCY))/2);
+	var range := Cint (CasterSkill / 15);
+	var PowerLevel := Cint(CasterSkill /5);
+	var DamageDie := "2d" + PowerLevel;
+
+	var manadrained := 0;
+	var tmpdmg;
+
+	foreach mobile in ListMobilesNearLocation (caster.x, caster.y, caster.z, range, caster.realm)
+		if ((mobile != caster) and (!mobile.dead))
+			var Dmg := RandomDiceRoll (DamageDie);
+			PlayObjectCenteredEffect (mobile, FX_CURSE_EFFECT, 7, 0x10);
+			PlaySoundEffect (mobile, SFX_SPELL_MANA_VAMPIRE);
+			DoDamageByType (caster, mobile, dmg, DAMAGETYPE_MAGIC);
+
+			tmpdmg := RandomInt (CINT (Dmg/2));
+			SetVital (caster, "Mana", GetVital (caster, "Mana") + tmpdmg*100);
+			if (GetVital (caster, "Mana") > GetVitalMaximumValue (caster, "Mana"))
+				SetVital (caster, "Mana", GetVitalMaximumValue (caster, "Mana"));
+			endif
+			manadrained := manadrained + tmpdmg;
+		endif
+	endforeach
+
+	SendSysMessage(caster, "You drained " + manadrained + " mana!");
+	return 1;
+endprogram

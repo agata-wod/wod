@@ -1,0 +1,8 @@
+use os;
+use uo;
+use util;
+
+program logon ( who )
+	EraseObjProperty (who, "#poisoninfo");
+endprogram
+

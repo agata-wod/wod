@@ -1,0 +1,111 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/itemtypes";
+include "include/utility";
+include "../pkg/items/housing/house";
+
+program oninsert_chest (character, container, movetype, null_value, item, existing_stack, amt_to_add)
+	if (amt_to_add and existing_stack and null_value)
+	endif
+	container.name := container.desc;
+	if (movetype != MOVETYPE_PLAYER)
+		return 1;
+	endif
+
+	//check to see if this is a lost and found box.  If it is, do lost and found box stuff
+	if (GetObjProperty (container, "lostandfound"))
+		DoLostAndFoundStuff (character, container, item);
+		container.name := container.desc;
+		return;
+	endif
+	if (container.item_count > 1)
+		case (container.graphic)
+			0x4142:
+			0x4144:
+				container.graphic := container.graphic - 1;
+			0x1947:
+			0x1948:
+				container.graphic := container.graphic + 2;
+		endcase
+	endif
+	//Sound effects
+	if (item.objtype == UOBJ_GOLD_COIN)
+		if(item.amount >= 100)
+			PlaySoundEffectPrivate (character, 0x38, character);
+		elseif(item.amount >= 10)
+			PlaySoundEffectPrivate (character, 0x37, character);
+		else
+			PlaySoundEffectPrivate (character, 0x36, character);
+		endif
+	elseif (IsGem (item.objtype))
+		PlaySoundEffectPrivate (character, 0x35, character);
+	else
+		PlaySoundEffectPrivate (character, 0x49, character);
+	endif
+	
+endprogram
+
+
+
+
+///////////////////
+//  Checks to see if the item is .own'ed, and if it is, moves it to the owner's bankbox
+///////////////////
+
+function DoLostAndFoundStuff (character, thecontainer, item)
+	var ownerserial := GetObjProperty (item, "ownerserial");
+	if (!ownerserial)
+		SendSysMessage (character, "That item does not have an owner's mark!");
+		MoveItemToContainer (item, character.backpack);
+		return;
+	endif
+	
+	var owner := SystemFindObjectBySerial (ownerserial, SYSFIND_SEARCH_OFFLINE_MOBILES);
+	if (!owner)
+		SendSysMessage (character, "That player no longer exists.");
+		PrintTextAbove (thecontainer, "*Trashed*");
+		DestroyItem (item);
+		return;
+	endif
+	
+	var bankbox := FindBankBox (owner.acctname);
+	if (!bankbox)
+		SendSysMessage (character, "Error opening bankbox!");
+		MoveItemToContainer (item, character.backpack);
+		return;
+	endif
+	
+	if (!MoveItemToContainer (item, bankbox))
+		SendSysMessage (character, "The bankbox is full!");
+		MoveItemToContainer (item, character.backpack);
+		return;
+	endif
+	SendSysMessage (character, "Thank you.  The item has been placed in that player's bankbox.");
+endfunction
+
+
+
+
+///////////////////
+//  Logs the message to a file
+///////////////////
+
+function AppendLog (who, themessage)
+	var log := Array {};
+	var prop := struct;
+	prop.+name := "";
+	prop.+value := "";
+	foreach line in themessage
+		prop.value := line;
+		log.append (prop);
+	endforeach
+
+	local elemkey := who.name + "(" + who.acctname + ")";
+	AppendConfigFileElem ("chestlog", "ITEM REMOVAL:", elemkey, log );
+	UnloadConfigFile ("chestlog");
+endfunction

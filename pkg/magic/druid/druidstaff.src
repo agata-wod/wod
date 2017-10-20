@@ -1,0 +1,111 @@
+use cfgfile;
+use os;
+use uo;
+
+include "include/eventid";
+include "include/client";
+include "include/sysevent";
+include "../pkg/magic/druid/druid";
+
+var spell_cfg_file := ReadConfigFile ("spells");
+
+program druidstaff (parms)
+	var character := parms[1];
+	var staff := parms[2];
+	var equiptime := parms[3];
+
+	//allows the staff to listen
+	RegisterForSpeechEvents (staff, 1);
+	EnableEvents (SYSEVENT_SPEECH, 0);
+	
+	var ev;
+	while (staff)
+		ev := wait_for_event (120);
+        	if (ev and ev.type == EVID_SPEECH)
+ 			if (!IsEquipped (character, staff, equiptime))
+				return;
+			endif
+			if (ev.source == character)
+				ProcessSpeechEvent (staff, ev);
+			endif
+        	endif
+	endwhile
+endprogram
+
+
+
+///////////////////
+//  makes sure that the staff is actually equiped and not listening in the player's
+//  backpack or something
+///////////////////
+
+function IsEquipped (character, staff, equiptime)
+	if (GetObjProperty (staff, "#equiptime") != equiptime)
+		return 0;
+	endif
+
+	var weaponone := GetEquipmentByLayer (character, LAYER_HAND1);
+	if (weaponone and weaponone == staff)
+		return 1;
+	endif
+	var weapontwo := GetEquipmentByLayer (character, LAYER_HAND2);
+	if (weapontwo and weapontwo == staff)
+		return 1;
+	endif
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Checks the spoken words against known spells
+///////////////////
+
+function ProcessSpeechEvent (staff, event)
+	//go through all the spells in the spells.cfg file looking for a match
+	for i := 81 to 96
+		if (spell_cfg_file[i] and lower(spell_cfg_file[i].PowerWords) == lower (event.text) )
+			//This is a valid spell.  start the castdruidspell script
+			var parms := array{};
+			parms[1] := event.source;
+			parms[2] := staff;
+			parms[3] := i;
+			start_script ("castdruidspell", parms);
+			return;
+		endif
+	endfor
+
+	//for GMs only
+	if (lower(event.text) == "i do not need reagents" and event.source.cmdlevel)
+		SetObjProperty (event.source, "#noreagents", 1);
+		SendSysMessage (event.source, "Reagent consumption off");
+	elseif (lower(event.text) == "i need reagents" and event.source.cmdlevel)
+		EraseObjProperty (event.source, "#noreagents");
+		SendSysMessage (event.source, "Reagent consumption on");
+	elseif (lower(event.text) == "create corruption" and event.source.cmdlevel)
+		var lvl := SendTextEntryGump (event.source, "Enter the level of the blight" ,
+				TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "(1 to 5)");
+			lvl := CINT (lvl);
+			if (!lvl)
+				SendSysMessage (event.source, "Canceled");
+			else
+				var blight := CreateItemAtLocation (event.source.x, event.source.y, event.source.z, 0x1706d, 1, event.source.realm);
+				SetObjProperty (blight, "difficulty", lvl);
+			endif
+	elseif (lower(event.text) == "nigh tir")
+		var parms := array{};
+		parms[1] := event.source;
+		parms[2] := 0;
+		start_script("purify", parms);
+	elseif (lower(event.text) == "quick purify" and event.source.cmdlevel)
+		var parms := array{};
+		parms[1] := event.source;
+		parms[2] := 1;
+		start_script("purify", parms);
+	endif
+endfunction
+
+
+
+

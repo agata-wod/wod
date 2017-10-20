@@ -1,0 +1,46 @@
+use uo;
+use os;
+use util;
+
+program test_text (character)
+	SendSysMessage (character, "Time for a storm!");
+	DoRainStorm ();
+	SendSysMessage (character, "Rain finished");
+endprogram
+
+
+
+
+
+
+function DoRainStorm ()
+	SendWeatherPacket ("65001000");
+	sleep (60);
+	SendWeatherPacket ("65004000");
+	sleep (60);
+	
+	var storm_counter := RandomInt (5) + 2;
+	for i := 1 to storm_counter
+		SendWeatherPacket ("65007000");
+		sleep (120);
+	endfor
+
+	SendWeatherPacket ("65004000");
+	sleep (120);
+	SendWeatherPacket ("65000000");
+endfunction
+
+
+
+
+
+
+function SendWeatherPacket (weather)
+	SetGlobalProperty ("#weather", weather);
+	foreach player in EnumerateOnlineCharacters()
+		if (player.x < 5120)
+			SendPacket (player, weather);
+		endif
+	endforeach
+endfunction
+

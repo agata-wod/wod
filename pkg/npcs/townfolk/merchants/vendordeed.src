@@ -1,0 +1,125 @@
+use os;
+use uo;
+use util;
+
+Const MAX_MERCHANTS_PER_ACCOUNT := 5;
+
+program use_vendor_deed ( character, deed )
+	if (!ReserveItem (deed))
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+
+	if (CountAccountMerchants (character) >= MAX_MERCHANTS_PER_ACCOUNT)
+		SendSysMessage (character, "You already have the maximum allowed merchants");
+		return;
+	endif
+
+	SendSysMessage (character, "Where yould you like the merchant?");
+	var where := TargetCoordinates (character);
+	if (!where)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	var gendermenu := CreateMenu ("Select a gender for your merchant:");
+	AddMenuItem (gendermenu, 0, "Male");
+	AddMenuItem (gendermenu, 0, "Female");
+	AddMenuItem (gendermenu, 0, "Random");
+	var gender := SelectMenuItem2 (character, gendermenu);
+
+	var parms := array {};
+	if (!gender)
+		SendSysMessage (character, "Canceled.");
+		return;
+	elseif (gender.index == 1)
+		parms.+gender := 0;
+	elseif (gender.index == 2)
+		parms.+gender := 1;
+	else
+		parms.+gender := RandomInt (2);
+		parms.+name := "<random>";
+		set_critical (1);
+		var merchant := CreateNpcFromTemplate (":merchants:playervendor", where.x, where.y, where.z, parms, where.realm);
+		if (!merchant)
+			SendSysMessage (character, "Can't place there.");
+			return;
+		endif
+
+		var next_pay := readgameclock() + 86400;
+		SetObjProperty (merchant, "p", next_pay);
+		SetObjProperty (merchant, "acctname", character.acctname);
+		SetObjProperty (merchant, "master", character.serial);
+		SetObjProperty (merchant, "mn", character.name);
+		SetObjProperty (merchant, "payments", 0);
+		DestroyItem (deed);
+		set_critical (0);
+		return;
+	endif
+	
+	var name := SendTextEntryGump (character, "Enter the vendor's name: (20 characters max, blank for random name)" ,
+			TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, " ");
+
+	if (!name)
+		parms.+name := "<random>";
+	elseif (len (name) > 20)
+		SendSysMessage (character, "Too long!");
+		return;
+	elseif (name ["buy"] or name["sell"] or name["follow"] or name ["release"] or name ["log"] or name ["help"])
+		SendSysMessage (character, "Name cannot contain: buy, sell, follow, release or other merchant commands");
+		return;
+	elseif (name ["collect"] or name["status"] or name["wear"] or name ["strip"] or name ["undress"] or name ["hire"])
+		SendSysMessage (character, "Name cannot contain: buy, sell, follow, release or other merchant commands");
+		return;
+	elseif (name ["trade"])
+		SendSysMessage (character, "Name cannot contain: buy, sell, follow, release or other merchant commands");
+		return;
+	else
+		parms.+name := name + ", " + character.name + "'s Merchant";
+	endif
+
+	set_critical (1);
+	var merchant := CreateNpcFromTemplate (":merchants:playervendor", where.x, where.y, where.z, parms, where.realm);
+	if (!merchant)
+		SendSysMessage (character, "Can't place there.");
+		return;
+	endif
+
+	var next_pay := readgameclock() + 86400;
+	SetObjProperty (merchant, "p", next_pay);
+	SetObjProperty (merchant, "acctname", character.acctname);
+	SetObjProperty (merchant, "master", character.serial);
+	SetObjProperty (merchant, "mn", character.name);
+	SetObjProperty (merchant, "payments", 0);
+	DestroyItem (deed);
+	set_critical (0);
+endprogram
+
+
+
+
+///////////////////
+//  counts how many merchants a particular account has
+///////////////////
+
+function CountAccountMerchants (player)
+	var acctname := player.acctname;
+	if (!acctname)
+		return 0;
+	endif
+
+	var merchants := GetGlobalProperty ("#merchants_of_"+acctname);
+	if (!merchants)
+		return 0;
+	endif
+
+	var newmerchants := array {};
+	foreach merchantserial in merchants
+		var themerchant := SystemFindObjectBySerial (merchantserial);
+		if (themerchant)
+			newmerchants.append (merchantserial);
+		endif
+	endforeach
+	SetGlobalProperty ("#merchants_of_"+acctname, newmerchants);
+	return  (len (newmerchants));
+endfunction

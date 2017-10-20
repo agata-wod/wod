@@ -1,0 +1,34 @@
+use os;
+use uo;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/attributes";
+include "include/dotempmods";
+include "../pkg/skills/warriorskills/healing/healing";
+
+program bandageheal (parms)
+	var healer := parms[1];
+	var patient := parms[2];
+	var bandages := parms [3];
+
+	var healtime := GetObjProperty (healer, "#heal");
+	if (healtime and healtime > ReadGameClock ())
+		SendSysMessage (healer, "You must wait until you can use your healing arts again!");
+		return;
+	endif
+
+	if (patient.dead)
+		ResurrectPlayer (healer, patient, bandages);
+	elseif (!patient.npctemplate)
+		HealPatient (healer, patient, bandages);
+	elseif (patient.graphic == 400 or patient.graphic == 401 or patient.graphic == 605 or patient.graphic == 606 or patient.graphic == 666 or patient.graphic == 667)
+		HealPatient (healer, patient, bandages);
+	else
+		SendSysMessage (healer, "You can't heal that.");
+		if (healer.npctemplate[":guards:warrior"])
+			PrintTextAbove (healer, "I can't heal that!");
+		endif
+	endif
+endprogram

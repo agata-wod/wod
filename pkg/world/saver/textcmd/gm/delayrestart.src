@@ -1,0 +1,29 @@
+use uo;
+use os;
+include "include/client";
+
+program delayrestart (gm)
+	If (GetGlobalProperty ("#delayserverrestart"))
+		SendSysMessage (gm, "The restart has already been delayed.");
+		return;
+	endif
+	If (GetGlobalProperty ("#restartingserver"))
+		SendSysMessage (gm, "Sorry, too late to cancel now.");
+		return;
+	endif
+
+	SetGlobalProperty ("#delayserverrestart", 1);
+	AlertOnlineGMs ("The server restart has been delayed.  Carry on.");
+	Syslog ("System restart has been delayed by " + gm.acctname);
+endprogram
+
+
+
+
+function AlertOnlineGMs (msg)
+	foreach player in EnumerateOnlineCharacters ()
+		if (player.cmdlevel)
+			SendSysMessage (player, msg, FONT_NORMAL, 30);
+		endif
+	endforeach
+endfunction

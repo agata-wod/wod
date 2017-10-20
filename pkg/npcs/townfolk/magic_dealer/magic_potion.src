@@ -1,0 +1,94 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/magicitems";
+include "include/utility";
+
+program display_forsale_items (player, potion)
+	if (!ReserveItem (potion))
+		SendSysMessage (player, "You can't use that right now!");
+		return;
+	endif
+
+	if (!potion.movable)
+		SendSysMessage (player, "You can't use that right now!");
+		return;
+	endif
+
+	SendSysMessage (player, "Select the non-magic item (this item will become magical):");
+	var normal_item := Target (player);
+	if (!normal_item)
+		SendSysMessage (player, "Canceled.");
+		return;
+	endif
+	if (IsMagicalItem (normal_item) )
+		SendSysMessage (player, "That's magical too!");
+		return;
+	endif
+	if (!InInventory (player.backpack, normal_item))
+		SendSysMessage (player, "Can't reach it!");
+		return;
+	endif
+	if (!ReserveItem (normal_item))
+		SendSysMessage (player, "You can't use that right now!");
+		return;
+	endif
+	if (GetObjProperty (normal_item, "ownerserial") )
+		SendSysMessage (player, "You can't use the manastone on that - it has an owner's mark!");
+		return;
+	endif
+
+	//Most items have to be exceptional to be transfered to, but there are some exceptions
+	if (!normal_item.desc["xceptional"])
+		case (normal_item.objtype)
+			UOBJ_CHAOS_SHIELD:
+			UOBJ_ORDER_SHIELD:
+			UOBJ_ORDER_SHIELD2:
+			UOBJ_DRUID_STAFF:
+			UOBJ_NECRO_STAFF:
+			UOBJ_BONE_ARMS:
+			UOBJ_BONE_TUNIC:
+			UOBJ_BONE_GLOVES:
+			UOBJ_BONE_HELM:
+			UOBJ_BONE_LEGS:
+			UOBJ_ORCHELM:
+			UOBJ_ORCHELM2:
+			UOBJ_G_CHAOS_SHIELD:
+			UOBJ_G_CHAOS_SHIELD2:
+			UOBJ_G_ORDER_SHIELD:
+			UOBJ_G_ORDER_SHIELD2:
+				if (player.cmdlevel)
+					SendSysMessage (player, "Bypassing strength requirements");
+				endif
+			default:
+				SendSysMessage (player, "You must use an exceptional item");
+				return;
+		endcase
+	endif
+
+	var new_item := CreateItemInContainer (player.backpack, normal_item.objtype, 1);
+	if (!new_item)
+		PrintTextAbovePrivate (player, "*Your backpack is full!*", player);
+		return;
+	endif
+	new_item.color := normal_item.color;
+
+	var parms := array {};
+	parms[1] := new_item;
+	parms[2] := 10;
+	parms[3] := 0;
+
+	if (!run_script_to_completion (":loot:makeitemmagic", parms))
+		SendSysMessage (player, "You cannot make that item magical!");
+		DestroyItem (new_item);
+		return;
+	endif
+	
+	DestroyItem (normal_item);
+	DestroyItem (potion);
+endprogram
+
+
+

@@ -1,0 +1,367 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/utility";
+include "include/itemtypes";
+include "../pkg/items/housing/house";
+
+
+program Place_Deed (character, deed)
+	var maxlockdowns, lockdowns, maxsecures, secures;
+
+	if (!ReserveItem (deed))
+		SendSysMessage (character, "You can't use this right now.");
+		return;
+	endif
+
+	var sign := FindHouseSign (character);
+	if (!sign)
+		if (!character.cmdlevel)
+			SendSysMessage (character, "You must be in your house to use this!");
+			return;
+		endif
+		SendSysMessage (character, "There's no house sign here, but we'll let that go.");
+		maxlockdowns := 100;
+		lockdowns := 0;
+		maxsecures := 10;
+		secures := 0;
+	else
+		maxlockdowns := GetMaxLockdowns (sign);
+		lockdowns := GetLockdowns (sign);
+		maxsecures := GetMaxSecures (sign);
+		secures := GetSecures (sign);
+
+		if (lockdowns >= maxlockdowns)
+			SendSysMessage (character, "You don't have any more lockdowns left.");
+			return;
+		endif
+	endif
+
+	foreach item in ListItemsNearLocation (character.x, character.y, character.z, 1, character.realm)
+ 		If (item.isa (POLCLASS_DOOR))
+			SendSysMessage (character, "You're too close to a door!");
+			return;
+  		endif
+	endforeach
+
+	foreach item in ListItemsNearLocationWithFlag (character.x, character.y, character.z, 0, TILEDATA_FLAG_IMPASSABLE, character.realm)
+		if (item.z == character.z)
+			SendSysMessage (character, "There's already an item here!");
+			return;
+		endif
+	endforeach
+
+	var characterx := character.x;
+	var charactery := character.y;
+
+	case (deed.objtype)
+		0xB01A:	//	medium stone table
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+			var config_file := "";
+			var color := deed.color;
+			case (deed.color)
+				1169:
+					config_file := "decoration_mediumsandstonetable_";
+					color := 0;
+				2962:
+					config_file := "decoration_mediummarbletable_";
+					color := 0;
+//				0:
+//					config_file := "decoration_mediumstonetable_";
+//					color := 1895;
+				default:
+					config_file := "decoration_mediumstonetable_";
+			endcase
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+			case (selected_item.index)
+				1:
+					CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, color, config_file+"ns");
+					MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+				2:
+					CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, color, config_file+"ew");
+					MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endcase
+			return;
+		0xB01B:	//	large stone table
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+			var config_file := "";
+			var color := deed.color;
+			case (deed.color)
+				1169:
+					config_file := "decoration_largesandstonetable_";
+					color := 0;
+				2962:
+					config_file := "decoration_largemarbletable_";
+					color := 0;
+//				0:
+//					config_file := "decoration_largestonetable_";
+//					color := 1895;
+				default:
+					config_file := "decoration_largestonetable_";
+			endcase
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+			case (selected_item.index)
+				1:
+					CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, color, config_file+"ns");
+					MoveObjectToLocation (character, character.x, character.y+3, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+				2:
+					CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, color, config_file+"ew");
+					MoveObjectToLocation (character, character.x+3, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endcase
+			return;
+		0xB01C:	//	medium stone bench
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+			var config_file := "";
+			var color := deed.color;
+			case (deed.color)
+				1169:
+					config_file := "decoration_mediumsandstonebench_";
+					color := 0;
+				2962:
+					config_file := "decoration_mediummarblebench_";
+					color := 0;
+				0:
+					config_file := "decoration_mediumstonebench_";
+					color := 1895;
+				1109:
+				2130:
+				1644:
+					config_file := "decoration_mediumstonebench_";
+				
+				default:
+					config_file := "decoration_mediumstonebench_";
+					color := color + 3;
+			endcase
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+			case (selected_item.index)
+				1:
+					CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, color, config_file+"ns");
+					MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+				2:
+					CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, color, config_file+"ew");
+					MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endcase
+			return;
+		0xB01D:	//	large stone bench
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+			var config_file := "";
+			var color := deed.color;
+			case (deed.color)
+				1169:
+					config_file := "decoration_largesandstonebench_";
+					color := 0;
+				2962:
+					config_file := "decoration_largemarblebench_";
+					color := 0;
+				0:
+					config_file := "decoration_largestonebench_";
+					color := 1895;
+				1109:
+				2130:
+				1644:
+					config_file := "decoration_largestonebench_";
+				default:
+					config_file := "decoration_largestonebench_";
+					color := color + 3;
+			endcase
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+			case (selected_item.index)
+				1:
+					CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, color, config_file+"ns");
+					MoveObjectToLocation (character, character.x, character.y+3, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+				2:
+					CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, color, config_file+"ew");
+					MoveObjectToLocation (character, character.x+3, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endcase
+			return;
+		0xB01E:	// Small Gargish Bed
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+			case (selected_item.index)
+				1:
+					CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, deed.color, "decoration_smallgargishbed_ns");
+					MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+				2:
+					CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, deed.color, "decoration_smallgargishbed_ew");
+					MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endcase
+			return;
+		0xB01F:	// Large Gargish Bed
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+			case (selected_item.index)
+				1:
+					CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, deed.color, "decoration_largegargishbed_ns");
+					MoveObjectToLocation (character, character.x, character.y+3, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+				2:
+					CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, deed.color, "decoration_largegargishbed_ew");
+					MoveObjectToLocation (character, character.x+3, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endcase
+			return;
+		default:
+			SendSysMessage (character, "That deed appears to be broken.");
+			return;
+	endcase
+
+endprogram
+
+
+///////////////////
+//  Reads a config file and created the multipart item from that.
+///////////////////
+
+function CreateMultipartItemFromConfig (character, deed, sign, x, y, z, color, cfgfilename)
+	var cfgfile := ReadConfigFile(cfgfilename);
+	if (!cfgfile)
+		SendSysMessage (character, "This seems to be broken...");
+		return;
+	endif
+	
+	var cfgfile_keys := GetConfigIntKeys (cfgfile);
+	var num_keys := len (cfgfile_keys);
+	if (!num_keys)
+		SendSysMessage (character, "This seems to be broken...");
+		return;
+	endif
+
+	if (sign)
+		//make sure they have enough lockdowns for this
+		var maxlockdowns := GetMaxLockdowns (sign);
+		var lockdowns := GetLockdowns (sign);
+		var maxsecures := GetMaxSecures (sign);
+		var secures := GetSecures (sign);
+	
+		if (lockdowns + num_keys > maxlockdowns)
+			SendSysMessage (character, "You don't have enough lockdowns left.");
+			return;
+		endif
+		if (secures and maxsecures)
+		endif
+	endif
+
+	var itemserials := array{};
+	foreach cfgkey in cfgfile_keys
+		var elem := FindConfigElem (cfgfile, cfgkey);
+		var itemx := x + elem.x;
+		var itemy := y + elem.y;
+		var itemz := z + elem.z;
+
+		var item := CreateItemAtLocation (itemx, itemy, itemz, elem.objtype, 1, character.realm);
+		if (!item)
+			SendSysMessage (character, "Error creating item.");
+			return;
+		endif
+		item.movable := 0;
+		if (sign)
+			SetObjProperty (item, "lockeddown", sign.serial);
+		endif
+		SetObjProperty (item, "deedobjtype", deed.objtype);
+		SetObjProperty (item, "deedcolor", deed.color);
+		itemserials.append (item.serial);
+
+		if (elem.color)
+			item.color := elem.color;
+		else
+			item.color := color;
+		endif
+		if (elem.name)
+			item.name := elem.name;
+		endif
+		if (elem.facing)
+			item.facing := elem.facing;
+		endif
+	endforeach
+
+	foreach serial in itemserials
+		var item := SystemFindObjectBySerial (serial);
+		if (item)
+			SetObjProperty (item, "otheritems", itemserials);
+		endif
+	endforeach
+	DestroyItem (deed);
+endfunction
+
+function CreateSinglePartDeededItem (character, deed, sign, x, y, z, objtype)
+	if (sign)
+		//make sure they have enough lockdowns for this
+		var maxlockdowns := GetMaxLockdowns (sign);
+		var lockdowns := GetLockdowns (sign);
+		var maxsecures := GetMaxSecures (sign);
+		var secures := GetSecures (sign);
+		
+	
+		if (lockdowns + 1 > maxlockdowns)
+			SendSysMessage (character, "You don't have enough lockdowns left.");
+			return;
+		endif
+	endif
+
+	var item := CreateItemAtLocation (x, y, z, objtype, 1, character.realm);
+	if (!item)
+		SendSysMessage (character, "Error creating item.");
+		return;
+	endif
+	item.movable := 0;
+	if (sign)
+		SetObjProperty (item, "lockeddown", sign.serial);
+	endif
+	SetObjProperty (item, "deedobjtype", deed.objtype);
+	DestroyItem (deed);
+endfunction

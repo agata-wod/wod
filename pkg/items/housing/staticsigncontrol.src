@@ -1,0 +1,41 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/eventid";
+include "include/utility";
+include "include/itemtypes";
+include "../pkg/items/housing/house";
+
+program SignListener (sign)
+	var homeinfo := array{ };
+	homeinfo := GetObjProperty (sign, "homeinfo");
+	if (!homeinfo[1])
+		sleep (10);
+		homeinfo := GetObjProperty (sign, "homeinfo");
+	endif
+
+	if (!homeinfo)
+		sign.controlscript := "";
+		return;
+	endif
+
+	if (!GetObjProperty (sign, "originalgraphic"))
+		SetObjProperty (sign, "originalgraphic", sign.graphic);
+	endif
+
+	RecordHouseSignOwner (sign);
+	RegisterForSpeechEvents (sign, 30);
+
+	var ev;
+	while (sign)
+        	ev := wait_for_event (600);
+		if (ev)
+			if (ev.type == EVID_SPEECH)
+				if (ev.source.acctname)
+					handle_speech (ev, sign);
+				endif
+			endif
+		endif
+	endwhile
+endprogram

@@ -1,0 +1,42 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 2;
+
+program cast_cure( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	PlayObjectCenteredEffect (cast_on, FX_BLESS_EFFECT, 5, 5);
+	if (cast_on.poisoned)
+		var diffi := (GetPoisonLevel(cast_on) * 5)+50;
+		if ( CheckSkill (caster, SKILLID_MAGERY, diffi, 0) )
+			CurePoison (cast_on, SFX_SPELL_CURE, caster.name+ " has CURED you!");
+			if (caster != cast_on)
+				SendSysMessage (caster, "You have CURED " + cast_on.name);
+			endif
+		else
+			PlaySoundEffect( cast_on, SFX_SPELL_CURE);
+			if (cast_on == caster)
+				SendSysMessage (caster, "You have FAILED to cure yourself!");
+			else
+				SendSysMessage (cast_on, caster.name+ " has FAILED to cure you!");
+				SendSysMessage (caster, "You have FAILED to cure " + cast_on.name );
+			endif
+		endif
+	else
+		CurePoison (cast_on, SFX_SPELL_CURE, caster.name+ " has CURED you!");
+	endif
+	return 1;
+endprogram

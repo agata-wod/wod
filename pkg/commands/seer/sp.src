@@ -1,0 +1,23 @@
+use uo;
+
+program addobjproperty( who, text )
+	var params := SplitWords( text );
+	var item := Target( who );
+
+	if (cint(params[2]) or params[2] == "0")
+		SetObjProperty( item, params[1], cint(params[2]) );
+	else
+		if ( len(params) > 2 )
+			var i;
+			for (i := 3; i <= len(params); i := i + 1)
+				params[2] := params[2] + " " + params[i];
+			endfor
+		endif
+		if (params[2])
+			SetObjProperty( item, params[1], params[2] );
+		else
+			EraseObjProperty(item, params[1] );
+		endif
+	endif
+         
+endprogram

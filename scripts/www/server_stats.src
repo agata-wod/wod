@@ -1,0 +1,46 @@
+use os;
+use uo;
+use http;
+
+include "include/www";
+include "include/clock";
+
+program GetServerStats ()
+	LogWWWPageAccess (QueryIP());
+
+	WriteHTML ("<html><head><title>POL Server Performance Center</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+	
+	WriteHTML ("<p>Server Vitals:");
+	WriteHTML ("<table border=1 width=80%");
+	WriteHTML ("<tr><td>System Load				</td><td>" + polcore().sysload + " (" +	polcore().sysload_severity + ")</td></tr>");
+	WriteHTML ("<tr><td>Mobiles					</td><td>" + polcore().mobilecount				+ "</td></tr>");
+	WriteHTML ("<tr><td>Toplevel Items				</td><td>" + polcore().itemcount				+ "</td></tr>");
+	WriteHTML ("<tr><td>Online Players				</td><td>" + EnumerateOnlineCharacters().size()	+ "</td></tr>");
+	WriteHTML ("<tr><td>Server Uptime				</td><td>" + GetServerUptime ()				+ "</td></tr>");
+	WriteHTML ("<tr><td>Events per Minute			</td><td>" + polcore().events_per_min			+ "</td></tr>");
+	WriteHTML ("<tr><td>Script Instructions/Minute	</td><td>" + polcore().instr_per_min			+ "</td></tr>");
+	WriteHTML ("<tr><td>Bytes Sent				</td><td>" + polcore().bytes_sent				+ "</td></tr>");
+	WriteHTML ("<tr><td>Bytes Received				</td><td>" + polcore().bytes_received			+ "</td></tr>");
+	WriteHTML ("<tr><td>Server Time				</td><td>" + Systime_GetReadableTimeString()		+ "</td></tr>");
+	WriteHTML ("</table>");
+	
+	
+	
+	WriteHTML ("</body></html>");
+endprogram
+
+function GetServerUptime ()
+	var serveruptimecounter := GetGlobalProperty ("#serveruptimecounter");
+	if (!serveruptimecounter)
+		return "< 1 hour";
+	elseif (serveruptimecounter == 1)
+		return "1 hour";
+	endif
+	return (serveruptimecounter + " hours");
+endfunction
+
+
+function SecondsToHours (amount)
+	return CINT (amount/3600);
+endfunction

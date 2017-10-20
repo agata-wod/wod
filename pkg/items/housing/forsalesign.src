@@ -1,0 +1,167 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/itemtypes";
+include "include/gumps";
+include "../pkg/items/housing/house";
+
+program forsalesign( who , sign )
+
+	var homeinfo := GetObjProperty (sign, "homeinfo");
+	if (!homeinfo)
+		if (!who.cmdlevel)
+			SendSysMessage (who, "Page a GM");
+			return;
+		else
+			SetUpForSaleSign (who, sign);
+			return;
+		endif
+	endif
+
+	var housevalue := GetObjProperty (sign, "housevalue");
+	if (!housevalue)
+		housevalue := 1;
+	endif
+
+	var price := GetObjProperty (sign, "houseprice");
+	if (!price)
+		price := GetDefaultHousePrice (housevalue);
+	endif
+
+	SendSysMessage (who, "The housevalue of this building is " + housevalue);
+	SendSysMessage (who, "and the price is " + price + " gold.");
+	
+	if (!HouseValueUnderLimit (who, housevalue))
+		if (!who.cmdlevel)
+			SendSysMessage (who, "You own too many houses to buy this.");
+			return;
+		endif
+	endif
+	
+	if (!YesNo (who, "Buy it?"))
+		SendSysMessage (who, "Canceled.");
+		return;
+	endif
+
+
+	if (!who.spendgold (price))
+		SendSysMessage (who, "You don't have enough money");
+		return;
+	endif
+
+	set_critical (1);
+	var newsign := CreateItemAtLocation (sign.x, sign.y, sign.z, 0x17060, 1, sign.realm);
+	if (!newsign)
+		SendSysMessage (who, "Unable to create a sign there!");
+		return;
+	endif
+
+	newsign.graphic := sign.graphic;
+	homeinfo[1] := who.serial;
+	SetObjProperty (newsign, "homeinfo", homeinfo);
+	SetObjProperty (newsign, "account", who.acctname );
+	SetObjProperty (newsign, "lastownername", who.name );
+	SetObjProperty (newsign, "houseprice", price);
+	SetObjProperty (newsign, "housevalue", housevalue);
+	ChangeTheLocks (who, newsign);
+	DestroyItem (sign);
+
+endprogram
+
+
+
+
+///////////////////
+//  changes the locks of all the doors in the house
+///////////////////
+
+function ChangeTheLocks (who, sign)
+
+	var homeinfo := GetObjProperty (sign, "homeinfo");
+	var newkey := CreateItemInContainer (who.backpack, UOBJ_GOLD_KEY, 1);
+	var lockid := AllocLockId ();
+	SetObjProperty (newkey, "lockid", lockid);
+ 
+	//var z;
+	foreach item in ListObjectsInBox (sign.x-32, sign.y-32, -128, sign.x+32, sign.y+32, +127, sign.realm)
+		if (item.isa (POLCLASS_DOOR))
+			if ((item.x >= homeinfo[2] and item.x <= homeinfo[4]) and
+					(item.y >= homeinfo[3] and item.y <= homeinfo[5]) )
+				item.locked := 1;
+				SetObjProperty (item, "lockid", lockid);
+				PrintTextAbove (item, "*LOCKED*");
+			endif
+		endif
+	endforeach
+
+	SendSysmessage (who, "Locks Changed.");
+endfunction
+
+
+
+
+///////////////////
+//  GMs can set up the for sale sign, such as housevalue and price
+///////////////////
+
+function SetUpForSaleSign (who, sign)
+
+	var boxmenu := CreateMenu ("Select a sign type:");
+	AddMenuItem (boxmenu, 0xbd1, "brass");
+	AddMenuItem (boxmenu, 0xbd2, "brass2");
+	AddMenuItem (boxmenu, 0xbcf, "wooden");
+	AddMenuItem (boxmenu, 0xbd0, "wooden2");
+	var selection := SelectMenuItem2 (who, boxmenu);
+	if (!selection)
+		SendSysMessage (who, "Canceled.");
+		return;
+	endif
+	sign.graphic := selection.objtype;
+	SetObjProperty (sign, "originalgraphic", selection.objtype);
+
+	var homeinfo := array{ };
+	homeinfo[1] := 0;
+	SendSysMessage (who, "Target the North-West corner of the house (Up!)");
+	var coords := TargetCoordinates (who);
+	if (!coords)
+		SendSysMessage (who, "Canceled!");
+		return;
+	endif
+	homeinfo[2]:= coords.x;
+	homeinfo[3]:= coords.y;
+
+	SendSysMessage (who, "Target the South-East corner of the house (Down!)");
+	coords := TargetCoordinates (who);
+	if (!coords)
+		SendSysMessage (who, "Canceled!");
+		return;
+	endif
+	homeinfo[4]:= coords.x;
+	homeinfo[5]:= coords.y;
+
+	var hvalue := SendTextEntryGump (who, "Enter the HOUSEVALUE of this place:", TE_CANCEL_ENABLE, TE_STYLE_NORMAL);
+	var housevalue := CINT (hvalue);
+	if (!housevalue)
+		housevalue := 1;
+	endif
+
+	var svalue := SendTextEntryGump (who, "Enter the PRICE of this place:", TE_CANCEL_ENABLE, TE_STYLE_NORMAL,
+			10, "Default price: " + GetDefaultHousePrice (housevalue) + " gold");
+	var sellvalue := CINT (svalue);
+	if (!sellvalue)
+		sellvalue := GetDefaultHousePrice (housevalue);
+	endif
+		
+	SetObjProperty (sign, "homeinfo", homeinfo);
+	SetObjProperty (sign, "housevalue", housevalue);
+	SetObjProperty (sign, "houseprice", sellvalue);
+
+	sign.name := "For Sale " + sellvalue + " gold";
+	SendSysMessage (who, "Done!");
+endfunction
+

@@ -1,0 +1,46 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 2;
+
+program cast_strength (parms, spellid)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	if (caster)
+		var caster_animallore := GetAttribute (caster, ATTRIBUTEID_ANIMALLORE);
+		if (caster_animallore > caster_evalint)
+			caster_evalint := caster_animallore;
+		endif
+	
+		var caster_spiritspeak:= GetAttribute (caster, ATTRIBUTEID_NECROMANCY);
+		if (caster_spiritspeak > caster_evalint)
+			caster_evalint := caster_spiritspeak;
+		endif
+	endif
+
+	var mod_amount := CalcModAmount();
+	var duration := CalcModDuration ();
+	if (caster_evalint > 90)
+		var new_mod_amount := CalcModAmount();
+		if (new_mod_amount > mod_amount)
+			mod_amount := new_mod_amount;
+		endif
+	endif
+
+	PlaySoundEffect (cast_on, SFX_SPELL_STRENGTH);
+	PlayObjectCenteredEffect (cast_on, FX_BLESS_EFFECT, 7, 7);
+	DoMagicStatMod (cast_on, STATMOD_STR, mod_amount, duration, "Strength Spell");
+	return 1;
+endprogram

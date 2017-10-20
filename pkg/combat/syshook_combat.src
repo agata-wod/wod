@@ -1,0 +1,45 @@
+///////////////////
+//
+//  This is the system hook script for combat.  It really doesn't do much more than
+//  fire another script.  That's so that I can modify the script on the fly without
+//  having to do a server restart with every change.  It would be a lot more efficient
+//  to do everything within this script, avoiding the overhead of calling another script,
+//  so its possible I'll more the rest of the code here eventually, but for now its a lot
+//  easier to just call an external script
+//
+///////////////////
+use os;
+
+include "include/itemtypes";
+
+
+exported function NewCombat (attacker, defender)
+	if (attacker.weapon)
+		if (IsBow(attacker.weapon))
+			start_script (":weapons:combat_attack_script_archery", array{attacker, defender});
+		elseif (IsThrowingWeapon(attacker.weapon))
+			start_script (":weapons:combat_attack_script_throwing", array{attacker, defender});
+		elseif (attacker.weapon.objtype == UOBJ_FIST)
+			if (attacker.npctemplate)
+				start_script (":npchitscripts:combat_attack_script_npc", array{attacker, defender});
+			else
+				start_script (":weapons:combat_attack_script_wrestling", array{attacker, defender});
+			endif
+		else
+			start_script (":weapons:combat_attack_script_melee", array{attacker, defender});
+		endif
+	elseif (attacker.npctemplate)
+		start_script (":npchitscripts:combat_attack_script_npc", array{attacker, defender});
+	else
+		start_script (":weapons:combat_attack_script_wrestling", array{attacker, defender});
+	endif
+
+	return 1;
+endfunction
+
+
+
+program SyshookCombat ()
+	Syslog ("Installing combat...");
+	return 1;
+endprogram

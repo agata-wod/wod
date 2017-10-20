@@ -1,0 +1,29 @@
+use uo;
+
+program modfix( gm )
+
+	var who := Target(gm);
+	if (!who) return; endif
+
+	EraseObjProperty(who,"#mods");
+	EraseObjProperty(who,"mods");
+
+	who.strength_mod := 0;
+	who.dexterity_mod := 0;
+	who.intelligence_mod := 0;
+	who.ar_mod := 0;
+	who.SetParalyzed (0);
+	who.graphic := who.trueobjtype;
+	who.color := who.truecolor;
+	RevokePrivilege( who, "hearghosts" );
+	who.title_prefix := "";
+	who.title_suffix := "";
+	who.SetPoison (0);
+
+	if (who.graphic == 400)
+		who.gender := 0;
+	else
+		who.gender := 1;
+	endif
+
+endprogram

@@ -1,0 +1,130 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/sleepmode_normal";
+include "../pkg/npcs/main_ai/combat/fightmode_normal_default";
+include "../pkg/npcs/main_ai/combat/closedistance_default";
+include "../pkg/npcs/main_ai/combat/combatevent_default";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/main_ai/combat/spellcasting";
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/npc_util";
+include "../pkg/npcs/npcinfo";
+include "../pkg/npcs/speech";
+
+Const HALT_THRESHOLD := 2;
+
+program HealerAI()
+	if (!me.backpack)
+		DoOnCreationSetup ();
+	endif
+
+	speech := 99;
+
+	if (getobjproperty(me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	EnableMainEvents ();
+	SetWarMode( 0 );
+	WalkHome ();
+	var next_wander := ReadGameClock() + 10;
+	var ev;
+	while (me)
+		ev := os::wait_for_event (30);
+		if (ev)
+			repeat
+				case (ev.type)
+					EVID_SPEECH:
+						next_wander := readgameclock()+30;
+						check_speech (ev.text, ev.source);
+					EVID_ENGAGED:
+					EVID_DAMAGED:
+						if (ev.source)
+							Fight (ev.source);
+							WalkHome ();
+						endif
+					EVID_ENTEREDAREA:
+						if (!ev.source.npctemplate)
+							next_wander := readgameclock()+10;
+							GreetPlayer (ev.source);
+						endif
+					EVID_ITEM_GIVEN:
+						next_wander := readgameclock()+60;
+						TakeItem (ev.source, ev.item);
+				endcase
+				ev := os::wait_for_event(4);
+			until (!ev);
+		endif
+		if (ReadGameClock() >= next_wander)
+			wander();
+			next_wander := ReadGameClock() + 10;
+		endif
+	endwhile
+endprogram
+
+
+function GreetPlayer (player)
+	if (GetObjProperty (me, "#nextgreet"))
+		if (GetObjProperty (me, "#nextgreet") > ReadGameClock())
+			return;
+		endif
+	endif
+	SetObjProperty (me, "#nextgreet", ReadGameClock() + 5);
+	
+	var playerdesc := "brother";
+	if (player.gender)
+		playerdesc := "sister";
+	endif
+	
+	if (RandomInt (2))
+		playerdesc := "friend";
+	endif
+	
+	TurnToward (player);
+	case (RandomInt (10))
+		0:	Say ("Peace be with thee, " + playerdesc + ".");
+		1:	Say ("Walk in virtue, " + playerdesc + ".");
+		2:	Say ("Let the virtues guide thy step, " + playerdesc + ".");
+		3:	Say ("Welcome to the Abby, " + playerdesc + ".  Relax and enjoy thyself.");
+		4:	Say ("Thou shouldst come and hear the abby choir sing sometime.");
+		5:	Say ("Canst I help thee, " + playerdesc + "?");
+		6:	Say ("The services of the abby are open to all.");
+		7:	Say ("Be careful, " + playerdesc + ":  The woods of Yew are quite dangerous.");
+		8:
+		9:	
+			case (RandomInt (10))
+				0:	Say ("I cannot speak with thee for I have taken a vow of si...  Crap!");
+				1:	Say ("*hic*  What's that?  Missing abby wine?  Don't know nothing about that.");
+				2:	Say ("Hey there " + player.name + ".  Would you like to come to my room to see my anhk sometime?");
+				3:	Say ("I thought about becoming an adventurer, but its a lot safer here in the abby.");
+				4:	Say ("Gruel, gruel, gruel.  Why can't they ever serve anything good in this place?");
+				5:	Say ("If the abbot comes looking for me, tell him I'm dead.");
+				6:	Say ("Weed the grapes, water the grapes, pick the grapes, crush the grapes.  It never stops...");
+				7:	Say ("Some days I wake up and just want to wear blue.");
+				8:	Say ("A couple more years in this place and the heat should be off in Britain.  Oops, never mind.");
+				9:	Say ("This robe is itchy.  And hot.  What in the hell is it made out of anyway?");
+			endcase
+	endcase
+endfunction
+
+function look_around ()
+	return;
+endfunction
+
+function EnableMainEvents()
+	DisableEvents (SYSEVENT_LEFTAREA + SYSEVENT_DISENGAGED + SYSEVENT_OPPONENT_MOVED );
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_ENTEREDAREA, HALT_THRESHOLD);
+	EnableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN, 3);
+endfunction
+
+function DisableMainEvents()
+	DisableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED + SYSEVENT_ENTEREDAREA);
+	DisableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN);
+endfunction
+

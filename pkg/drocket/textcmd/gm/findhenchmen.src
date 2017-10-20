@@ -1,0 +1,67 @@
+use uo;
+use os;
+
+program restart_AI (character, text)
+	var searchserial := CINT (text);
+	if (!searchserial)
+		SendSysMessage (character, "You must provide a serial number to search for.");
+		return;
+	endif
+	var realms := array { REALM_BRITANNIA, REALM_BRITANNIA_ALT, REALM_ILSHENAR, REALM_MALAS, REALM_TERMUR };
+	var number_found := 0;
+	var xmid, ymid;
+	var RealmMaxX := 0;
+	var RealmMaxY := 0;
+
+	foreach realm in realms
+		case (realm)
+			REALM_BRITANNIA:
+			REALM_BRITANNIA_ALT:
+				RealmMaxX := 7168;
+				RealmMaxY := 4096;
+			REALM_ILSHENAR:
+				RealmMaxX := 2304;
+				RealmMaxY := 1600;
+			REALM_MALAS:
+				RealmMaxX := 2560;
+				RealmMaxY := 2048;
+			REALM_TERMUR:
+				RealmMaxX := 1280;
+				RealmMaxY := 4096;
+		endcase
+		SendSysMessage (character, "Searching realm: " + realm);
+
+		for (xmid := 31; xmid < RealmMaxX; xmid := xmid + 64)
+			for (ymid := 31; ymid < RealmMaxY; ymid := ymid + 64)
+				foreach item in ListObjectsInBox (xmid-31, ymid-31, -128, xmid+32, ymid+32, +127, realm)
+					if (GetObjProperty (item, "master"))
+						if (GetObjProperty (item, "master") == searchserial)
+							number_found := number_found + 1;
+							SendSysMessage (character, "Found one at X=" + item.x + ", Y=" + item.y + ", Realm=" + realm);
+						endif
+					endif
+				endforeach
+			endfor
+			sleepms (100);
+		endfor
+	endforeach
+	// Tokuno's dimensions aren't a multiple of 64
+	RealmMaxX := 1448;
+	RealmMaxY := 1448;
+	SendSysMessage (character, "Searching realm: tokuno");
+	for (xmid := 90; xmid < RealmMaxX; xmid := xmid + 181)
+		for (ymid := 90; ymid < RealmMaxY; ymid := ymid + 181)
+			foreach item in ListObjectsInBox (xmid-90, ymid-90, -128, xmid+90, ymid+90, +127, REALM_TOKUNO)
+				if (GetObjProperty (item, "master"))
+					if (GetObjProperty (item, "master") == searchserial)
+						number_found := number_found + 1;
+						SendSysMessage (character, "Found one at X=" + item.x + ", Y=" + item.y + ", Realm=tokuno");
+					endif
+				endif
+			endforeach
+		endfor
+		sleepms (10);
+	endfor
+	SendSysMessage (character, "Done. Found " + number_found);
+
+endprogram

@@ -1,0 +1,73 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+include "include/magicitems";
+
+program fireworks (character, text)
+
+	foreach mobile in ListMobilesNearLocation (character.x, character.y, character.z, 20, character.realm)
+		mobile.setlightlevel (30, 120);
+	endforeach
+
+	sleep (5);
+
+	var amount := CINT (text);
+	if (!amount)
+		amount := 100;
+	endif
+	
+	for i := 1 to amount
+		foreach mobile in ListMobilesNearLocation (character.x, character.y, character.z, 20, character.realm)
+			mobile.setlightlevel (30, 120);
+		endforeach
+
+		DoFireworkEffect (character);
+		sleepms (100);
+	endfor
+	
+	sleep (5);
+
+	foreach mobile in ListMobilesNearLocation (character.x, character.y, character.z, 20, character.realm)
+		mobile.setlightlevel (0, 0);
+	endforeach
+
+endprogram
+
+
+
+
+function DoFireworkEffect (character)
+	var x := character.x + RandomInt (11) - 5;
+	var y := character.y + RandomInt (11) - 5;
+	var light := CreateItemAtLocation (x, y, character.z + 20, 0x1647, 1, character.realm);
+	light.facing := 29;
+	case (RandomInt (5))
+		0:
+			PlayStationaryEffect (x, y, character.z + 20, FX_BLESS_EFFECT, 7, 0x10, 0, character.realm);
+		1:
+			PlayStationaryEffect (x, y, character.z + 20, FX_CURSE_EFFECT, 7, 0x10, 0, character.realm);
+		2:
+			PlayStationaryEffect (x, y, character.z + 20, FX_SPARK_EFFECT, 7, 0x10, 0, character.realm);
+		3:
+			PlayStationaryEffect (x, y, character.z + 20, FX_SPARK_EFFECT, 7, 0x10, 0, character.realm);
+//		4:
+//			PlayStationaryEffect (x, y, character.z + 20, FX_HEAL_EFFECT, 7, 0x10);
+		4:
+			PlayStationaryEffect (x, y, character.z + 20, FX_MARK_EFFECT, 7, 0x10, 0, character.realm);
+	endcase
+	sleepms (100);
+	case (RandomInt (4))
+		0:
+			PlaySoundEffect (character, 0x11c);
+		1:
+			PlaySoundEffect (character, 0x11d);
+		2:
+			PlaySoundEffect (character, 0x11e);
+		3:
+			PlaySoundEffect (character, 0x11f);
+	endcase
+	sleepms (750);
+	DestroyItem (light);
+endfunction

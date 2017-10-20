@@ -1,0 +1,92 @@
+use uo;
+use os;
+use http;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+include "include/www";
+include "../pkg/items/housing/house";
+
+program find_houses ()
+	WriteHTML ("<html><head><title>Account Information</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+	
+	//Used for the 'take me there' function
+	var signserial := CINT (QueryParam ("signserial"));
+	if (signserial)
+		var character := FindOnlineAccountByIP (QueryIP());
+		if (character and character.cmdlevel)
+			var sign := SystemFindObjectBySerial (signserial);
+			if (sign)
+				MoveObjectToLocation (character, sign.x, sign.y, sign.z, sign.realm, MOVEOBJECT_FORCELOCATION);
+			endif
+		endif
+	endif
+
+	var acctname := QueryParam ("acctname");
+	if (!acctname)
+		WriteHTML ("Please enter an account name");
+		WriteHTML ("<form method=GET action=house_search.ecl>");
+		WriteHTML ("Account name: <input name=acctname>");
+		WriteHTML ("<input id=submit1 name=submit1 type=submit value=Search>");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	acctname := lower(acctname);
+	var acct := FindAccount (acctname);
+	if (!acct)
+		WriteHTML ("That account does not exist</body></html>");
+		return;
+	endif
+
+	WriteHTML ("<center><b>Account name: </b> " + acctname + "</center><br>");
+	WriteHTML ("<center><b>Registered house value: </b> " + GetAccountHouseValue (acctname) + "</center><br>");
+	
+	var housesigns := array{};
+	var global_prop_name := "#housing_of_" + acctname;
+	var sign_serials := GetGlobalProperty (global_prop_name);
+	if (!sign_serials)
+		WriteHTML ("No houses found");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	
+	foreach sign_serial in sign_serials
+		var sign := SystemFindObjectBySerial (sign_serial);
+		if (sign)
+			var house_owner := Lower (GetObjProperty (sign, "account"));
+			if (house_owner and house_owner == acctname)
+				housesigns.append (sign);
+			endif
+		endif
+	endforeach
+
+	if (!len (housesigns))
+		WriteHTML ("No houses found</body></html>");
+		return;
+	endif
+		
+	var findcharacter := FindOnlineAccountByIP (QueryIP());
+	
+	WriteHTML ("<table border=1 align=center width=60% cellpadding=5>");
+	WriteHTML ("<tr><td>Sign Name</td><td>House Value</td><td>Sign X</td><td>Sign Y</td><td>Sign Realm</td>");
+	if (findcharacter)
+		WriteHTML ("<td>-</td>");
+	endif
+	WriteHTML ("</tr>");
+	foreach sign in housesigns
+		WriteHTML ("<tr>");
+		WriteHTML ("<td>" + sign.desc + "</td>");
+		WriteHTML ("<td>" + GetHouseValueOfSign (sign) + "</td>");
+		WriteHTML ("<td>" + sign.x + "</td>");
+		WriteHTML ("<td>" + sign.y + "</td>");
+		WriteHTML ("<td>" + sign.realm + "</td>");
+		if (findcharacter)
+			WriteHTML ("<td><a href=house_search.ecl?signserial=" + sign.serial + "&acctname=" + acctname + ">Take me there</a></td>");
+		endif
+		WriteHTML ("</tr>");
+	endforeach
+	WriteHTML ("</table>");
+	WriteHTML ("</body></html>");
+endprogram

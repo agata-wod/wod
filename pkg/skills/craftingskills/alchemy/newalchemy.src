@@ -1,0 +1,407 @@
+use cfgfile;
+
+include ":crafting:crafting";
+include ":alchemy:alchemy";
+include "include/attributes";
+include "include/objtype";
+include "include/crafting";
+include "include/utility";
+include "include/newperformaction";
+
+var item_config := ReadConfigFile( ":*:itemdesc" );
+var craft_config := ReadConfigFile( ":alchemy:newalchemy" );
+
+Const SOUND_EFFECT_SPARKLE	:= 0x1e8;
+Const EFFECT_SPARKLE		:= 0x373a;
+Const MAX_KEG_VOLUME		:= 100;
+var mymortar, myburner;
+
+program MakeAlchemyItems (who, tool)
+	if (tool.objtype == UOBJ_MORTAR)
+		mymortar := tool;
+		var items := EnumerateItemsInContainer (who.backpack);
+		foreach item in items
+			if (item.objtype == UOBJ_HEATINGSTAND)
+				myburner := item;
+				break;
+			endif
+		endforeach
+	elseif (tool.objtype == UOBJ_HEATINGSTAND)
+		myburner := tool;
+		var items := EnumerateItemsInContainer (who.backpack);
+		foreach item in items
+			if (item.objtype == UOBJ_MORTAR)
+				mymortar := item;
+				break;
+			endif
+		endforeach
+	else
+		var items := EnumerateItemsInContainer (who.backpack);
+		foreach item in items
+			if (item.objtype == UOBJ_HEATINGSTAND)
+				myburner := item;
+				break;
+			endif
+		endforeach
+		foreach item in items
+			if (!mymortar and item.objtype == UOBJ_MORTAR)
+				mymortar := item;
+				break;
+			endif
+		endforeach
+	endif
+	if (!myburner or !ReserveItem (myburner))
+		myburner := 0;
+	endif
+	if (!mymortar or !ReserveItem (mymortar))
+		mymortar := 0;
+	endif
+	
+	var rinfo := sendCraftGump( who, ATTRIBUTEID_ALCHEMY );
+	if( rinfo == 0 )
+		return 0;
+	endif
+
+	var the_objtype := rinfo[1],
+	    amt := rinfo[2],
+	    fortify := rinfo[5];
+	
+	if (fortify)
+		if (!myburner)
+			SendSysMessage (who, "You need a heating stand to do that.");
+			return 0;
+		endif
+		SendSysMessage (who, "Select an Alchemy Symbol to charge");
+		var alchemy_symbol := Target(who);
+		if (!alchemy_symbol)
+			SendSysMessage(who, "Cancelled.");
+		//if they target a alchemical symbol, charge the symbol
+		elseif ( alchemy_symbol.objtype >= 0x181d and alchemy_symbol.objtype <= 0x1828 )
+			ChargeSymbol (who, alchemy_symbol);
+			return 0;
+		endif
+	else
+		MakeAlchemyItem ( who, tool, the_objtype, amt );
+	endif
+	
+
+	return 1;
+endprogram
+
+function MakeAlchemyItem ( who, tool, the_objtype, amt )
+	if (tool)
+	endif
+	
+	if( !the_objtype || !amt )
+		SendSysMessage( who, "Cancelled." );
+		return 0;
+	endif
+
+ 	var craft_elem := craft_config[the_objtype],
+ 	    skill_elem := menu_config[craft_skill],
+            x := who.x,
+	    y := who.y;
+	
+	if (craft_elem.needmortar and !mymortar)
+		SendSysMessage( who, "You need a mortar and pestle for making that." );
+		return 0;
+	elseif (craft_elem.needburner and !myburner)
+		SendSysMessage( who, "You need a heating stand for making that." );
+		return 0;
+	endif
+	
+	var craftingbag := FindCraftingBag (who);
+	var potion_container := SelectPotionContainer (who, the_objtype);
+	var keg_potion_type;
+	var keg_fullness;
+	var worknoise := 0x243;
+	if (craft_elem.worknoise)
+		worknoise := craft_elem.worknoise;
+	endif
+	var makenoise := 0x241;
+	if (craft_elem.makenoise)
+		makenoise := craft_elem.makenoise;
+	endif
+	var failnoise := 0x4f;
+	if (craft_elem.failnoise)
+		failnoise := craft_elem.failnoise;
+	endif
+
+	if (!potion_container)
+		return;
+	elseif (potion_container.objtype == 0x1940)
+		keg_potion_type := GetObjProperty (potion_container, "type");
+		keg_fullness := GetObjProperty (potion_container, "amount");
+		if (keg_potion_type == "c")
+			keg_potion_type := 0;
+		endif
+	endif
+
+        SendSysMessage( who, "You start "+skill_elem.EndMessage+"...", 3, 89 );
+
+	while( amt )
+                var parts_list := Craft_CheckParts( who, craft_elem );
+                if( !parts_list )
+                	break;
+		endif
+                if( amt != -1 )
+                	SendSysMessage( who, "Looping ["+amt+" more to go].", 3, 89 );
+                else
+                	SendSysMessage( who, "Looping.", 3, 89 );
+                endif
+                
+		playsoundeffect(who, worknoise);
+		
+		//animate the burner
+		var i;
+		for (i:= 1; i < 4; i := i + 1)
+			NewPerformAction(who, NPA_ANIM_EMOTE, NPA_EMOTE_SALUTE );
+			myburner.graphic := myburner.graphic + 1;
+			sleep(1);
+		endfor
+		myburner.graphic := 0x1849;
+
+                if( !Craft_ConsumeParts( who, parts_list ))
+                	break;
+                endif
+                
+		if (CheckSkill (who, SKILLID_ALCHEMY, craft_elem.skill, 0))
+			playsoundeffect(who, makenoise);
+			//if the container the potion is being made in is a bottle
+			if (potion_container.objtype == 0x0f0e)
+				var created_potion := CreateItemInContainer(craftingbag, the_objtype,1);
+				if (!created_potion)
+					PrintTextAbovePrivate (who, "*Your backpack is full!*", who);
+					return;
+				endif
+
+				//destroy a bottle, if needed
+				if (craft_elem.consume_bottle)
+					SubtractAmount (potion_container, 1);
+					if (!potion_container)
+						SendSysMessage (who, "You run out of bottles.");
+						return;
+					endif
+				endif
+
+			//if it doesn't need a container
+			elseif (potion_container == "no container needed")
+				var created_potion := CreateItemInContainer (craftingbag, the_objtype,1);
+				if (!created_potion)
+					PrintTextAbovePrivate (who, "*Your backpack is full!*", who);
+					return;
+				endif
+
+			//otherwise the potion is being made in a keg
+			else
+				//if there's nothing already in the container, we need to set it's type
+				if (!keg_potion_type)
+					SetObjProperty (potion_container, "type", the_objtype);
+					keg_potion_type := the_objtype;
+					keg_fullness := 0;
+				endif
+
+				//increase the kegs fullness and rename it
+				keg_fullness := keg_fullness + 1;
+				SetObjProperty (potion_container, "amount", keg_fullness);
+				RenameKeg (potion_container);
+
+				if (keg_fullness >= MAX_KEG_VOLUME)
+					SendSysMessage (who, "The keg is full.");
+					return;
+				endif
+			endif
+	                if( amt != -1 )
+				amt -= 1;
+			endif
+		else
+			playsoundeffect(who, failnoise);
+			SendSysMessage( who, "You lost some materials." );
+		endif
+
+                if( who.x != x || who.y != y )
+			SendSysMessage( who, "Cancelled." );
+			break;
+                endif
+		sleep(2);
+		
+	endwhile
+
+        SendSysMessage( who, "You stop "+skill_elem.EndMessage+"...", 3, 89 );
+
+	return 1;
+endfunction
+
+///////////////////
+//  allows the character to select what container they want to make the potion into
+///////////////////
+
+function SelectPotionContainer (byref character, the_objtype)
+
+ 	var current_potion := craft_config[the_objtype];
+	var found_empty_bottle := FindObjtypeInContainer (character.backpack, 0x0f0e);
+	var found_keg := FindObjtypeInContainer (character.backpack, 0x1940);
+	var potion_container;
+	var keg_potion_type;
+	var keg_fullness;
+
+	//if it doesn't use up a bottle, we can just make it without a container
+	if (!current_potion.consume_bottle)
+		potion_container := "no container needed";
+	//this one doesn't need a container
+	elseif (the_objtype == 0xdc2a)
+		potion_container := "no container needed";
+	//if the potion can't be made in a keg and we found a bottle, automatically select the bottle
+	elseif (!current_potion.make_in_keg and found_empty_bottle)
+		potion_container := found_empty_bottle;
+	//if there's no keg and there are bottles, automatically select the bottles
+	elseif (!found_keg and found_empty_bottle)
+		potion_container := found_empty_bottle;
+	//if it can't be made in a keg and we didn't find any bottles, ask to select bottles
+	elseif (!current_potion.make_in_keg)
+		//choose bottles
+		SendSysMessage (character, "Select an empty bottle to make the potion in.");
+		potion_container := target(character);
+		if (potion_container.objtype != 0x0f0e)
+			SendSysMessage (character, "You can't make this potion in that.");
+			return;
+		endif
+	//otherwise ask what they want to put the potion in
+	else
+		//let them target either a keg or bottles
+		SendSysMessage (character, "Select a keg or empty bottles to make the potion in.");
+		potion_container := target(character);
+	endif
+
+	if (potion_container != "no container needed")
+		keg_potion_type := GetObjProperty (potion_container, "type");
+		keg_fullness := GetObjProperty (potion_container, "amount");
+		if (keg_potion_type == "c")
+			keg_potion_type := 0;
+		endif
+
+		//lots of possible error messages.  :)
+		if (!potion_container)
+			SendSysmessage (character, "canceled.");
+			return;
+		elseif (!ReserveItem (potion_container) )
+			SendSysmessage (character, "You cannot make the potion in that.");
+			return;
+		elseif (potion_container.objtype != 0x0f0e and potion_container.objtype != 0x1940)
+			SendSysmessage (character, "You cannot make the potion in that.");
+			return;
+		elseif (potion_container.movable == 0)
+			SendSysmessage (character, "You cannot make the potion in that.");
+			return;
+		elseif (potion_container.objtype == 0x1940 and keg_fullness == 100 )
+			SendSysmessage (character, "That keg is already full.");
+			return;
+		elseif (potion_container.objtype == 0x1940 and !current_potion.make_in_keg )
+			SendSysmessage (character, "You cannot put that type of potion in a keg.");
+			return;
+		elseif (potion_container.objtype == 0x1940 and keg_potion_type != cint(the_objtype) and keg_potion_type)
+			SendSysmessage (character, "That keg already has another type of potion in it.");
+			return;
+		endif
+	endif
+
+	return potion_container;
+
+endfunction
+
+function ChargeSymbol (byref character, needed)
+
+	if (!needed.movable)
+		return;
+	endif
+	if (!accessible(character,needed))
+		return;
+	endif
+
+	var skillcheck := 0;
+	var chargename := "";
+	var chargedby := 0;
+	case (needed.objtype)
+	0x181d://name  Summon Daemon
+		skillcheck := 80;
+		chargedby := 0x0F13;
+		chargename := "ruby";
+	0x181e://name  Lightening
+		chargedby := 0x0F11;
+		chargename := "sapphire";
+		skillcheck := 70;
+	0x181f://name Flame Strike
+		chargedby := 0x0F30;
+		chargename := "diamond";
+		skillcheck := 100;
+	0x1821://name  Meteor Swarm
+		chargedby := 0x0F0F;
+		chargename := "star sapphire";
+		skillcheck := 100;
+	0x1822://name  Nightsight
+		skillcheck := 40;
+		chargedby := 0x0F25;
+		chargename := "amber";
+	0x1823://name  Protection
+		chargedby := 0x0F15;
+		chargename := "citrine";
+		skillcheck := 40;
+	0x1824://name  Venom
+		chargedby := 0x0F16;
+		chargename := "amethyst";
+		skillcheck := 50;
+	0x1825://name  Magic Reflection
+		chargedby := 0x0F11;
+		chargename := "sapphire";
+		skillcheck := 60;
+	0x1826://name  Resurrection
+		chargedby := 0x0F10;
+		chargename := "emerald";
+		skillcheck := 90;
+	0x1827://name  Magic Missile
+		chargedby := 0x0F18;
+		chargename := "tourmaline";
+		skillcheck := 30;
+	0x1828://name  Wall of Fire
+		skillcheck := 50;
+		chargedby := 0x0F10;
+		chargename := "emerald";
+	default:
+		SendSysMessage(character, "You can't charge that!");
+		return;
+	endcase
+
+	SendSysMessage(character, "Select the " + chargename + " to use.");
+	var thegem := Target(character);
+	if (!thegem)
+		return;
+	endif
+	if (!Accessible(character,thegem))
+		return;
+	endif
+	if (!thegem.movable)
+		return;
+	endif
+	if (thegem.objtype != chargedby)
+		SendSysMessage(character, "You can't charge it with that!");
+		return;
+	endif
+
+	SubtractAmount(thegem,1);
+
+	if (!checkskill(character,SKILLID_ALCHEMY,skillcheck,0))
+		PrintTextAbovePrivate(character,"*You fail to charge the focus*",character);
+		DestroyItem(needed);
+	else
+		PlayObjectCenteredEffect(character, EFFECT_SPARKLE, 7,0x10);
+        	PlaySoundEffect(character, SOUND_EFFECT_SPARKLE);
+		needed.color := 1152;
+		SetObjProperty(needed,"chargedby",chargedby);
+		SetObjProperty(needed,"chargename",chargename);
+		PrintTextAbovePrivate(character,"*You charge the focus*",character);
+	endif
+
+endfunction
+
+
+

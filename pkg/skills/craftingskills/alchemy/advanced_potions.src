@@ -1,0 +1,185 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/poison";
+include "include/wodinc";
+include "include/dotempmods";
+include "include/eventid";
+include "include/itemtypes";
+
+program use_product (character, potion)
+	if (!ReserveItem (potion) or !potion.movable)
+		SendSysMessage (character, "You can't use that right now!");
+		return;
+	endif
+	
+	var itemdesc_cfgfile := ReadConfigFile (":*:itemdesc");
+	if (!itemdesc_cfgfile)
+		SendSysMessage (character, "Error opening itemdesc.cfg file.  Please contact a GM.");
+		Syslog ("Error opening itemdesc.cfg file");
+		return;
+	endif
+	
+	var itemdesc_elem := FindConfigElem (itemdesc_cfgfile, potion.objtype);
+	if (!itemdesc_elem)
+		SendSysMessage (character, "Error finding itemdesc.cfg entry for " + potion.objtype + ".  Please contact a GM.");
+		Syslog ("Error finding itemdesc.cfg entry for " + potion.objtype);
+		return;
+	endif
+	
+	var multiply_factor := GetAttribute (character, ATTRIBUTEID_ALCHEMY);
+	if (multiply_factor < 60)
+		multiply_factor := 1;
+	else
+		multiply_factor := (150.0 + multiply_factor) / 200.0;
+	endif
+	
+//	var skillreq := CINT (itemdesc_elem.skillcheck);
+//	if (skillreq)
+//		if (!CheckSkill (character, SKILLID_ALCHEMY, skillreq, 0))
+//			SubtractAmount (potion, 1);
+//			CreateItemInContainer (potion.container, UOBJ_EMPTY_BOTTLE, 1);
+//			DoBadThingTo (character, RandomInt (CINT (skillreq/5)));
+//			return;
+//		endif
+//	endif
+
+	//play some assorted effects
+	if (itemdesc_elem.usenoise)
+		PlaySoundEffect (character, itemdesc_elem.usenoise);
+	endif
+	if (itemdesc_elem.useanim)
+		PerformAction (character, itemdesc_elem.useanim);
+	endif
+	if (itemdesc_elem.useeffect)
+		PlayObjectCenteredEffect (character, itemdesc_elem.useeffect, 10, 10);
+	endif
+
+	case (potion.objtype)
+		0xdc20:	//invisibility potion
+			SubtractAmount (potion, 1);
+			CreateItemInContainer (potion.container, UOBJ_EMPTY_BOTTLE, 1);
+			character.hidden := 1;
+			var duration := ReadGameClock()+ 180;
+
+			while ((character.hidden) and (ReadGameClock() < duration))
+				sleepms (200);
+			endwhile
+			character.hidden := 0;
+
+		0xdc21:	//Phandel's Fine Intellect potion
+			SubtractAmount (potion, 1);
+			CreateItemInContainer (potion.container, UOBJ_EMPTY_BOTTLE, 1);
+			var mod_amount := CINT ((12 + RandomInt (6)) * multiply_factor);
+			var duration := 60 * 45;
+			DoTempMod (character, "int", mod_amount, duration, "Phandel Int. Pot.");
+		0xdc22:	//Phandel's Fantastic Intellect potion
+			SubtractAmount (potion, 1);
+			CreateItemInContainer (potion.container, UOBJ_EMPTY_BOTTLE, 1);
+			var mod_amount := CINT ((14 + RandomInt (8)) * multiply_factor);
+			var duration := 60 * 75;
+			DoTempMod (character, "int", mod_amount, duration, "Phandel Int. Pot.");
+		0xdc23:	//lesser Mego Invulnerability potion
+			SubtractAmount (potion, 1);
+			CreateItemInContainer (potion.container, UOBJ_EMPTY_BOTTLE, 1);
+			var mod_amount := CINT ((8 + RandomInt (5)) * multiply_factor);
+			var duration := 60 * 45;
+			DoTempMod(character, "ar", mod_amount, duration, "Mego Invul. Potion");
+		0xdc24:	//greater Mego Invulnerability potion
+			SubtractAmount (potion, 1);
+			CreateItemInContainer (potion.container, UOBJ_EMPTY_BOTTLE, 1);
+			var mod_amount := CINT ((9 + RandomInt (7)) * multiply_factor);
+			var duration := 60 * 75;
+			DoTempMod(character, "ar", mod_amount, duration, "Mego Invul. Potion");
+		0xdc25:	//Homeric Might potion
+			SubtractAmount (potion, 1);
+			CreateItemInContainer (potion.container, UOBJ_EMPTY_BOTTLE, 1);
+			var mod_amount := CINT ((12 + RandomInt (6)) * multiply_factor);
+			var duration := 60 * 45;
+			DoTempMod(character, "all", mod_amount, duration, "Homeric Might Pot.");
+		0xdc26:	//Greater Homeric Might potion
+			SubtractAmount (potion, 1);
+			CreateItemInContainer (potion.container, UOBJ_EMPTY_BOTTLE, 1);
+			var mod_amount := CINT ((14 + RandomInt (8)) * multiply_factor);
+			var duration := 60 * 75;
+			DoTempMod(character, "all", mod_amount, duration, "Homeric Might Pot.");
+		0xdc27:	//Tamla Heal potion
+			SubtractAmount (potion, 1);
+			CreateItemInContainer (potion.container, UOBJ_EMPTY_BOTTLE, 1);
+			SetVital (character, "Life", GetVitalMaximumValue (character, "Life"));
+		0xdc28:	//Taint's Minor Transmutation potion
+			SubtractAmount (potion, 1);
+			CreateItemInContainer (potion.container, UOBJ_EMPTY_BOTTLE, 1);
+			var newcolor := 1411 + RandomInt(8);
+			var mod_amount := CINT ((10 + RandomInt (6)) * multiply_factor);
+			var duration := 60 * 30;
+
+			DoTempMod (character, "poly", mod_amount, duration, "Taint's Trans. Pot.");
+			DoPersistedMod (character,"color", newcolor, character.truecolor, duration, "Taint's Trans. Pot.");
+		0xdc29:	//Taint's Major Transmutation potion
+			SubtractAmount (potion, 1);
+			CreateItemInContainer (potion.container, UOBJ_EMPTY_BOTTLE, 1);
+			var newcolor := 1431 + RandomInt(8);
+			var mod_amount := CINT ((14 + RandomInt (6)) * multiply_factor);
+			var duration := 60 * 45;
+	
+			DoTempMod (character, "poly", mod_amount, duration, "Taint's Trans. Pot.");
+			DoPersistedMod (character,"color", newcolor, character.truecolor, duration, "Taint's Trans. Pot.");
+		default:
+			SendSysMessage (character, "no action for potion type " + potion.objtype + ".  Please contact a GM.");
+			Syslog ("No action for potion type " + potion.objtype);
+			return;
+	endcase
+
+
+endprogram
+
+
+
+
+///////////////////
+//  Bad effects for unskilled alchemists
+///////////////////
+
+function DoBadThingTo (character, HowBad)
+	if (HowBad < 5)
+		PrintTextAbovePrivate(character,"Gah!  Your hair falls out!",character);
+		DestroyItem(GetEquipmentByLayer (character, LAYER_HAIR));
+		DestroyItem(GetEquipmentByLayer (character, LAYER_BEARD));
+	elseif (HowBad < 8)
+		PrintTextAbovePrivate(character,"Ugh... You don't feel so well...",character);
+		DoTempMod (character, "call", 0-(RandomInt(10)+5), 300+RandomInt(600), "Bad Alchemy Effect");
+	elseif (HowBad < 10)
+		PrintTextAbovePrivate(character,"Doh!",character);
+		DoPersistedMod (character, "color", RandomInt(47)+1301, character.truecolor, 1200+RandomInt(1200), "Bad Alchemy Effect");
+	elseif (HowBad < 12)
+		PrintTextAbovePrivate(character, "Ooh.. what's this?", character);
+		var newgender := 0;
+		var newgraphic := 400;
+		var duration := 1200 + RandomInt(1200);
+		if (character.gender == 0)
+			newgender := 1;
+			newgraphic := 401;
+		endif
+		DoPersistedMod(character, "gender", newgender, character.gender, duration, "Bad Alchemy Effect");
+
+		DoPersistedMod(character, "graphic", newgraphic, character.graphic, duration, "Bad Alchemy Effect");
+	elseif (HowBad < 14)
+		PrintTextAbove (character, "*Doesn't feel well*");
+		sleep (7);
+		PrintTextAbove (character, "*Doesn't look well*");
+		sleep (7);
+		PlaySoundEffect (character, 0x208);
+		PlayObjectCenteredEffect (character, 0x36b0, 10, 10);
+		DoPersistedMod (character, "graphic", 0x32, character.graphic, 300, "Bad Alchemy Effect");
+		PlayObjectCenteredEffect (character, 0x36b0, 10, 10);
+
+	else
+		var x := cint(HowBad/2);
+		SetPoison(character, x, "Gack! You've been poisoned!");
+	endif
+endfunction

@@ -1,0 +1,26 @@
+use os;
+use uo;
+use util;
+
+include "include/objtype";
+include "include/client";
+include "../pkg/character/virtue/virtue";
+
+program use_crystal( character , crystal )
+
+	ReserveItem (crystal);
+
+	SendSysmessage( character , "You smash the magic crystal!" );
+
+	foreach cast_near in ListMobilesNearLocation( character.x, 
+					character.y, character.z, 15, character.realm );
+		PlayObjectCenteredEffect( cast_near, FX_BLESS_EFFECT, 10,10);
+		PlaySoundEffect( cast_near , SFX_SPELL_GREATER_HEAL );
+		EraseObjProperty(cast_near ,"death");
+		SendSysmessage( cast_near , "Death pardons your next transgression into the nether realm..." );
+		AddVirtue(character);
+	endforeach
+
+	DestroyItem( crystal );
+
+endprogram

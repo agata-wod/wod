@@ -1,0 +1,39 @@
+use uo;
+use os;
+
+program textcmd_create (character, text)
+	if (!text)
+		SendSysMessage (character, "You must supply an objtype to create");
+		return;
+	endif
+	var splitted := SplitWords (text);
+	var objtype := splitted [1];
+	
+	if (CINT (objtype))
+		objtype := CINT (objtype);
+	endif
+	
+	if (!objtype)
+		SendSysMessage (character, "You must supply an objtype to create");
+		return;
+	endif
+	
+	var amount := 1;
+	if (CINT (splitted[2]))
+		amount := CINT (splitted[2]);
+	endif
+	
+	repeat
+		var place := TargetCoordinates (character);
+		if (!place)
+			return;
+		endif
+		
+		var item := CreateItemAtLocation (place.x, place.y, place.z, objtype, 1, place.realm);
+		if (!item)
+			SendSysMessage (character, "Error creating item");
+			return;
+		endif
+		amount := amount - 1;
+	until (!character or !amount);
+endprogram

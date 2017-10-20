@@ -1,0 +1,192 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+use attributes;
+
+include "include/client";
+include "include/objtype";
+include "include/itemtypes";
+
+
+
+program use_scissors( character , scissors )
+
+	SendSysmessage (character, "Select cloth, or cut your hair with this?");
+	var use_on := Target (character);
+	if(!use_on)
+		SendSysmessage (character, "Canceled.");
+		if (scissors)
+		endif
+		return;
+	endif
+
+	if (!ReserveItem (use_on) and use_on != character)
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+
+	if (use_on == character)
+		CutHair (character);
+	elseif (use_on.objtype == UOBJ_CLOTH or use_on.objtype == UOBJ_BOLT_OF_CLOTH)
+		MakeBandages (character, use_on);
+	elseif (IsClothing (use_on) )
+		CutUpClothing (character, use_on);
+	else
+		SendSysMessage (character, "You can't cut that.");
+	endif
+
+endprogram
+
+
+
+
+///////////////////
+// cuts cloth into bandages
+///////////////////
+
+function MakeBandages (character, cloth)
+
+	if (cloth.objtype == UOBJ_CLOTH)
+		var bandage_amount := CInt (cloth.amount/2);
+		PlaySoundEffect (character, SFX_TAILORING);
+		sleep (2);
+		if (CheckSkill (character, SKILLID_TAILORING, 5, 0) )
+			var bandages := CreateItemInBackpack (character, UOBJ_BANDAGE, bandage_amount);
+			if (!bandages)
+				PrintTextAbovePrivate (character, "*Your backpack is full*", character);
+				return;
+			endif
+			SubtractAmount (cloth, bandage_amount * 2);
+			SendSysMessage (character, "You create " + bandage_amount + " bandages.");
+		else
+			SendSysmessage (character, "You can't even make a scrap of cloth right!");
+			var ruined_cloth := RandomInt (10);
+			if (ruined_cloth > cloth.amount)
+				ruined_cloth := cloth.amount;
+			endif
+			SubtractAmount (cloth, ruined_cloth);
+		endif
+	elseif (cloth.objtype == UOBJ_BOLT_OF_CLOTH)
+		if (cloth.amount > 100)
+			PlaySoundEffect (character, SFX_TAILORING);
+			sleep (2);
+			if (CheckSkill (character, SKILLID_TAILORING, 5, 0) )
+				var bandages := CreateItemInBackpack (character, UOBJ_BANDAGE, 2500);
+				if (!bandages)
+					PrintTextAbovePrivate (character, "*Your backpack is full*", character);
+					return;
+				endif
+				SubtractAmount (cloth, 100);
+				SendSysMessage (character, "You create 2500 bandages.");
+			else
+				SendSysmessage (character, "You can't even make a scrap of cloth right!");
+				SubtractAmount (cloth, 1);
+			endif
+		else
+			var bandage_amount := cloth.amount * 25;
+			PlaySoundEffect (character, SFX_TAILORING);
+			sleep (2);
+			if (CheckSkill (character, SKILLID_TAILORING, 5, 0) )
+				var bandages := CreateItemInBackpack (character, UOBJ_BANDAGE, bandage_amount);
+				if (!bandages)
+					PrintTextAbovePrivate (character, "*Your backpack is full*", character);
+					return;
+				endif
+				DestroyItem (cloth);
+				SendSysMessage (character, "You create " + bandage_amount + " bandages.");
+			else
+				SendSysmessage (character, "You can't even make a scrap of cloth right!");
+				SubtractAmount (cloth, 1);
+			endif
+		endif
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Cuts up clothing to make bandages
+///////////////////
+
+function CutUpClothing (character, clothing)
+	var cloth_cfg_file := ReadConfigFile ("cloth_items");
+	var elem := FindConfigElem (cloth_cfg_file, clothing.objtype);
+	if (!elem)
+		SendSysMessage (character, "Hmm, you're not sure how to cut this one up.");
+		return;
+	endif
+
+	var material := CINT (elem.material/2);
+	if (!material)
+		SendSysMessage (character, "Not even enough to be worth cutting up...");
+		return;
+	endif
+
+	PlaySoundEffect (character, SFX_TAILORING);
+	Sleep (2);
+	if (!CreateItemInContainer (character.backpack, UOBJ_BANDAGE, material) )
+		PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+		return;
+	endif
+	DestroyItem (clothing);
+endfunction
+
+
+
+
+///////////////////
+// cuts the character's hair
+///////////////////
+
+function CutHair (me)
+	if(me.race == RACE_GARGOYLE)
+		return;
+	endif
+
+	var hair := GetEquipmentByLayer( me, LAYER_HAIR );
+
+	if (!hair)
+		SendSysMessage(me, "Hmm.. not much there to cut...");
+		return;
+	endif
+
+	PlaySoundEffect (me, SFX_TAILORING);
+	sleep (2);
+
+	var newhair := 0;
+	var newhaircolor := hair.color;
+
+	if (GetObjProperty(me,"haircolor"))
+		newhaircolor := GetObjProperty(me,"haircolor");
+	else
+		SetObjProperty(me,"haircolor",newhaircolor);
+	endif
+
+	case (hair.objtype)
+	0x204a:	newhair := 0;
+	0x2044:	newhair := 0x204a;
+	0x2048: newhair := 0x2044;
+	0x2047: newhair := 0x2048;
+	0x203B: newhair := 0x2047;
+	0x2046: newhair := 0x203B;
+	0x2045: newhair := 0x2046;
+	0x203D: newhair := 0x2045;
+	0x2049: newhair := 0x203D;
+	0x203C: newhair := 0x2049;
+	endcase
+
+	DestroyItem(hair);
+
+	if (newhair)
+		var newdoo := createitematlocation(me.x, me.y, me.z, newhair,1, me.realm);
+		if (newdoo)
+			EquipItem(me,newdoo);
+			newdoo.color := newhaircolor;
+		else
+			PrintTextAbove(me,"Oops!");
+		endif
+	endif
+
+endfunction

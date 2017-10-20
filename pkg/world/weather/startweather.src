@@ -1,0 +1,80 @@
+use uo;
+use os;
+use util;
+
+include "include/wodinc";
+include "../pkg/world/weather/weather";
+
+var intensity := RandomInt (100) + 1;
+var increasing := 1;
+
+program setweather ()
+	sleep (600);
+	SendGMErrorMessage ("Weather has started", 0);
+	while (1)
+		if (GetGlobalProperty ("#stopweather"))
+			SendGMErrorMessage ("Aborting weather", 1);
+			EraseGlobalProperty ("#weather");
+			EraseGlobalProperty ("#stopweather");
+			return;
+		endif
+		
+		if (RandomInt (10) == 1)
+//			DoSnowStorm ();
+			DoRainStorm ();
+		endif
+		
+		EraseGlobalProperty ("#weather");
+		Sleep (RandomInt (600) + 600);
+	endwhile;
+endprogram
+
+
+
+
+function DoRainStorm ()
+	SendWeatherPacket ("65001000");
+	sleep (60);
+	SendWeatherPacket ("65004000");
+	sleep (60);
+	
+	var storm_counter := RandomInt (5) + 2;
+	for i := 1 to storm_counter
+		SendWeatherPacket ("65007000");
+		sleep (120);
+	endfor
+
+	SendWeatherPacket ("65004000");
+	sleep (120);
+	SendWeatherPacket ("65000000");
+endfunction
+
+
+
+
+
+function DoSnowStorm ()
+	SendWeatherPacket ("65021000");
+	sleep (60);
+	SendWeatherPacket ("65024000");
+	sleep (60);
+	SendWeatherPacket ("65027000");
+	sleep (120);
+	SendWeatherPacket ("65024000");
+	sleep (120);
+	SendWeatherPacket ("65020000");
+endfunction
+
+
+
+function SendWeatherPacket (weather)
+	SetGlobalProperty ("#weather", weather);
+	foreach player in EnumerateOnlineCharacters()
+		if (player.x < 5120 and player.realm == REALM_BRITANNIA)
+			SendPacket (player, weather);
+		endif
+	endforeach
+endfunction
+
+
+

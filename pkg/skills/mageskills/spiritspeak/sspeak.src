@@ -1,0 +1,277 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/string";
+include "include/eventid";
+include "include/wodinc";
+include "include/spawn";
+include "include/dotempmods";
+include "../pkg/npcs/npc_util";
+
+const NECROGRAVESTONE := 0xED6;
+
+program spiritspeak (me)
+	if (GetObjProperty (me, "#useskill"))
+		if (GetProcess (GetObjProperty (me, "#useskill")))
+			PrintTextAbovePrivate (me, "I am already performing another action.", me);
+			return;
+		endif
+	endif
+	SetObjProperty (me, "#useskill", GetPid());
+
+	me.hidden := 0;
+
+//	//first see if they are "already under the influence"
+//	if (!CanMod (me, "spiritspeak", 1))
+//		SendSysMessage (me, "You are already in contact with the netherworld.");
+//		return;
+//	endif
+//
+//	if (!CheckSkill (me, SKILLID_SPIRITSPEAK, -1, 0 ))
+//		SendSysMessage (me, "You fail to communicate with the netherworld.");
+//		return;
+//	endif
+//
+//	SendSysMessage (me, "You contact the netherworld." );
+//	PlaySoundEffect (me, SFX_SKILL_SPIRITSPEAK );
+//
+//	DoPersistedMod(me, "spiritspeak", 1, me.enabled( "hearghosts" ), 120, "Spiritspeak");
+//========================
+	PerformAction (me, ANIM_CAST_AREA);
+	PlaySoundEffect (me, SFX_SKILL_SPIRITSPEAK );
+	if (!CheckSkill (me, SKILLID_SPIRITSPEAK, -1, 0 ))
+		SendSysMessage (me, "You fail to communicate with the netherworld.");
+		detach();
+		sleep (5);
+		EraseObjProperty (me, "#useskill");
+		return;
+	endif
+	If (DrainVitae(me))
+		DoPersistedMod(me, "spiritspeak", 1, me.enabled( "hearghosts" ), 120, "Spiritspeak");
+	endif
+
+//========================
+
+	//now see if they are near a necro gravestone:
+	var stonelevel := FindNecroGravestone(me);
+	if (stonelevel)
+		if (GetObjProperty(me, "#contactedgravestone") < ReadGameClock())
+			SetObjProperty(me, "#contactedgravestone", ReadGameClock() + 120);
+			ContactUndead(me, stonelevel);
+		endif
+	endif
+	
+	detach();
+	sleep (5);
+	EraseObjProperty (me, "#useskill");
+
+endprogram
+
+function FindNecroGravestone(me)
+
+	//create item 0xED6 and set it in a graveyard
+	//set cprop "necro" to the highest level scroll (1 through 16) that can be found
+
+	foreach stone in ListItemsNearLocationOfType(me.x, me.y, me.z, 15, 0xED6, me.realm );
+		if (GetObjProperty (stone, "necro"))
+			return GetObjProperty (stone, "necro");
+		endif
+	endforeach
+
+	return 0;
+
+endfunction
+
+function ContactUndead(me, stonelevel)
+
+	PrintTextAbovePrivate (me, "*What's this?*",me);
+	PlaySoundEffect(me, SFX_58);
+	PerformAction( me, ANIM_BOW );
+	sleep(4);
+	PlaySoundEffect(me, 0x0108);
+
+	stonelevel := RandomInt(stonelevel)+1;
+	if (!Checkskill (me, SKILLID_SPIRITSPEAK, (stonelevel*5),0) )
+		SendSysMessage(me,"You find nothing of interest...");
+		return;
+	endif
+
+	PlaySoundEffect(me, 0x0108);
+	var npctemplate := GetUndeadType (stonelevel);
+	var it := SpawnNPCInArea (npctemplate, me.x, me.y, 4, 20, me.realm);
+	if (!it)
+		return;
+	endif
+
+	it.name := "a conjured " + TruncateArticle(it.name);
+	SetObjProperty (it, "killme", 1);
+	it.frozen := 1;
+	PrintTextAbove(it,"You disturb me in search for knowledge...");
+
+	PerformAction(me, ANIM_CAST_DIR);
+	PlaySoundEffect( me, SFX_SKILL_SPIRITSPEAK );
+
+	sleep(1);
+
+	var ev := struct;
+	ev.+type := EVID_PEACEMADE;
+	ev.+source := me;
+	SendEvent(it, ev);
+
+	sleep(3);
+
+	if (!Checkskill (me, SKILLID_SPIRITSPEAK, (stonelevel*7), 0) or me.hidden)
+		me.hidden := 0;
+		PrintTextAbove(it,"I give you only death!");
+		it.frozen := 0;
+		EraseObjProperty (it, "killme");
+		sleep (1);
+		SendEvent (it, ev);
+		ev.type := EVID_DAMAGED;
+		SendEvent (it, ev);
+	else
+		PrintTextAbove (it, "I give you only this!");
+		var scroll := GetScrollType(stonelevel);
+		if (RandomInt(20) > stonelevel)
+			CreateItemAtLocation(it.x, it.y, it.z, scroll, 1, it.realm);
+		endif
+		MakeAMess(it, stonelevel);
+		sleep(2);
+		SetObjProperty (it, "guardkill",1);
+		PlaySoundEffect( me, SFX_SPELL_DISPEL );
+		PlayStationaryEffect( it.x, it.y, it.z, FX_SMOKE, 0xA, 0xA, 0, it.realm );
+		KillNPC (it);
+	endif
+
+	return;
+
+endfunction
+
+function GetUndeadType(stonelevel)
+
+	case (stonelevel)
+	 1: return ":undead:skeleton";
+	 2: return ":undead:skeletonarcher";
+	 3: return ":undead:ghost";
+	 4: return ":undead:boneknight";
+	 5: return ":undead:shade";
+	 6: return ":undead:wraith";
+	 7: return ":undead:bonemage";
+	 8: return ":undead:spectre";
+	 9: return ":undead:flamingskeleton";
+	10: return ":undead:iceskeleton";
+	11: return ":diablo:darkspawn";
+	12: return ":diablo:daemonspawn";
+	13: return ":undead:lich";
+	14: return ":diablo:daemon";
+	15: return ":undead:bloodlich";
+	default: return ":diablo:daemonlieutenant";
+	endcase
+
+endfunction
+
+function GetScrollType(stonelevel)
+
+	case (stonelevel)
+	1:	return 0xA10E; //DarknessScroll
+	2:	return 0xA101; //CommuneScroll
+	3:	return 0xA102; //AnimateDeadScroll
+	4:	return 0xA103; //ControlUndeadScroll
+	5:	return 0xA104; //SacrificeScroll
+	6:	return 0xA105; //SpectresTouchScroll
+	7:	return 0xA110; //WraithsBreathScroll
+	8:	return 0xA10D; //WyvernStrikeScroll
+	9:	return 0xA106; //KillScroll
+	10:	return 0xA107; //RaiseDeadScroll
+	11:	return 0xA108; //WraithformScroll
+	12:	return 0xA10F; //ReleaseScroll
+	13:	return 0xA109; //SpellbindScroll
+	14:	return 0xA10A; //SummonSpiritScroll
+	15:	return 0xA10C; //PlagueScroll
+	default: return 0xA10B; //LichScroll
+	endcase
+
+endfunction
+
+function MakeAMess(me, stonelevel)
+
+	var stuff;
+	for i := 1 to 4
+		var maxamt := 5;
+		case (randomint(stonelevel))
+			0: stuff := 0x0F8F;		//VolcanicAsh
+			1: stuff := 0x0F79;		//BlackMoor
+			2: stuff := 0x0F7E;		//Bone
+			3: stuff := 0x0F8E;		//SerpentScales
+			4: stuff := 0x0F7D;		//VialOfBlood
+			5: stuff := 0x0F7C;		//BloodSpawn
+			6: stuff := 0x0F7F;		//Brimstone
+			7: stuff := 0x0F90;		//Deadwood
+			8: stuff := 0x0F81;		//FertileDirt
+			9: stuff := 0x0F78;		//BatWing
+			10: stuff := 0x0F82;	//DragonsBlood
+			11: stuff := 0x0F83;	//ExecutionersCap
+			12: stuff := 0x0F80;	//DaemonBone
+				maxamt := 3;
+			13: stuff := 0x0F91;	//WyrmHeart
+				maxamt := 2;
+			default: stuff := 0x0F7E;	//Bone
+		endcase
+		CreateItemAtLocation (me.x, me.y, me.z, stuff, randomint(maxamt), me.realm);
+	endfor
+
+endfunction
+
+function FindFreshCorpse(me)
+	foreach freshcorpse in ListItemsNearLocationOfType(me.x, me.y, me.z, 3, 0x2006 );
+		if (!GetObjProperty (freshcorpse, "drainedvitae"))
+			return freshcorpse;
+		endif
+	endforeach
+
+	return 0;
+
+endfunction
+
+function DrainVitae(me)
+	var necromancyskill := GetAttribute(me, ATTRIBUTEID_NECROMANCY);
+	var maxhealamount := (necromancyskill/10) + 4;
+	var minhealamount := 1 + (maxhealamount/2);
+	var healamount := 0;
+	foreach freshcorpse in ListItemsNearLocationOfType(me.x, me.y, me.z, 3, 0x2006, me.realm );
+		if (!GetObjProperty (freshcorpse, "drainedvitae"))
+			SetObjProperty (freshcorpse, "drainedvitae", 1);
+			freshcorpse.set_member("color", COLOR_GRAY);
+			var npctemplate := TrimTemplate (GetObjProperty (freshcorpse, "npctemplate"));
+			var NPCTemplateElem := GetNpcTemplateElem (npctemplate);
+			var corpsevirtue := NPCTemplateElem.virtue;
+			if (corpsevirtue < 1)
+				corpsevirtue := 1;
+			endif
+			maxhealamount := (necromancyskill / 2);
+			minhealamount := (1 + corpsevirtue) * 6;
+			if (minhealamount > maxhealamount)
+				minhealamount := maxhealamount;
+				healamount := maxhealamount;
+			else
+				healamount := minhealamount + RandomInt(maxhealamount - minhealamount);
+			endif 			
+			SendSysMessage (me, "You channel energy from a nearby corpse to heal your wounds.");
+			break;
+		endif
+	endforeach
+	if (!healamount)
+		if (!ConsumeVital(me, "Mana", 1000))
+			SendSysMessage (me, "You do not have enough mana.");
+			return 0;
+		endif
+		healamount := 1 + (maxhealamount/2) + RandomInt(maxhealamount/2);
+		SendSysMessage (me, "You channel your own spiritual energy to heal your wounds.");
+	endif
+	PlayObjectCenteredEffect (me, FX_SPARK_EFFECT, 10, 10);
+	HealDamage(me, healamount);
+	SendSysMessage (me, "You healed " + healamount + " damage.");
+	return 1;
+endfunction

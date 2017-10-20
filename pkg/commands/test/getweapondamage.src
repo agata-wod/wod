@@ -1,0 +1,12 @@
+use uo;
+use os;
+use polsys;
+
+program textcmd_getweapondamage( who)
+	var weapon := Target(who);
+	var weapondesc := GetItemDescriptor(weapon.objtype);
+	var damagefactor := (weapon.hp * weapon.quality)/weapon.maxhp;
+	var mindamage := weapondesc.mindamage + weapon.dmg_mod;
+	var maxdamage := weapondesc.maxdamage + weapon.dmg_mod;
+	SendSysMessage(who, "MinDamage: " + CINT(mindamage * damagefactor) + ", MaxDamage: " + CINT(maxdamage * damagefactor));
+endprogram

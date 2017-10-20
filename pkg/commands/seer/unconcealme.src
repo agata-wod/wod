@@ -1,0 +1,108 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/gumps";
+include "include/wodinc";
+include "include/effects";
+
+program unconcealme (character, text)
+	text := Lower (text);
+	if (text)
+		if (text == "help")
+			var themessage := "UNCONCEALME:";
+			themessage := themessage + "<p>Reveals your character so that players can see you.  Several ";
+			themessage := themessage + "special effects are available, usable by adding the following ";
+			themessage := themessage + "on the command line: ";
+			themessage := themessage + "<br>fire - burst of flame";
+			themessage := themessage + "<br>dark - screen goes black";
+			themessage := themessage + "<br>smoke - puff of smoke";
+			themessage := themessage + "<br>sparkle - sparkle effect";
+			
+			SendStringAsHtmlWindow (character, themessage, "Help");
+			return;
+		elseif (text == "fire")
+			PlayStationaryEffect (character.x, character.y, character.z+1, 0x3709, 0x0a, 0x1e, 0, character.realm);
+			PlaySoundEffect (character, SFX_SPELL_FLAME_STRIKE);
+			sleepms (1000);
+			character.concealed := 0;
+			return;
+		elseif (text == "dark")
+			foreach mobile in ListMobilesNearLocation (character.x, character.y, character.z, 20, character.realm)
+				if (!mobile.npctemplate)
+					mobile.setlightlevel (10, 200);
+				endif
+			endforeach
+			character.setlightlevel (10, 200);
+			sleepms (250);
+			foreach mobile in ListMobilesNearLocation (character.x, character.y, character.z, 20, character.realm)
+				if (!mobile.npctemplate)
+					mobile.setlightlevel (20, 200);
+				endif
+			endforeach
+			character.setlightlevel (20, 200);
+			sleepms (250);
+			foreach mobile in ListMobilesNearLocation (character.x, character.y, character.z, 20, character.realm)
+				if (!mobile.npctemplate)
+					mobile.setlightlevel (30, 200);
+				endif
+			endforeach
+			character.setlightlevel (30, 200);
+
+			sleep (1);
+			character.concealed := 0;
+			sleep (2);
+			
+			foreach mobile in ListMobilesNearLocation (character.x, character.y, character.z, 20, character.realm)
+				if (!mobile.npctemplate)
+					mobile.setlightlevel (20, 200);
+				endif
+			endforeach
+			character.setlightlevel (20, 200);
+			sleepms (250);
+			foreach mobile in ListMobilesNearLocation (character.x, character.y, character.z, 20, character.realm)
+				if (!mobile.npctemplate)
+					mobile.setlightlevel (10, 200);
+				endif
+			endforeach
+			character.setlightlevel (10, 200);
+			sleepms (250);
+			foreach mobile in ListMobilesNearLocation (character.x, character.y, character.z, 20, character.realm)
+				if (!mobile.npctemplate)
+					mobile.setlightlevel (0, 200);
+				endif
+			endforeach
+			character.setlightlevel (0, 200);
+	
+			return;
+		elseif (text == "smoke")
+			PlayStationaryEffect (character.x, character.y, character.z+1, 0x3728, 0x0a, 0x1e, 0, character.realm);
+			PlaySoundEffect (character, SFX_SPELL_FLAME_STRIKE);
+			sleepms (250);
+			PlayStationaryEffect (character.x-1, character.y-1, character.z+1, 0x3728, 0x0a, 0x1e, 0, character.realm);
+			PlayStationaryEffect (character.x-1, character.y+1, character.z+1, 0x3728, 0x0a, 0x1e, 0, character.realm);
+			PlayStationaryEffect (character.x+1, character.y-1, character.z+1, 0x3728, 0x0a, 0x1e, 0, character.realm);
+			PlayStationaryEffect (character.x+1, character.y+1, character.z+1, 0x3728, 0x0a, 0x1e, 0, character.realm);
+			sleepms (250);
+			PlayStationaryEffect (character.x-1, character.y, character.z+1, 0x3728, 0x0a, 0x1e, 0, character.realm);
+			PlayStationaryEffect (character.x, character.y-1, character.z+1, 0x3728, 0x0a, 0x1e, 0, character.realm);
+			PlayStationaryEffect (character.x+1, character.y, character.z+1, 0x3728, 0x0a, 0x1e, 0, character.realm);
+			PlayStationaryEffect (character.x, character.y+1, character.z+1, 0x3728, 0x0a, 0x1e, 0, character.realm);
+			sleepms (250);
+			PlayStationaryEffect (character.x, character.y, character.z+1, 0x3728, 0x0a, 0x1e, 0, character.realm);
+		elseif (text == "sparkle")
+			PlaySoundEffect (character, SFX_SPELL_HEAL);
+			PlayStationaryEffect (character.x, character.y, character.z+1, EFFECT_SPARKLE_1, 0x0a, 0x1e, 0, character.realm);
+			sleepms (500);
+			PlayStationaryEffect (character.x, character.y, character.z+1, EFFECT_SPARKLE_2, 0x0a, 0x1e, 0, character.realm);
+			sleepms (500);
+			PlayStationaryEffect (character.x, character.y, character.z+1, EFFECT_SPARKLE_3, 0x0a, 0x1e, 0, character.realm);
+		else
+			SendSysMessage (character, "Invalid option.  Try '.concealme help'");
+		endif
+	endif
+
+
+    character.concealed := 0;
+endprogram

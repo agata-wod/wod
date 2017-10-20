@@ -1,0 +1,231 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/wodinc";
+include "../pkg/npcs/npc_util";
+include "../pkg/npcs/npcinfo";
+
+Const ACTION_EAT := 0x22;
+
+program Hunger (character)
+	if (GetObjProperty (character, "#proof"))
+		start_script( "drunk", character );
+	endif
+
+	if (character.cmdlevel)
+		return;
+	endif
+
+	var starttime := GetObjProperty (character, "logontime");
+	var hunger;
+
+	while (character)
+		hunger := CINT (GetObjProperty (character, "hunger"));
+		if (hunger >= 9)
+			hunger := 9;
+		elseif (!hunger)
+			hunger := 0;
+		endif
+
+		hunger := hunger + 1;
+		SetObjProperty (character, "hunger", hunger);
+
+		case (hunger)
+			4:
+			5:
+			6:
+				SendSysMessage (character, "You could use a bite to eat...");
+			7:
+			8 :
+				SendSysMessage (character, "You're getting pretty hungry...", FONT_NORMAL, MESSAGE_COLOR_WARNING);
+			10 : 
+				SendSysMessage (character, "You're absolutely famished!", FONT_NORMAL, MESSAGE_COLOR_BAD);
+				TryToAutoEat (character);
+		endcase
+		RecalcVitals (character);
+		sleep (30 * 60);
+		if (character)
+			if (starttime != GetObjProperty (character, "logontime"))
+				return;
+			else
+				checkmount (character);
+			endif
+		else
+			return;
+		endif
+	endwhile    
+
+endprogram
+
+
+
+
+///////////////////
+//  horses and other mounts auto-eat if the character has food in their pack
+///////////////////
+
+function CheckMount(me)
+	var mount := GetEquipmentByLayer (me, 25);
+	if (!mount)
+		return;
+	endif
+
+	if (GetObjProperty (mount, "totem"))
+		return;
+	elseif (GetObjProperty (mount, "summoned"))
+		var freetime := GetObjProperty (mount, "freetime");
+		if (ReadGameClock() < freetime)
+			return;
+		endif
+	
+		var it := Dismount (me, mount);
+		if (!it)
+			return;
+		endif
+
+		PlayStationaryEffect (it.x, it.y, it.z, FX_SMOKE, 0xA, 0xA, 0, it.realm);
+		KillNPC (it);
+		return;
+	endif
+
+	poop (me, mount);
+	var freetime := GetObjProperty (mount, "freetime");
+	if (ReadGameClock() < freetime or RandomInt(3))
+		return;
+	endif
+
+	if (CanFeed (me, mount))
+		return;
+	endif
+
+	//if we didn't find any food, the mount goes wild
+	var it := Dismount (me, mount);
+	if (!it)
+		return;
+	endif
+
+	var MyTemplateElem := GetNpcTemplateElem (it.npctemplate);
+	EraseObjProperty (it, "master");
+	if (MyTemplateElem.script)
+		it.script := MyTemplateElem.script;
+	else
+		it.script := ":wild_animals:ai_animal_barker";
+	endif
+	it.name := MyTemplateElem.name;
+	if ( it.name["<random>"] )
+		var temp_string := it.name;
+		temp_string["<random>"] := RandomName (it);
+		it.name := temp_string;
+	endif
+
+	PrintTextAbove (it, it.name + " can roam free again!");
+	it.setmaster (0);
+	sleep (1);
+	RestartScript (it);
+endfunction
+
+
+
+
+///////////////////
+//  Make poop.  Whee!
+///////////////////
+
+function poop (me, mount)
+	if (GetObjProperty (mount, "summoned") or GetObjProperty (mount, "totem"))
+		return 0;
+	endif
+
+	if (RandomInt (50) == 1)
+		case (mount.graphic)
+			0x3ea2:
+			0x3e9f:
+			0x3ea0:
+			0x3ea1:
+				CreateItemAtLocation(me.x,me.y,me.z,0x0f3c,1, me.realm);
+			default:
+				return;
+		endcase
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  try to find food for the mount in the character's backpack
+///////////////////
+
+function CanFeed(me, mount)
+	if (GetObjProperty (mount, "summoned"))
+		return 0;
+	endif
+
+	var npctemplate := GetObjProperty (mount, "npctemplate");
+	var MyTemplateElem := GetNpcTemplateElem (npctemplate);
+	var foodtype := MyTemplateElem.food;
+	if (!foodtype)
+		foodtype := "all";
+	endif
+
+	var cfg := ReadConfigFile ("::food");
+	var elem := FindConfigElem (cfg, foodtype);
+	var foodarray := GetConfigStringArray (elem, "food");
+	foreach item in EnumerateItemsInContainer (me.backpack)
+		if ( CSTR(item.objtype) in foodarray )
+			PlaySoundEffect (me, CINT(0x3b) + RandomInt(3));
+			SubtractAmount (item, 1);
+			PrintTextAbovePrivate (me, "*You feed your mount*", me);
+			SetObjProperty (mount, "freetime", CINT(ReadGameClock() + 14400));
+			return 1;
+		endif
+	endforeach
+
+	return 0;
+
+endfunction
+
+
+
+
+///////////////////
+//  tries to automatically find some food in the character's backpack
+///////////////////
+
+function TryToAutoEat (character)
+	var cfgfile := ReadConfigFile (":cooking:itemdesc");
+	var elem;
+
+	foreach item in EnumerateItemsInContainer (character.backpack)
+		elem := FindConfigElem (cfgfile, item.objtype);
+		if (elem and elem.script == "eat")
+			var foodvalue := GetConfigInt (elem, "nutrition");
+			if (!foodvalue)
+				foodvalue := 1;
+			endif
+
+			PerformAction (character, ACTION_EAT);
+			PlaySoundEffect (character, CINT(0x3b) + RandomInt(3));
+			PrintTextAbovePrivate (character, "*Yummy!*", character);
+			var hunger := GetObjProperty (character, "hunger");
+			if (!hunger) 
+				hunger := 0;
+			endif
+
+			hunger := hunger - foodvalue;
+			if (hunger < 0)
+				hunger := 0;
+			endif
+			SetObjProperty (character, "hunger", hunger);
+			SetObjProperty (character, "#hunger_lastfoodvalue", foodvalue);
+			SubtractAmount (item, 1);
+			return 1;
+		endif
+	endforeach
+
+	return 0;
+endfunction

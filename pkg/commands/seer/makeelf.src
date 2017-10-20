@@ -1,0 +1,24 @@
+use uo;
+use os;
+use vitals;
+
+program makeelf( me )
+	var elf := Target( me, TGTOPT_NOCHECK_LOS );
+	if (!elf.acctname)
+		SendSysMessage (me, "That is not a player.");
+		return;
+	endif
+	if (elf.race == RACE_GARGOYLE)
+		SendSysMessage (me, "That is not a human or elf.");
+		return;
+	endif
+	
+	elf.race := RACE_ELF;
+	elf.graphic := 605 + elf.gender;
+	elf.carrying_capacity_mod := 0;
+	elf.trueobjtype := elf.graphic;
+	
+	SendCharacterRaceChanger( elf );
+	RecalcVitals(elf);
+endprogram
+

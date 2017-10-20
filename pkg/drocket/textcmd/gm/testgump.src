@@ -1,0 +1,19 @@
+use uo;
+use os;
+
+include "include/gumps";
+
+program test_gump (character, text)
+	var splitted := SplitWords (text);
+	if (!splitted or !len (splitted))
+		SendSysMessage (character, "Error: Supply options");
+		return;
+	endif
+	
+	var selected := DisplayMenuSelectionGump (character, "Pick one", splitted);
+	SendSysMessage (character, "You selected " + selected);
+
+endprogram
+
+
+

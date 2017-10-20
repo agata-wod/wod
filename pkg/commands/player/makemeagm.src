@@ -1,0 +1,52 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/wodinc";
+
+program make_me_a_gm (character)
+	if (!IsAGM (character))
+		if (character.cmdlevel)
+			SendSysMessage (character, "Your account is not recognized.  You would not be able to return to GM status.  Canceled.");
+		else
+			SendSysMessage (character, "I don't think so, bub.");
+		endif
+		return;
+	endif
+	
+	if (!GetConfigFileCmdLevel (character.acctname))
+		SendSysMessage (character, "Your account is not recognized.  You would not be able to return to GM status.");
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (character.cmdlevel)
+		character.cmdlevel := 0;
+		SendSysMessage (character, "Cmdlevel revoked.  Use this command again to return to GM status.");
+		return;
+	endif
+	
+	character.cmdlevel := IsAGM (character);
+	SendSysMessage (character, "Congratulations!  You're a GM!");
+endprogram
+
+
+
+
+///////////////////
+//  Get their cmdlevel as defined in gms.cfg
+//////////////////
+
+function GetConfigFileCmdLevel (acctname)
+	UnloadConfigFile ("::gms");
+	var cfgfile := ReadConfigFile ("::gms");
+	var elem := FindConfigElem (cfgfile, acctname);
+	if (!elem)
+		return 0;
+	endif
+	if (elem.cmdlevel)
+		return elem.cmdlevel;
+	endif
+endfunction
+
+

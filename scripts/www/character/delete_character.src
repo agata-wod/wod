@@ -1,0 +1,95 @@
+use uo;
+use os;
+use http;
+
+include "include/www";
+
+program delete_character ()
+	WriteHTML ("<html><head><title>Account Information</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+	
+	var acctname := QueryParam ("acctname");
+	var charnum := CINT (QueryParam ("charnum"));
+	var charserial := CINT (QueryParam ("charserial"));
+	if (!acctname or !charnum or !charserial)
+		WriteHTML ("<p>Cannot complete action.  Please <a href=account_info.ecl?acctname=" + acctname + ">go back</a> and try again.");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	
+	var acct := FindAccount (acctname);
+	if (!acct)
+		WriteHTML ("<p>Account does not exist.  Please <a href=account_info.ecl?acctname=" + acctname + ">go back</a> and try again.");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+
+	var character := acct.GetCharacter(charnum);
+	if (!character)
+		WriteHTML ("<p>Character does not exist.  Please <a href=account_info.ecl>go back</a> and try again.");
+		WriteHTML ("</body></html>");
+		return;
+	elseif (character.serial != charserial)
+		WriteHTML ("<p>Character does not match selected.  Please <a href=account_info.ecl>go back</a> and try again.");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	
+	//to delete a character, the GM has to be online (needed to confirm authority
+	var online_gm := FindOnlineAccountByIP (QueryIP());
+	if (!online_gm)
+		WriteHTML ("<p>Warning:  You must be logged in to WoD delete characters (security measure)");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	
+	if (!online_gm.cmdlevel or online_gm.cmdlevel < 5)
+		WriteHTML ("<p>Warning:  You do not have the authority to access this function.  Only GMs of command level 5 ");
+		WriteHTML ("are permitted to delete chacters.");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	
+	
+	
+	
+
+	var confirm := QueryParam ("confirm");
+	if (!confirm)
+		WriteHTML ("<p>Deleting character " + character.name);
+		WriteHTML ("<p>Click <a href=delete_character.ecl?acctname=" + acctname + "&charnum=" + charnum + "&charserial=" + charserial + "&confirm=1>here</a> to confirm.");
+		WriteHTML ("<p>Otherwise, <a href=account_info.ecl?acctname=" + acctname + ">Go back</a>");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+	
+	if (character.ip)
+		WriteHTML ("<p>Warning:  That character is online.  Continuing would be bad.  .kick them first.");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+
+	var charname := character.name;
+	var delete_success := acct.deletecharacter (charnum);
+	if (!delete_success)
+		WriteHTML ("<p>Character delete failed.  Error message was: " + delete_success);
+		WriteHTML ("</body></html>");
+		return;
+	endif
+
+	WriteHTML ("<p>Character " + charname + " was deleted.");
+	WriteHTML ("</body></html>");
+	return;
+	
+
+
+endprogram
+
+
+
+
+
+
+
+
+

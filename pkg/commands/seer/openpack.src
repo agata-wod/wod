@@ -1,0 +1,66 @@
+use uo;
+use os;
+use attributes;
+
+include "include/npcbackpacks";
+
+program textcmd_pack (who, text)
+
+	if (text)
+		TryToOpenOfflineBackpack (who, text);
+		return;
+	endif
+
+	var me := Target( who,TGTOPT_NOCHECK_LOS );
+	if (!GetAttribute (me, "Strength"))
+		SendSysMessage (who, "Invalid target");
+		return;
+	endif
+
+	if (!me.backpack)
+		var newbackpack := CreateItemAtLocation(5288 , 1176 , 0, 0xe75,1, _DEFAULT_REALM);
+		if (!EquipItem(me, newbackpack))
+			return;
+		endif
+	endif
+
+	var mypack := FindMyPack(me.serial);
+
+	foreach item in enumerateitemsincontainer(mypack)
+		if (item.container.serial == mypack.serial)
+			moveitemtocontainer(item, me.backpack);
+		endif
+	endforeach
+
+	SendOpenSpecialContainer (who, me.backpack);
+endprogram
+
+
+
+function TryToOpenOfflineBackpack (character, text)
+
+	var serial := CINT (text);
+	if (!serial)
+		SendSysMessage (character, "Invalid serial.");
+		return;
+	endif
+
+	var account, player;
+	set_script_option( SCRIPTOPT_CAN_ACCESS_OFFLINE_MOBILES, 1 );
+	foreach accountname in ListAccounts ()
+		account := FindAccount (accountname);
+		if (account)
+			for counter := 1 to 7
+				player := account.GetCharacter (counter);
+				if (player and player.serial == serial)
+					var thepack := player.backpack;
+					MoveObjectToLocation( character,player.x,player.y,player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+					SendOpenSpecialContainer (character, thepack);
+					var items := EnumerateItemsInContainer (thepack);
+					SendSysMessage (character, "Total items: " + len(items));
+					return;
+				endif
+			endfor
+		endif
+	endforeach
+endfunction

@@ -1,0 +1,27 @@
+use uo;
+use os;
+
+program send_logon_message (character)
+	sleep (1);
+	
+	//make sure there's a set message
+	var daily_message := GetGlobalProperty ("daily_message");
+	if (!daily_message)
+		return;
+	endif
+	
+	var last_updated := daily_message [1];
+	var themessage := daily_message [2];
+	
+	if (!last_updated or !themessage)
+		return;
+	endif
+	
+	var last_saw_message := GetObjProperty (character, "LastSeenDailyMessage");
+	if (last_saw_message and last_saw_message > last_updated)
+		return;
+	endif
+	
+	SendStringAsTipWindow (character, themessage);
+	SetObjProperty (character, "LastSeenDailyMessage", ReadGameClock());
+endprogram

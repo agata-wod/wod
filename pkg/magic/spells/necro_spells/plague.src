@@ -1,0 +1,28 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 8;
+
+program cast_plague (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		return 0;
+	endif
+
+	var casterSkill := CINT (GetAttribute (caster, ATTRIBUTEID_MAGERY) + GetAttribute (caster, ATTRIBUTEID_NECROMANCY)/2);
+	var range := CINT (CasterSkill / 10);
+	var PoisonPower := CINT (CasterSkill/25);
+
+	foreach mobile in ListMobilesNearLocation (caster.x, caster.y, caster.z, range, caster.realm)
+		if (mobile != caster)
+			DoDamageByType (caster, mobile, RandomDiceRoll("2d6"), DAMAGETYPE_MAGIC);
+			SetPoison (mobile, PoisonPower, "You feel deathly ill...");
+		endif
+	endforeach
+	return 1;
+endprogram

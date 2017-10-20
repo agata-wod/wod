@@ -1,0 +1,216 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/eventid";
+include "include/skills";
+include "include/attributes";
+include "../pkg/npcs/npcinfo";
+
+Const GATE_PRICE := 100;
+
+var gump_layout := array{
+	"page 0",
+	"nodispose",
+
+	"resizepic 50 50 2620 310 370",
+	"text 70 59 40 0",
+	"text 120 59 40 1",
+	"page 1",
+
+	"button 70 90 2118 2117 1 1 1",
+	"text 100 85 40 2",
+	
+	"button 70 115 2118 2117 1 1 2",
+	"text 100 110 40 3",
+	
+	"button 70 140 2118 2117 1 1 3",
+	"text 100 135 40 4",
+
+	"button 70 165 2118 2117 1 1 4",
+	"text 100 160 40 5",
+
+	"button 70 190 2118 2117 1 1 5",
+	"text 100 185 40 6",
+
+	"button 70 215 2118 2117 1 1 6",
+	"text 100 210 40 7",
+
+	"button 70 240 2118 2117 1 1 7",
+	"text 100 235 40 8",
+
+	"button 70 265 2118 2117 1 1 8",
+	"text 100 260 40 9",
+
+	"button 70 290 2118 2117 1 1 9",
+	"text 100 285 40 10",
+
+	"button 70 315 2118 2117 1 1 10",
+	"text 100 310 40 11",
+
+	"text 90 350 40 12"
+};
+
+var gump_data := array{
+	"Go",         //0
+	"Location",
+	"Covetous",
+	"Deceit",
+	"Despise",
+	"Destard",
+	"Famine",
+	"Hythloth",
+	"Ice",
+	"Shame",
+	"Wind",
+	"Wrong",
+	"Cost: " + GATE_PRICE + " gold"
+};
+
+program merchant_gate (player)
+//	var merchant := parms [1];
+//	var player := parms [2];
+	var merchant := player;
+
+	if (!merchant or !player or !player.acctname)
+		return;
+	endif
+
+	if (GetObjProperty (player, "#merchant_teleporter_gump"))
+		if (GetProcess (GetObjProperty (player, "#merchant_teleporter_gump")))
+			return;
+		endif
+	endif
+
+	var gump_return := SendDialogGump (player, gump_layout, gump_data);
+	if (gump_return == error)
+		PrintTextAbovePrivate (merchant, "Please close other gumps first.", player);
+		EraseObjProperty (player, "#merchant_teleporter_gump");
+		return;
+	elseif (gump_return[0]==0)
+		PrintTextAbovePrivate (merchant, "Maybe next time.", player);
+		EraseObjProperty (player, "#merchant_teleporter_gump");
+		return;
+	endif
+
+	var xgateloc := 0;
+	var ygateloc := 0;
+	var zgateloc := 0;
+	var rgateloc := REALM_BRITANNIA;
+	case (gump_return[0])
+		1:	//Covetous
+			xgateloc := 2524;
+			ygateloc := 928;
+			zgateloc := 0;
+		2:	//Deceit
+			xgateloc := 4107;
+			ygateloc := 446;
+			zgateloc := 0;
+		3:	//Despise
+			xgateloc := 1319;
+			ygateloc := 1048;
+			zgateloc := 0;
+		4:	//Destard
+			xgateloc := 1209;
+			ygateloc := 2656;
+			zgateloc := 0;
+		5:	//Famine
+			xgateloc := 1820;
+			ygateloc := 909;
+			zgateloc := -1;
+		6:	//Hythloth
+			xgateloc := 4682;
+			ygateloc := 3883;
+			zgateloc := 0;
+		7:	//Ice
+			xgateloc := 2000;
+			ygateloc := 46;
+			zgateloc := 4;
+		8:	//Shame
+			xgateloc := 564;
+			ygateloc := 1627;
+			zgateloc := 2;
+		9:	//Wind
+			xgateloc := 1443;
+			ygateloc := 904;
+			zgateloc := 0;
+		10:	//Wrong
+			xgateloc := 2041;
+			ygateloc := 266;
+			zgateloc := 5;
+		default:
+			SendSysMessage (player, "Error:  invalid return:" + gump_return[0]);
+			return;
+	endcase
+	
+	
+	var casterx := merchant.x;
+	var castery := merchant.y;
+	var casterz := merchant.z;
+	var casterr := merchant.realm;
+
+	set_critical (1);
+	var pregate := CreateItemAtLocation (casterx, castery, casterz, 0x1af3, 1, casterr);
+	pregate.movable := 0;
+	pregate.facing := 1;
+	PlaySoundEffect (merchant, SFX_SPELL_GATE_TRAVEL);
+	sleepms (1500);
+	DestroyItem (pregate);
+
+	var gate1 := CreateItemAtLocation (casterx, castery, casterz, UOBJ_BLUE_MOONGATE, 1, casterr);
+	gate1.movable := 0;
+	gate1.facing := 1;
+	var gate2 := CreateItemAtLocation (xgateloc, ygateloc, zgateloc, UOBJ_BLUE_MOONGATE, 1, rgateloc);
+	gate2.movable := 0;
+	gate2.facing := 1;
+	if (!gate1 or !gate2)
+        	return;
+	endif
+
+	SetObjProperty (gate1, "GateDestX", gate2.x);
+	SetObjProperty (gate1, "GateDestY", gate2.y);
+	SetObjProperty (gate1, "GateDestZ", gate2.z);
+	SetObjProperty (gate1, "GateDestR", gate2.realm);
+	SetObjProperty (gate2, "GateDestX", gate1.x);
+	SetObjProperty (gate2, "GateDestY", gate1.y);
+	SetObjProperty (gate2, "GateDestZ", gate1.z);
+	SetObjProperty (gate2, "GateDestR", gate1.realm);
+
+	SetObjProperty (gate1, "summoned_field", 1);
+	SetObjProperty (gate2, "summoned_field", 1);
+	
+	var forbidden_gaters := array{};
+	foreach mob in ListMobilesNearLocation (merchant.x, merchant.y, merchant.z, 10, merchant.realm)
+		if (mob.npctemplate)
+			if (GetObjProperty (mob, "myhome"))
+				forbidden_gaters.append (mob);
+			endif
+		endif
+	endforeach
+	SetObjProperty (gate1, "#forbidden_gaters", forbidden_gaters);
+	SetObjProperty (gate2, "#forbidden_gaters", forbidden_gaters);
+
+	Detach();
+	set_critical( 0 );
+
+	var timer_counter := 0;
+	repeat
+		sleep (1);
+		if (!gate1 or !gate2)
+			DestroyItem (gate1);
+			DestroyItem (gate2);
+			return;
+		endif
+		timer_counter := timer_counter + 1;
+	until (timer_counter > 30);
+	DestroyItem (gate1);
+	DestroyItem (gate2);
+endprogram
+
+
+
+
+
+

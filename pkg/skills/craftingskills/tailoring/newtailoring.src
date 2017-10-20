@@ -1,0 +1,1043 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include ":crafting:crafting";
+include "include/attributes";
+include "include/objtype";
+include "include/crafting";
+include "include/gumps";
+include "include/utility";
+include "include/magicitems";
+
+var item_config := ReadConfigFile( ":*:itemdesc" );
+var craft_config := ReadConfigFile( ":tailoring:tailoring" );
+
+program use_sewing_kit (who, tool)
+
+	if (!ReserveItem (tool) )
+		SendSysMessage (who, "You cannot use that right now.");
+		return;
+	endif
+
+	var rinfo := sendCraftGump( who, ATTRIBUTEID_TAILORING );
+	if( rinfo == 0 )
+		return 0;
+	endif
+
+	var the_objtype := rinfo[1],
+	    amt := rinfo[2],
+	    repair := rinfo[3],
+	    resmelt := rinfo[4],
+	    fortify := rinfo[5];
+     
+	if( repair )
+                RepairItem( who, SKILLID_TAILORING );
+	elseif (fortify)
+		UpgradeItem (who, SKILLID_TAILORING);
+	elseif (resmelt)
+		return 0;
+	else
+		makeTailoringItem( who, tool, the_objtype, amt );
+	endif
+
+	return 1;
+endprogram
+
+function makeTailoringItem (who, tool, chosen_item, amt)
+	if (tool)
+	endif
+	if( !chosen_item || !amt )
+		SendSysMessage( who, "Cancelled." );
+		return 0;
+	endif
+
+	var items_to_make := amt;
+	if (items_to_make == 0)
+		return 0;
+	endif
+
+	var skill_elem := menu_config[craft_skill];
+	//find the item in tailoring.cfg file
+	var selection := FindConfigElem (craft_config, chosen_item);
+	if (!selection)
+		SendSysMessage (who, "That was an invalid selection");
+		return;
+	endif
+
+	var material_needed := cint (selection.material);
+	var material_type := selection.type;
+	var item_skill := cint (selection.skill);
+	var time_delay := cint (selection.time);
+	var item_stackable := selection.stackable;
+	var item_name := selection.name;
+
+	var material2_needed := cint (selection.material2);
+	var material2_type := selection.type2;
+	var message := "(Skill: " + item_skill + ", " + material_type + ": " + material_needed;
+	if (material2_needed and material2_type)
+		message := message + ", " + material2_type + ": " + material2_needed + ")";
+	else
+		message := message + ")";
+	endif
+	SendSysMessage(who, message);
+
+	var chosen_material := MaterialSelection( who, craft_skill, material_type );
+	if (!chosen_material)
+		return 0;
+	endif
+	
+	var chosen_material2;
+	if (material2_needed and material2_type)
+		chosen_material2 := MaterialSelection( who, craft_skill, material2_type );
+		if (!chosen_material2)
+			return 0;
+		endif
+	endif
+
+	var craftingbag := FindCraftingBag (who);
+	var whox := who.x;
+	var whoy := who.y;
+	var amax := CINT (chosen_material.amount/material_needed);
+	if (!amax)
+		SendSysMessage (who, "You don't have enough " + material_type + " to make that!");
+		return;
+	endif
+	if (material2_type)
+		amax := CINT (chosen_material2.amount/material2_needed);
+		if (!amax)
+			SendSysMessage (who, "You don't have enough " + material2_type + " to make that!");
+			return;
+		endif
+	endif
+	
+
+	//save the who's position and ask them if they want to autoloop
+	var autoupgrade := 0;;
+	if (selection.Exceptional)
+		autoupgrade := quality;
+	endif
+
+	var created_item;
+	repeat
+		created_item := 0;
+		if (chosen_material.amount < material_needed or !chosen_material)
+			SendSysmessage (who, "You don't have enough " + material_type + " to continue!");
+			break;
+		endif
+		if (material2_type)
+			if (chosen_material2.amount < material2_needed or !chosen_material2)
+				SendSysmessage (who, "You don't have enough " + material_type + " to continue!");
+				break;
+			endif
+		endif
+
+		for i := 1 to time_delay
+			PlaySoundEffect (who, SFX_TAILORING);
+			sleep (5);
+		endfor
+		PlaySoundEffect(who, SFX_TAILORING);
+		sleep (3);
+
+		if (!CheckSkill (who, SKILLID_TAILORING, item_skill, 0))
+			var lossamount := RandomInt (CINT ( material_needed/3) )+1;
+			SubtractAmount (chosen_material, lossamount);
+			SendSysmessage (who, "You fail, destroying some " + material_type + ".");
+		else
+			created_item := CreateItemInContainer (craftingbag, chosen_item, 1);
+			if (!created_item)
+				PrintTextAbovePrivate (who, "*Your backpack is full!*", who);
+				break;
+			endif
+
+			created_item.movable := 1;
+			created_item.buyprice := 0;
+			SendSysMessage (who, "You place the item in your backpack.");
+			//set the color
+			if (selection.retain and chosen_material.color)
+				created_item.color := chosen_material.color;
+			endif
+			if (!item_stackable)
+				SetObjProperty (created_item, "material_objtype", chosen_material.objtype);
+			endif
+			SubtractAmount (chosen_material, material_needed);
+			if (material2_type)
+				SubtractAmount (chosen_material2, material2_needed);
+			endif
+			if (selection.mark)
+				created_item.name := item_name;
+				SetObjProperty (created_item, "craftername", who.name);
+			endif
+			created_item.hp := created_item.maxhp;
+
+			if (autoupgrade)
+				var upgrade_material := CINT (material_needed/2);
+				if (chosen_material.amount < upgrade_material)
+					SendSysMessage (who, "You don't have enough chosen_material to upgrade that item!");
+					break;
+				endif
+				
+				var upgrade_skill := item_skill + 15;
+				if (upgrade_skill > 110)
+					upgrade_skill := 110;
+				endif
+				if (upgrade_skill >= GetAttribute (who, ATTRIBUTEID_TAILORING) + 20)
+					SendSysMessage (who, "Your skill is too low to upgrade that item.");
+					break;
+				endif
+
+				if (whox != who.x or whoy != who.y)
+					break;
+				endif
+
+				PerformItemUpgrade (who, created_item, chosen_material, upgrade_material,
+						SKILLID_TAILORING, upgrade_skill, item_name, autoupgrade);
+			endif
+		endif
+		
+		if (whox != who.x or whoy != who.y)
+			break;
+		endif
+		
+		if (created_item)
+			items_to_make := items_to_make - 1;
+		endif
+		sleep (2);
+
+	until (!items_to_make);
+
+        SendSysMessage( who, "You stop "+skill_elem.EndMessage+"...", 3, 89 );
+
+	return 1;
+endfunction
+
+
+function DoSpecialUpgradeStuff (character, item, repair_skill)
+
+	//nothing we can do with player made items
+	if (item.desc["exceptional"] or item.desc["Exceptional"])
+		SendSysMessage (character, "That item can't be upgraded further.");
+		return;
+	endif
+	if (IsAHat (item) and repair_skill == SKILLID_TAILORING)
+		FortifyHat (character, item);
+
+	//if its a magic item and they're using tailoring, they can change the color of the item, or
+	//if its a tunic, they can change its gender
+	elseif (IsMagicalItem (item) and IsLeatherArmor (item) and repair_skill == SKILLID_TAILORING)
+		if ( item.graphic == UOBJ_LEATHER_FEMALE or item.graphic == UOBJ_LEATHER_TUNIC or
+				item.graphic == UOBJ_STUDDED_FEMALE or item.graphic == UOBJ_STUDDED_TUNIC
+				or item.graphic == UOBJ_LEATHER_TUNIC2 or item.graphic == UOBJ_STUDDED_BUSTIER
+				or item.graphic == 0x2fc5 or item.graphic == 0x2fcb or item.graphic == 0x2b74 or item.graphic == 0x2b79)
+			var menu := CreateMenu ("Options:");
+			AddMenuItem (menu, 0, "Reinforce");
+			AddMenuItem (menu, 0, "Change gender");
+
+			var selection := SelectMenuItem2 (character, menu);
+			if (!selection)
+				SendSysMessage (character, "Canceled.");
+				return;
+			elseif (selection.index == 1)
+				DoLeatherColorChange (character, item, repair_skill);
+				return;
+			elseif (selection.index == 2)
+				ChangeGenderOfLeatherArmor (character, item, repair_skill);
+				return;
+			else
+				SendSysMessage (character, "You're not supposed to get this message.  Whoops.");
+				return;
+			endif
+			return;
+		else
+			DoLeatherColorChange (character, item, repair_skill);
+			return;
+		endif
+
+	//otherwise, if its a magic item, there's nothing they can do with it
+	elseif (IsMagicalItem (item) )
+		SendSysMessage (character, "That item can't be upgraded further.");
+		return;
+
+	//otherwise try to upgrade it
+	else
+		DoItemUpgrade (character, item, repair_skill);
+		return;
+	endif
+
+endfunction
+
+
+
+///////////////////
+//  Allows the user to make cloth items
+///////////////////
+
+function MakeClothItems (character, cloth)
+	//Calls the function in the tailoring_menu.inc file that displays the fancy new menu
+	var cloth_cfg_file := ReadConfigFile ("cloth_items");
+	var tailoring_menu_return := BuildTailoringCraftingMenu (character, ":tailoring:menu", ":tailoring:cloth_items", "clothmenu", "Tailoring");
+	if (!tailoring_menu_return)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+
+	var chosen_item := tailoring_menu_return[1];
+	var autoupgrade_level := tailoring_menu_return[2];
+	var number_to_make := tailoring_menu_return[4];
+	if (!number_to_make or number_to_make < 1)
+		number_to_make := 1;
+	elseif (number_to_make > 5)
+		number_to_make := 5;
+	endif
+
+	//find the item in cloth_items.cfg file
+	var elem := FindConfigElem (cloth_cfg_file, chosen_item);
+	if (!elem)
+		SendSysMessage (character, "There was an error making that item.");
+		return;
+	endif
+
+	//make sure they have enough material
+	var material_needed := CINT (elem.material);
+	if (cloth.amount < material_needed)
+		SendSysMessage (character, "You don't have enough material to make that!");
+		return;
+	endif
+
+	//make sure they can make how many they set
+	var max_number_to_make := CINT (cloth.amount/material_needed);
+	if (!max_number_to_make)
+		SendSysMessage (character, "You don't have enough material to make that! (error?)");
+		return;
+	elseif (number_to_make > max_number_to_make)
+		SendSysMessage (character, "You don't have enough material for that many!");
+		SendSysMessage (character, "(Now making " + max_number_to_make + ")");
+		number_to_make := max_number_to_make;
+	endif
+
+	//Load some assorted information
+	var item_name		:= elem.name;
+	var time_delay := CINT (elem.time);
+	var skill_needed	:= elem.skill;
+	var stackable		:= elem.stackable;
+
+	//Save the character's position
+	var characterx := character.x;
+	var charactery := character.y;
+	var craftingbag := FindCraftingBag (character);
+	if (!elem.hasquality)
+		autoupgrade_level := 0;
+	endif
+
+
+	var created_item;
+	SendSysMessage (character, "You begin tailoring...");
+	repeat
+		created_item := 0;
+		PlaySoundEffect (character, SFX_TAILORING);
+		sleep (3);
+
+		if (CheckSkill (character, SKILLID_TAILORING, skill_needed, 0 ) )
+			created_item := CreateItemInContainer (craftingbag, chosen_item, 1);
+			if (!created_item)
+				PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+				return;
+			endif
+			if (!stackable)
+				created_item.color := cloth.color;
+				created_item.name := "a " + item_name + " [crafted by " + character.name + "]";
+				created_item.buyprice := 0;
+			endif
+
+			SendSysMessage (character, "You place the item in your backpack.");
+			SubtractAmount (cloth, material_needed);
+			if (autoupgrade_level)
+				var upgrade_material_needed := CINT (material_needed/2);
+				if (cloth.amount < upgrade_material_needed)
+					SendSysMessage (character, "You don't have enough material to upgrade that item!");
+					return;
+				endif
+				
+				var upgrade_skill := skill_needed + 15;
+				if (upgrade_skill > 110)
+					upgrade_skill := 110;
+				endif
+				if (upgrade_skill > GetAttribute (character, ATTRIBUTEID_TAILORING) + 20)
+					SendSysMessage (character, "Your skill is too low to upgrade that item.");
+					return;
+				endif
+				
+				var upgrade_timedelay := time_delay - 1;
+				if (!upgrade_timedelay or upgrade_timedelay < 0)
+					upgrade_timedelay := 1;
+				endif
+
+				if (characterx != character.x or charactery != character.y)
+					SendSysMessage (character, "You stop sewing.");
+					return;
+				endif
+
+				var upgrade_to_quality := 0;
+				if (autoupgrade_level == 1)
+					upgrade_to_quality := 1;
+				endif
+
+				PerformTailoringItemUpgrade (character, created_item, cloth, cloth,
+						SKILLID_TAILORING, upgrade_skill, upgrade_timedelay, item_name, upgrade_to_quality);
+			endif
+		else
+			SendSysmessage (character, "You failed, ruining some cloth.");
+			var ruined_amount := RandomInt (material_needed) + 1;
+			SubtractAmount (cloth, ruined_amount);
+		endif
+
+		if (cloth.amount < material_needed)
+			SendSysMessage (character, "You run out of cloth.");
+			return;
+		endif
+
+		if (characterx != character.x or charactery != character.y)
+			SendSysMessage (character, "You stop sewing.");
+			return;
+		endif
+	
+		if (created_item)
+			number_to_make := number_to_make - 1;
+		endif
+		sleep (2);
+	until (!number_to_make or number_to_make < 1);
+	
+	SendSysmessage (character, "You stop tailoring.");
+endfunction
+
+///////////////////
+//  allows the user to coat the given piece of equipment with another color
+///////////////////
+
+function DoLeatherColorChange (character, item, repair_skill)
+	if (repair_skill != SKILLID_TAILORING)
+		SendSysMessage (character, "That item is in full repair.");
+		return;
+	endif
+	if ( GetObjProperty (item,"ownerserial") )
+		SendSysMessage (character, "That has an owner's mark!");
+		return;
+	endif
+
+	var leather_cfg_file := ReadConfigFile( ":tailoring:leather_items" );
+	var elem := FindConfigElem (leather_cfg_file, item.graphic);
+	if (!elem)
+		SendSysMessage (character, "That item is in full repair.");
+		return;
+	endif
+
+	var material_needed := cint (elem.material/2);
+	var time_delay := elem.time;
+	if (time_delay > 1)
+		time_delay := time_delay - 1;
+	endif;
+
+	SendSysMessage (character, "That item is in full repair.");
+	SendSysMessage (character, "Reinforcing that item will take " + material_needed + " hides and 90 skill.");
+	if (GetAttribute (character, GetAttributeIDBySkillID (repair_skill)) < 90)
+		SendSysMessage (character, "Your skill is too low to reinforce that item.");
+		return;
+	endif
+
+	SendSysmessage (character, "Target some hides to reinforce the item with.");
+	var found_hides := Target (character);
+	if (!found_hides)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	if (!ReserveItem (found_hides) )
+		SendSysMessage (character, "You cannot use that right now.");
+		return;
+	endif
+	if (!IsTypeOfHide (found_hides) )
+		SendSysMessage (character, "That's not a hide!");
+		return;
+	endif
+	if (!Accessible (character, found_hides) )
+		SendSysMessage (character, "You can't reach that.");
+		return;
+	endif
+	if (found_hides.amount < material_needed)
+		SendSysMessage (character, "You need " + material_needed + " hides.  That's only " + found_hides.amount + "!");
+		return;
+	endif
+
+	var confirm_upgrade := YesNo (character, "Reinforce?");
+	if (!confirm_upgrade)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	for i := 1 to time_delay
+		PlaySoundEffect(character, SFX_TAILORING);
+		sleep (5);
+	endfor
+	PlaySoundEffect(character, SFX_TAILORING);
+	sleep (3);
+
+	if (RandomInt (1000) == 0)
+		SendSysMessage (character, "You fail, destroying the item.");
+		DestroyItem (item);
+		return;
+	elseif ( RandomInt (100) < 10 )
+		SendSysMessage (character, "You fail, destroying some hides.");
+		SubtractAmount (found_hides, RandomInt (material_needed) );
+		return;
+	else
+		SendSysMessage (character, "You succeed in reinforcing the item.");
+		item.color := found_hides.color;
+		SubtractAmount (found_hides, material_needed);
+		return;
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  changes the gender of plate armor from male to female and back again
+///////////////////
+
+function ChangeGenderOfLeatherArmor (character, item, repair_skill)
+	if (repair_skill != SKILLID_TAILORING)
+		SendSysMessage (character, "That item is in full repair.");
+		return;
+	endif
+	if ( GetObjProperty (item,"ownerserial") )
+		SendSysMessage (character, "That has an owner's mark!");
+		return;
+	endif
+
+	var leather_cfg_file := ReadConfigFile( ":tailoring:leather_items" );
+	var elem := FindConfigElem (leather_cfg_file, item.graphic);
+	if (!elem)
+		SendSysMessage (character, "That item is in full repair.");
+		return;
+	endif
+
+	var material_needed := cint (elem.material/2);
+	var time_delay := elem.time;
+	if (time_delay > 1)
+		time_delay := time_delay - 1;
+	endif;
+
+	SendSysMessage (character, "That item is in full repair.");
+	SendSysMessage (character, "Changing the gender of that item will take " + material_needed + " hides and 90 skill.");
+	if (GetAttribute (character, GetAttributeIDBySkillID (repair_skill)) < 90)
+		SendSysMessage (character, "Your skill is too low to reinforce that item.");
+		return;
+	endif
+
+	SendSysmessage (character, "Target some hides to change the gender of the item with.");
+	var found_hides := Target (character);
+	if (!found_hides)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	if (!ReserveItem (found_hides) )
+		SendSysMessage (character, "You cannot use that right now.");
+		return;
+	endif
+	if (!IsTypeOfHide (found_hides) )
+		SendSysMessage (character, "That's not a hide!");
+		return;
+	endif
+	if (!Accessible (character, found_hides) )
+		SendSysMessage (character, "You can't reach that.");
+		return;
+	endif
+	if (found_hides.amount < material_needed)
+		SendSysMessage (character, "You need " + material_needed + " hides.  That's only " + found_hides.amount + "!");
+		return;
+	endif
+
+	var confirm_upgrade := YesNo (character, "Change gender?");
+	if (!confirm_upgrade)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	for i := 1 to time_delay
+		PlaySoundEffect(character, SFX_TAILORING);
+		sleep (5);
+	endfor
+	PlaySoundEffect(character, SFX_TAILORING);
+	sleep (3);
+
+	if (RandomInt (1000) == 0)
+		SendSysMessage (character, "You fail, destroying the item.");
+		DestroyItem (item);
+		return;
+	elseif ( RandomInt (100) < 10 )
+		SendSysMessage (character, "You fail, destroying some hides.");
+		SubtractAmount (found_hides, RandomInt (material_needed) );
+		return;
+	else
+		SendSysMessage (character, "You succeed in modifying the item.");
+		case (item.graphic)
+			UOBJ_LEATHER_TUNIC:
+				item.graphic := UOBJ_LEATHER_FEMALE;
+			UOBJ_LEATHER_TUNIC2:
+				item.graphic := UOBJ_LEATHER_FEMALE;
+			UOBJ_LEATHER_FEMALE:
+				item.graphic := UOBJ_LEATHER_TUNIC;
+			UOBJ_STUDDED_TUNIC:
+				item.graphic := UOBJ_STUDDED_FEMALE;
+			UOBJ_STUDDED_FEMALE:
+			UOBJ_STUDDED_BUSTIER:
+				item.graphic := UOBJ_STUDDED_TUNIC;
+      0x2fc5:
+        item.graphic := 0x2fcb;
+      0x2fcb:
+        item.graphic := 0x2fc5;
+      0x2b74:
+        item.graphic := 0x2b79;
+      0x2b79:
+        item.graphic := 0x2b74;
+			default:
+				SendSysMessage (character, "Um, never mind.  I was thinking of a different type of item, I guess.");
+				return;
+		endcase
+		SubtractAmount (found_hides, material_needed);
+		return;
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  fortify a hat with a helm
+///////////////////
+
+function FortifyHat (character, hat)
+	var ownerserial := GetObjProperty (hat, "ownerserial");
+	var ownername := GetObjProperty (hat, "ownername");
+	if (ownerserial)
+		PrintTextAbovePrivate (hat,"That hat is owned by "+ownername, character );
+		return;
+	endif
+	
+	SendSysMessage (character, "Fortify this hat with what?");
+	var helm := Target (character);
+	if (!helm)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (!IsAHelm (helm))
+		SendSysMessage (character, "That's not a helmet.");
+		return;
+	endif
+
+	ownerserial := GetObjProperty (helm, "ownerserial");
+	ownername := GetObjProperty (helm, "ownername");
+	if (ownerserial)
+		PrintTextAbovePrivate (helm,"That helm is owned by "+ownername, character );
+		return;
+	endif
+	
+	if (!ReserveItem (helm))
+		SendSysMessage (character, "That helm is not available right now.");
+		return;
+	endif
+
+	if ( !InInventory (character.backpack, hat) or !InInventory (character.backpack, helm) )
+		SendSysMessage (character, "Both the hat and the helm need to be in your backpack.");
+		return;
+	endif
+
+	if (!CheckSkill (character, SKILLID_TAILORING, -1, 0))
+		SendSysMessage (character, "You fail and ruin the hat.");
+		DestroyItem (hat);
+		return;
+	endif
+
+	PlaySoundEffect(character, SFX_TAILORING);
+	sleep (5);
+	PlaySoundEffect(character, SFX_TAILORING);
+	sleep (3);
+
+	
+	var tempstring := TruncateArticle (helm.desc);
+	helm.graphic := hat.graphic;
+	helm.color := hat.color;
+	helm.name := "a fortified " + TruncateArticle (hat.desc) + " (" + tempstring + ")";
+	DestroyItem (hat);
+endfunction
+
+
+
+
+///////////////////
+//  determines if the given item is a type of hide
+///////////////////
+
+function IsTypeOfHide (item)
+
+	case (item.objtype)
+		UOBJ_HIDE:
+		UOBJ_BROWN_HIDE:
+		UOBJ_BLUE_HIDE:
+		UOBJ_RED_HIDE:
+		UOBJ_GREEN_HIDE:
+		UOBJ_SILVER_HIDE:
+			return 1;
+	endcase
+
+	return 0;
+
+endfunction
+
+
+
+
+///////////////////
+//  Determines if the given item objtype is a piece of leather armor
+///////////////////
+
+function IsClothItem (item)
+	case (item.graphic)
+		0x1F03:
+		0x204E:
+		0x153B:
+		0x153D:
+		0x1541:
+		0x1EFD:
+		0x1EFF:
+		0x1F01:
+		0x1F7B:
+		0x1F9F:
+		0x1FA1:
+		0x1FFD:
+		0x1515:
+		0x1517:
+		0x153A:
+		0x1516:
+		0x152E:
+		0x1537:
+		0x1539:
+		0x153F:
+		0x1543:
+		0x1713:
+		0x1714:
+		0x1715:
+		0x1718:
+		0x1719:
+		0x171A:
+		0x171B:
+		0x171C:
+		0x4000:
+		0x4001:
+		0x4002:
+		0x4003:
+		0x405f:
+		0x4060:
+		0x4061:
+		0x4062:
+		0x4063:
+		0x4064:
+		0x4065:
+		0x4066:
+		0x450d:
+		0x450e:
+		0x45a4:
+		0x45a5:
+		0x46aa:
+		0x46ab:
+		0x46b4:
+		0x46b5:
+		0x50d8:
+		0x50d9:
+			return 1;
+	endcase;
+
+	return 0;
+
+endfunction
+
+
+
+
+///////////////////
+//  Determines if the item objtype passed is a helm
+///////////////////
+
+function IsAHelm (item)
+
+	case (item.objtype)
+		0x1408:
+		0x1409:
+		0x140A:
+		0x140B:
+		0x140C:
+		0x140D:
+		0x140E:
+		0x140F:
+		0x1412:
+		0x1419:
+		0x1DB9:
+		0x1708b:
+		0x13BB:
+		0x13C0:
+		0x1708c:
+		0x1451:
+		0x236c:
+		0x2645:
+		0x2646:
+		0x2689:
+		0x268a:
+		0x2774:
+		0x2775:
+		0x2776:
+		0x2777:
+		0x2778:
+		0x2781:
+		0x2784:
+		0x2785:
+		0x2789:
+		0x278e:
+		0x27bf:
+		0x27c0:
+		0x27c1:
+		0x27c3:
+		0x27cc:
+		0x27cf:
+		0x27d0:
+		0x27d4:
+		0x27d9:
+		0x2b6e:
+		0x2b6f:
+		0x2b70:
+		0x2b71:
+		0x2b72:
+		0x2b73:
+			return 1;
+	endcase
+
+	return 0;
+
+endfunction
+
+
+
+
+///////////////////
+//  Allows the user to make leather items
+///////////////////
+
+function MakeLeatherItems (character, material)
+	//calls the SelectWhatToMakeFromMenu function found in makemenu.inc, in /scripts/include
+	var leather_cfg_file := ReadConfigFile ("leather_items");
+	var tailoring_menu_return := BuildTailoringCraftingMenu (character, ":tailoring:menu", ":tailoring:leather_items", "leathermenu", "Tailoring");
+	if (!tailoring_menu_return)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+	
+	var chosen_item := tailoring_menu_return[1];
+	var autoupgrade_level := tailoring_menu_return[2];
+	var upgrade_material_selectmethod := tailoring_menu_return[3];
+	var number_to_make := tailoring_menu_return[4];
+	if (!number_to_make or number_to_make < 1)
+		number_to_make := 1;
+	elseif (number_to_make > 5)
+		number_to_make := 5;
+	endif
+
+	var elem := FindConfigElem (leather_cfg_file, chosen_item);
+	if (!elem)
+		SendSysMessage (character, "There was an error making that item.");
+		return;
+	endif
+
+	//make sure they have enough material
+	var material_needed := CINT (elem.material);
+	if (material.amount < material_needed)
+		SendSysMessage (character, "You don't have enough material to make that!");
+		return;
+	endif
+
+	//make sure they can make how many they set
+	var max_number_to_make := CINT (material.amount/material_needed);
+	if (!max_number_to_make)
+		SendSysMessage (character, "You don't have enough material to make that! (error?)");
+		return;
+	elseif (number_to_make > max_number_to_make)
+		SendSysMessage (character, "You don't have enough material for that many!");
+		SendSysMessage (character, "(Now making " + max_number_to_make + ")");
+		number_to_make := max_number_to_make;
+	endif
+
+	//load some random variables from the cfg file
+	var item_skill := CINT (elem.skill);
+	var time_delay := CINT (elem.time);
+	var item_name := elem.name;
+
+	//save the character's position
+	var craftingbag := FindCraftingBag (character);
+	var characterx := character.x;
+	var charactery := character.y;
+
+	var upgrade_material := 0;
+	if (!elem.hasquality)
+		autoupgrade_level := 0;
+	elseif (autoupgrade_level)
+		if (upgrade_material_selectmethod == 0)
+			upgrade_material := material;
+		elseif (upgrade_material_selectmethod == 1)
+			upgrade_material := FindObjtypeInContainer (character.backpack, UOBJ_HIDE);
+			if (upgrade_material)
+				if (!ReserveItem (upgrade_material) )
+					SendSysMessage (character, "You cannot use that right now.");
+					return;
+				endif
+				if (upgrade_material.amount < material_needed)
+					SendSysMessage (character, "You need " + material_needed + " hides.  That's only " + upgrade_material.amount + "!");
+					return;
+				endif
+			else
+				SendSysMessage (character, "Can't find any plain hides.  Select another?");
+				upgrade_material := Target (character);
+				if (!upgrade_material)
+					SendSysMessage (character, "Canceled.");
+					return;
+				elseif (!IsTypeOfHide (upgrade_material) )
+					SendSysMessage (character, "That's not a hide!");
+					return;
+				endif
+				if (!ReserveItem (upgrade_material) )
+					SendSysMessage (character, "You cannot use that right now.");
+					return;
+				endif
+				if (!Accessible (character, upgrade_material) )
+					SendSysMessage (character, "You can't reach that.");
+					return;
+				endif
+				if (upgrade_material.amount < material_needed)
+					SendSysMessage (character, "You need " + material_needed + " hides.  That's only " + upgrade_material.amount + "!");
+					return;
+				endif
+			endif
+		elseif (upgrade_material_selectmethod == 2)
+			SendSysMessage (character, "Select the hides to use to upgrade:");
+			upgrade_material := Target (character);
+			if (!upgrade_material)
+				SendSysMessage (character, "Canceled.");
+				return;
+			elseif (!IsTypeOfHide (upgrade_material) )
+				SendSysMessage (character, "That's not a hide!");
+				return;
+			endif
+			if (!ReserveItem (upgrade_material) )
+				SendSysMessage (character, "You cannot use that right now.");
+				return;
+			endif
+			if (!Accessible (character, upgrade_material) )
+				SendSysMessage (character, "You can't reach that.");
+				return;
+			endif
+			if (upgrade_material.amount < material_needed)
+				SendSysMessage (character, "You need " + material_needed + " hides.  That's only " + upgrade_material.amount + "!");
+				return;
+			endif
+		else
+			SendSysMessage (character, "Error: autoupgrade material selection return invalid");
+			return;		
+		endif
+	endif
+
+	SendSysMessage (character, "You begin tailoring...");
+	var created_item;
+	repeat
+		created_item := 0;
+		for i := 1 to time_delay
+			PlaySoundEffect(character, SFX_TAILORING);
+			sleep (5);
+		endfor
+		PlaySoundEffect(character, SFX_TAILORING);
+		sleep (3);
+
+		if (!CheckSkill (character, SKILLID_TAILORING, item_skill, 0))
+			var lossamount := RandomInt (CINT ( material_needed/3) )+1;
+			SubtractAmount (material, lossamount);
+			SendSysmessage (character, "You fail, destroying some hides.");
+		else
+			created_item := CreateItemInContainer (craftingbag, chosen_item, 1);
+			if (!created_item)
+				PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+				return;
+			endif
+			created_item.hp := created_item.maxhp;
+
+			SendSysMessage (character, "You place the item in your backpack.");
+			//set the color
+			if (material.color)
+				created_item.color := material.color;
+			endif
+			SetObjProperty (created_item, "material_objtype", material.objtype);
+			SubtractAmount (material, material_needed);
+			created_item.buyprice := 0;
+			
+			if (autoupgrade_level)
+				var upgrade_material_needed := CINT (material_needed/2);
+				if (upgrade_material.amount < upgrade_material_needed)
+					SendSysMessage (character, "You don't have enough material to upgrade that item!");
+					return;
+				endif
+				
+				var upgrade_skill := item_skill + 15;
+				if (upgrade_skill > 110)
+					upgrade_skill := 110;
+				endif
+				if (upgrade_skill > GetAttribute (character, ATTRIBUTEID_TAILORING) + 20)
+					SendSysMessage (character, "Your skill is too low to upgrade that item.");
+					return;
+				endif
+				
+				var upgrade_timedelay := time_delay - 1;
+				if (!upgrade_timedelay or upgrade_timedelay < 0)
+					upgrade_timedelay := 1;
+				endif
+
+				if (characterx != character.x or charactery != character.y)
+					SendSysMessage (character, "You stop sewing.");
+					return;
+				endif
+
+				var upgrade_to_quality := 0;
+				if (autoupgrade_level == 1)
+					upgrade_to_quality := 1;
+				endif
+
+				PerformTailoringItemUpgrade (character, created_item, upgrade_material, upgrade_material,
+						SKILLID_TAILORING, upgrade_skill, upgrade_timedelay, item_name, upgrade_to_quality);
+			endif
+		endif
+
+		if (!material or material.amount < material_needed)
+			SendSysMessage (character, "You run out of leather.");
+			return;
+		endif
+		
+		if (characterx != character.x or charactery != character.y)
+			SendSysMessage (character, "You stop sewing.");
+			return;
+		endif
+		
+		if (created_item)
+			number_to_make := number_to_make - 1;
+		endif
+		sleep (2);
+	until (!number_to_make or number_to_make < 1);
+	SendSysMessage (character, "You stop sewing.");
+endfunction
+

@@ -1,0 +1,14 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/wodinc";
+include "include/utility";
+include "include/gumps";
+
+program test_url (character)
+	SendSysMessage (character, "Opening WoD://stuff/ in 3 seconds");
+	sleep (3);
+	OpenBrowser (character, "WoD://stuff/");
+endprogram

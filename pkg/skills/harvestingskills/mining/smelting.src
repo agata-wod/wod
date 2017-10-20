@@ -1,0 +1,172 @@
+use uo;
+use os;
+use util;
+use attributes;
+
+include "include/client";
+include "include/objtype";
+include "include/gumps";
+
+program smelt_that_ore ( character , ore )
+	if (!ReserveItem (ore))
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+	
+	if (!Accessible (character, ore))
+		SendSysmessage (character, "You can't reach that.");
+		return;
+	endif
+
+	case( ore.objtype )
+		UOBJ_IRON_ORE:			SmeltOre ( character , ore , UOBJ_IRON_INGOT		, 30 , 0 );
+		UOBJ_BRONZE_ORE:		SmeltOre ( character , ore , UOBJ_BRONZE_INGOT	, 60 , 0 );
+		UOBJ_DULLCOPPER_ORE:	SmeltOre ( character , ore , UOBJ_DULLCOPPER_INGOT, 70 , 0 );
+		UOBJ_COPPER_ORE:		SmeltOre ( character , ore , UOBJ_COPPER_INGOT	, 80 , 0 );
+		UOBJ_ONYX_ORE:			SmeltOre ( character , ore , UOBJ_ONYX_INGOT		, 85 , 0 );
+		UOBJ_PYRITE_ORE:		SmeltOre ( character , ore , UOBJ_PYRITE_INGOT	, 90 , 0 );
+		UOBJ_MALACHITE_ORE:		SmeltOre ( character , ore , UOBJ_MALACHITE_INGOT	, 95 , 0 );
+		UOBJ_AZURITE_ORE:		SmeltOre ( character , ore , UOBJ_AZURITE_INGOT	, 99 , 0 );
+		UOBJ_BLUESTEEL_ORE:		SmeltOre ( character , ore , UOBJ_BLUESTEEL_INGOT , 99 , 0 );
+		UOBJ_RUBYSTEEL_ORE:		SmeltOre ( character , ore , UOBJ_RUBYSTEEL_INGOT , 99 , 0 );
+		UOBJ_SAND:			SmeltOre ( character , ore , UOBJ_GLASS			, 40 , 0 );
+		UOBJ_GOLD_COIN:		MakeGoldBars ( character, ore );
+		default:				SendSysmessage( character , "You can't smelt that." );
+	endcase
+
+endprogram
+
+
+
+
+///////////////////
+// Does the actual smelting, producing the ingot specified
+///////////////////
+
+function SmeltOre ( character , ore , ingot , difficulty , points )
+	var firebeetle;
+	if (!FindForgeInArea (character))
+		firebeetle := FindFireBeetle (character);
+		if (firebeetle)
+			PlaySoundEffect (firebeetle, 0x228);
+		else
+			SendSysMessage (character, "You must be near a forge to smelt ore!");
+			return;
+		endif
+			
+	endif
+
+	if ( CheckSkill (character, SKILLID_MINING, difficulty, points ) )
+		var ingots := CreateItemInBackpack ( character, ingot, ore.amount );
+		if (!ingots)
+			PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+			return;
+		endif
+		DestroyItem (ore);
+		SendSysmessage (character, "You create some ingots and place them in your pack.");
+		return;
+	else
+		SubtractAmount (ore, 1);
+		SendSysmessage (character, "You destroy some material." );
+		return;
+	endif    
+endfunction
+
+function FindFireBeetle (character)
+	foreach mobile in (ListMobilesNearLocation (character.x, character.y, character.z, 2, character.realm))
+		if (mobile.npctemplate == ":tokuno:firebeetle")
+			if (GetObjProperty (mobile, "master") == character.serial)
+				return mobile;
+			endif
+		endif
+	endforeach
+	return 0;
+endfunction
+
+
+
+///////////////////
+//  Searches the area around the character for a forge
+///////////////////
+
+function FindForgeInArea (character)
+	foreach item in ListItemsNearLocation(character.x, character.y, character.z,2, character.realm)
+		if ( item.objtype >= UOBJ_FORGE_START and item.objtype <= UOBJ_FORGE_END )
+			return 1;
+		else
+			case (item.objtype)
+				UOBJ_SMALL_FORGE:
+				UOBJ_ELVEN_FORGE:
+				UOBJ_SOULFORGE:
+				UOBJ_SOULFORGE_NW:
+				UOBJ_SOULFORGE_NE:
+				UOBJ_SOULFORGE_SW:
+				UOBJ_SOULFORGE_SE:
+					return 1;
+			endcase
+		endif
+	endforeach
+	foreach item in ListStaticsNearLocation (character.x, character.y, character.z, 2, ITEMS_IGNORE_MULTIS, character.realm)
+		if ( item.objtype >= UOBJ_FORGE_START and item.objtype <= UOBJ_FORGE_END )
+			return 1;
+		else
+			case (item.objtype)
+				UOBJ_SMALL_FORGE:
+				UOBJ_ELVEN_FORGE:
+				UOBJ_SOULFORGE:
+				UOBJ_SOULFORGE_NW:
+				UOBJ_SOULFORGE_NE:
+				UOBJ_SOULFORGE_SW:
+				UOBJ_SOULFORGE_SE:
+					return 1;
+			endcase
+		endif
+	endforeach
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Creates gold bars out of gold coins
+///////////////////
+
+function MakeGoldBars (character, gold)
+	if (!FindForgeInArea (character))
+		SendSysMessage (character, "You must be near a forge to smelt gold.");
+		return;
+	endif
+
+	if (gold.amount < 100)
+		SendSysmessage (character, "It doesn't look like you have enough gold");
+		return;
+	endif
+
+	if (!YesNo (character,"Melt coins?"))
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (CheckSkill( character, SKILLID_BLACKSMITHY, 40, 0 ))
+		var theamount;
+		if (gold.amount < 100)
+			SendSysmessage (character, "It doesn't look like you have enough gold");
+			return;
+		else
+			theamount := CINT (gold.amount /100);
+		endif
+
+		var ingots := CreateItemInBackpack (character, UOBJ_GOLD_INGOT, theamount);
+		if (!ingots)
+			PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+			return;
+		endif
+		SubtractAmount (gold, CINT (theamount*100));
+		SendSysmessage (character, "You create some gold ingots and place them in your pack." );
+	else
+		SubtractAmount (gold, randomint(30) + 3);
+		SendSysmessage (character, "You destroy some material." );
+	endif
+
+endfunction

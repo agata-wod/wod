@@ -1,0 +1,54 @@
+use os;
+use uo;
+
+program walk_on_moongate( mobile, gate )
+
+	set_critical(1);
+	if ( GetObjProperty (mobile, "#justgated") )
+		return;
+	endif
+
+	var x := GetObjProperty (gate, "DestX");
+	var y := GetObjProperty (gate, "DestY");
+	var z := GetObjProperty (gate, "DestZ");
+	var rlm := GetObjProperty (gate, "DestR");
+	if (!x or !y)
+		return;
+	endif
+	PlaySoundEffect (mobile, 0x1f1);
+	PlayStationaryEffect (mobile.x, mobile.y, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+	sleepms (250);
+	PlayStationaryEffect (mobile.x-1, mobile.y-1, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+	PlayStationaryEffect (mobile.x-1, mobile.y+1, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+	PlayStationaryEffect (mobile.x+1, mobile.y-1, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+	PlayStationaryEffect (mobile.x+1, mobile.y+1, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+	sleepms (250);
+	PlayStationaryEffect (mobile.x-1, mobile.y, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+	PlayStationaryEffect (mobile.x, mobile.y-1, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+	PlayStationaryEffect (mobile.x+1, mobile.y, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+	PlayStationaryEffect (mobile.x, mobile.y+1, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+	sleepms (250);
+	PlayStationaryEffect (mobile.x, mobile.y, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+	if(MoveObjectToLocation( mobile, x, y, z, rlm, MOVEOBJECT_NORMAL ))
+		mobile.concealed := 1;
+		SetObjProperty (mobile, "#justgated", 1);
+		sleepms (250);
+		PlayStationaryEffect (mobile.x, mobile.y, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+		sleepms (250);
+		PlayStationaryEffect (mobile.x-1, mobile.y-1, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+		PlayStationaryEffect (mobile.x-1, mobile.y+1, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+		PlayStationaryEffect (mobile.x+1, mobile.y-1, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+		PlayStationaryEffect (mobile.x+1, mobile.y+1, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+		sleepms (250);
+		PlayStationaryEffect (mobile.x-1, mobile.y, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+		PlayStationaryEffect (mobile.x, mobile.y-1, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+		PlayStationaryEffect (mobile.x+1, mobile.y, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+		PlayStationaryEffect (mobile.x, mobile.y+1, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+		sleepms (250);
+		PlayStationaryEffect (mobile.x, mobile.y, mobile.z+1, 0x3728, 0x0a, 0x0d, 0, mobile.realm);
+		mobile.concealed := 0;
+		sleepms (250);
+		EraseObjProperty (mobile, "#justgated");
+	endif
+	
+endprogram

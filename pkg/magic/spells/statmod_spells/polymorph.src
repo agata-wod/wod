@@ -1,0 +1,90 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 7;
+
+program cast_poly( parms, spellid )
+	if (parms[1] == "#MOB")
+		CastToad (parms[2], parms[3]);
+		return;
+	endif
+
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+
+//	if (!CanMod (caster, "poly"))
+//		SendSysMessage (caster, "You cannot cast this spell in your present form!");
+//		return 0;
+//	endif
+
+	var Critgroup;
+	if (caster_magery < 70)
+		Critgroup := RandomInt(2);
+	elseif (caster_magery < 85)
+		Critgroup := RandomInt(2)+1;
+	elseif (caster_magery < 95)
+		Critgroup := RandomInt(2)+2;
+	else
+		Critgroup := 3;
+	endif
+
+	var mod_amount := (critgroup*3) + RandomInt(4);
+	if (caster_evalint > 90)
+		var new_mod_amount := (critgroup*3) + RandomInt(4);
+		if (new_mod_amount > mod_amount)
+			mod_amount := new_mod_amount;
+		endif
+	endif
+
+	var newcolor := 1401 + (critgroup*10) + RandomInt(8);
+	var caster_med := GetAttribute (caster, ATTRIBUTEID_MEDITATION);
+	var caster_second_mageskill := caster_evalint;
+	var caster_animallore := GetAttribute (caster, ATTRIBUTEID_ANIMALLORE);
+	if (caster_animallore > caster_second_mageskill)
+		caster_second_mageskill := caster_animallore;
+	endif
+
+	var caster_spiritspeak:= GetAttribute (caster, ATTRIBUTEID_NECROMANCY);
+	if (caster_spiritspeak > caster_second_mageskill)
+		caster_second_mageskill := caster_spiritspeak;
+	endif
+
+	var bonusskillval := caster_magery + caster_med + caster_second_mageskill - 200;
+	if (bonusskillval > 0)
+		bonusskillval := CINT (bonusskillval/10);
+		mod_amount := mod_amount + bonusskillval;
+	endif
+
+	var duration := CalcModDuration ();
+	DoTempMod (caster, "poly", mod_amount, duration, "Polymorph Spell");
+	DoPersistedMod (caster, "color", newcolor, caster.color, duration, "Polymorph Spell");
+
+//	if (CanMod(caster, "graphic"))
+//		DoPersistedMod (cast_on, "graphic", crittergraphic, caster.trueojtype, duration);
+//	endif
+	return 1;
+endprogram
+
+function CastToad(caster,cast_on)
+	cast_on := CheckMagicReflection (caster, cast_on);
+	if (!cast_on)
+		return 0;
+	endif
+
+	PlayStationaryEffect (cast_on.x, cast_on.y, cast_on.z, FX_SMOKE, 0xA, 0xA, 0, cast_on.realm);
+	PlaySoundEffect (cast_on, SFX_SPELL_MANA_VAMPIRE);
+
+	var mod_amount := Resisted (caster, cast_on, GetModAmount (caster_magery) );
+	var duration := CINT (GetModDuration (caster_magery)/3);
+
+	DoTempMod (cast_on, "cpoly", 0 - mod_amount, duration, "Polymorph Spell");
+	DoPersistedMod (cast_on, "color", 1425, cast_on.color, duration, "Polymorph Spell");
+	DoPersistedMod (cast_on, "graphic", 0x51, cast_on.graphic, duration, "Polymorph Spell");
+endfunction

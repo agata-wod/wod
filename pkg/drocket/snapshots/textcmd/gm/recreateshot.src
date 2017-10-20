@@ -1,0 +1,42 @@
+use uo;
+use cfgfile;
+
+program recreateshot( who, text )
+
+	if (!len(text))
+		SendSysMessage( who, "Usage is: .recreateshot [shotname]" );
+		return;
+	endif
+
+	var filename := lower( text );
+
+	var cfg := ReadConfigFile( filename );
+	if (!cfg)
+		SendSysMessage( who, "Unable to read " + filename );
+		return;
+	endif
+
+	var elem;
+//	foreach key in GetConfigIntKeys( cfg );
+
+	for key :=  1 to GetConfigMaxIntKey (cfg)
+		elem := FindConfigElem( cfg, key );
+		if (!elem.realm)
+			elem.realm := REALM_BRITANNIA;
+		endif
+		var item := CreateItemAtLocation( elem.x, elem.y, elem.z, elem.objtype, elem.amount, elem.realm );
+		if (item)
+			if ( item.desc != elem.desc )
+				item.name := elem.desc;
+			endif
+			item.graphic := elem.graphic;
+			item.color := elem.color;
+			if (elem.facing)
+				item.facing := elem.facing;
+			endif
+			item.movable := elem.movable;
+		endif
+	endfor
+	UnloadConfigFile( filename );
+
+endprogram

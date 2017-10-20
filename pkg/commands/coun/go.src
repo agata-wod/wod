@@ -1,0 +1,143 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+var goloc_cfgfile;
+
+program textcmd_go (character, text)
+	goloc_cfgfile := readconfigfile ("golocs");
+	if (!goloc_cfgfile)
+		SendSysMessage (character, "Error reading goloc file");
+		return;
+	endif
+
+	text := Lower (text);
+	if (!text)
+		DisplayTravelGump (character);
+		return;
+	endif
+
+	var tname := lower (character.acctname) + " " + text;
+	var elem := goloc_cfgfile[tname];
+	if (!elem)
+		tname := "all" + " " + text;
+		elem := goloc_cfgfile[tname];
+	endif
+
+	if (!elem)
+		SendSysmessage (character, "Unknown Location");
+		return;
+	endif
+	var gorealm := elem.realm;
+	if (!gorealm)
+		gorealm := _DEFAULT_REALM;
+	endif
+
+	MoveObjectToLocation( character, elem.x, elem.y, elem.z, gorealm, MOVEOBJECT_FORCELOCATION );
+endprogram
+
+
+
+
+///////////////////
+//  If no text is supplied, a gump is shown that allows them to select a location
+///////////////////
+
+function DisplayTravelGump (character)
+	var rootelem := FindConfigElem (goloc_cfgfile, "masterlist");
+	if (!rootelem)
+		SendSysMessage (character, "Error finding root travel locations element");
+		return;
+	endif
+	
+	//Array of the names of the golocs
+	var loc_array := GetConfigStringArray (rootelem, "location");
+	if (!len (loc_array))
+		SendSysMessage (character, "No go locations set");
+		return;
+	endif
+	
+	//Lets turn this into an easier to read menu
+	var max_pages := 1;
+	var travel_locations := array{};
+	for i := 1 to len (loc_array)
+		var thisloc := loc_array[i];
+
+		if (thisloc == "PAGEBREAK")
+			travel_locations.append ("PAGE BREAK");
+			max_pages := max_pages + 1;
+		else
+			var elem := FindConfigElem (goloc_cfgfile, "all " + thisloc);
+			if (!elem)
+				SendSysMessage (character, "Error finding element " + thisloc);
+				return;
+			endif
+			var temparray := array{elem.desc, elem.x, elem.y, elem.z, elem.realm};
+			travel_locations.append (temparray);
+		endif
+	endfor
+	
+	var gump_layout := array {
+		"page 0",
+		"nodispose",
+		"resizepic 50 50 2620 310 470",
+		"text 70 59 40 0",
+		"text 120 59 40 1",
+		"page 1"
+	};
+
+	var gump_data := array {
+		"Go",
+		"Location"
+	};
+	
+	var current_page := 1;
+	var current_y := 85;
+	for i := 1 to len (travel_locations)
+		var thisloc := travel_locations[i];
+		
+		if (thisloc == "PAGE BREAK")
+			if (current_page != max_pages and current_page != 0)
+				gump_layout.append ("button 320 480 5601 5605 0 " + (current_page+1));
+			endif
+
+			current_page := current_page + 1;
+			gump_layout.append ("page " + current_page);
+			current_y := 85;
+
+  			gump_data.append ("PAGE BREAK");
+			if (current_page != 1)
+				gump_layout.append ("button 70 480 5603 5607 0 " + (current_page-1));
+			endif
+
+		else
+			gump_layout.append ("button 70 " + (current_y+5) + " 2118 2117 1 1 " + i);
+			gump_layout.append ("text 100 " + current_y + " 40 " + (i+1));
+			gump_data.append (thisloc[1]);
+			current_y := current_y + 25;
+		endif	
+	endfor
+
+	var gump_return := SendDialogGump (character, gump_layout, gump_data);
+	if (!gump_return or !gump_return[0])
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	var selected_travel_loc := travel_locations[gump_return[0]];
+	if (!selected_travel_loc or !len (selected_travel_loc))
+		SendSysMessage (character, "Ack, this isn't supposed to happen!");
+		return;
+	endif
+	var travelrealm := selected_travel_loc[5];
+	if (!travelrealm)
+		travelrealm := _DEFAULT_REALM;
+	endif
+	MoveObjectToLocation(character,selected_travel_loc[2],selected_travel_loc[3],selected_travel_loc[4],travelrealm,MOVEOBJECT_FORCELOCATION );
+	return;
+endfunction
+
+
+
+

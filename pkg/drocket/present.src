@@ -1,0 +1,27 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/magicitems";
+
+program open_present (character, package)
+	SendSysMessage (character, "You open the package and find...");
+	
+	package.locked := 0;
+	foreach item in ListRootItemsInContainer (package)
+		if (package.container)
+			if (!MoveItemToContainer (item, package.container))
+				MoveObjectToLocation( item, character.x, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION );
+			endif
+		else
+if(!MoveObjectToLocation( item, package.x, package.y, package.z, package.realm, MOVEOBJECT_FORCELOCATION ))
+	MoveObjectToLocation( item, character.x, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION );
+endif
+		endif
+		SendSysMessage (character, item.desc + "!");
+	endforeach
+	DestroyItem (package);
+endprogram
+

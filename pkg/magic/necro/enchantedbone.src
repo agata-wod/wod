@@ -1,0 +1,18 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/magic";
+
+program use_enchantedbone (character, bone)
+
+	var cast_loc := struct;
+	cast_loc.+x := character.x;
+	cast_loc.+y := character.y;
+	cast_loc.+z := character.z;
+	cast_loc.+realm := character.realm;
+
+	SummonCreature (character, "skeleton", cast_loc, 3600);
+	SubtractAmount (bone, 1);
+
+endprogram

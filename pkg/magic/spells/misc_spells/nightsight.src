@@ -1,0 +1,47 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 1;
+
+program cast_nightsight( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms);
+	if (!cast_on)
+		return 0;
+	endif
+
+	var range := CINT (GetAttribute (caster, ATTRIBUTEID_MAGERY)/15);
+	var duration := GetAttribute (caster, ATTRIBUTEID_MAGERY) * 60;
+
+	PlaySoundEffect (caster, SFX_SPELL_NIGHT_SIGHT );
+	var daylight_brightness := GetGlobalProperty ("daylight_level");
+	if (!daylight_brightness)
+		daylight_brightness := 0;
+	endif
+
+	if (caster.x > 5260 and caster.x < 5340 and caster.y > 1870 and caster.y < 1940)
+		daylight_brightness := 20;
+	elseif (caster.x > 5670 and caster.x < 5870 and caster.y > 790 and caster.y < 1010)
+		daylight_brightness := 20;
+	elseif (caster.x > 5240 and caster.x < 5280 and caster.y > 1740 and caster.y < 1780)
+		daylight_brightness := 20;
+	elseif (caster.x > 5190 and caster.x < 5230 and caster.y > 1720 and caster.y < 1765)
+		daylight_brightness := 20;
+	endif
+
+	foreach mobile in ListMobilesNearLocation (cast_on.x, cast_on.y, cast_on.z, range, cast_on.realm);
+		if (mobile.race != RACE_ELF)
+			mobile.setlightlevel (daylight_brightness, duration);
+			PlayObjectCenteredEffect (mobile, FX_BLESS_EFFECT, 10, 10);
+		endif
+	endforeach
+	return 1;
+endprogram

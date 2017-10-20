@@ -1,0 +1,18 @@
+use uo;
+use os;
+
+program test_target (character)
+	SendSysMessage (character, "Target something now:");
+	var targetted := TargetCoordinates (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	
+	if (targetted.item)
+		SendSysMessage (character, "Targetted was " + targetted.item.desc);
+	else
+		SendSysMessage (character, "Unable to find targetted.");
+	endif
+
+endprogram

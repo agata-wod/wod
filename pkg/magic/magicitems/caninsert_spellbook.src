@@ -1,0 +1,12 @@
+use uo;
+use os;
+
+program caninsert_spellbook (character, spellbook, movetype, inserttype, scroll, existing_stack, amt_to_add)
+	if (existing_stack)
+		SendSysMessage (character, "You already have that spell in your spellbook!");
+		return 0;
+	endif
+	if (amt_to_add and spellbook and movetype and inserttype and scroll)
+	endif
+	return 1;
+endprogram

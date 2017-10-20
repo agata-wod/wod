@@ -1,0 +1,328 @@
+///////////////////
+//This AI is for wandering NPCs that can be hired by players.  When they are hired, they switch to the henchman script
+///////////////////
+
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/sleepmode_townfolk";
+include "../pkg/npcs/main_ai/combat/fightmode_normal_default";
+include "../pkg/npcs/main_ai/combat/closedistance_default";
+include "../pkg/npcs/main_ai/combat/gethelp_good";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/speech";
+
+include ":contextMenus:contextMenus";
+
+include "../pkg/npcs/townfolk/guards/henchman";
+
+const HALT_THRESHOLD := 8; // how close before he attacks?
+var last_error_message := ReadGameClock();
+drop_anchor();
+
+program Warrior()
+	sleep (1);
+	if (GetObjProperty (me, "master") )
+		me.script := ":guards:henchman";
+		RestartScript (me);
+		return;
+	endif
+
+	if (!me.backpack)
+		DoOnCreationSetup ();
+		foreach item in ListEquippedItems (me)
+			SetObjProperty (item, "mine", 1);
+		endforeach
+	endif
+	DoStartupSetup ();
+	SetUpSpeech ();
+	
+	if (getobjproperty(me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	if (GetObjProperty (me, "color") )
+		me.color := GetObjProperty (me, "color");
+	endif
+	
+	if (GetObjProperty (me, "race") )
+		me.race := GetObjProperty (me, "race");
+	endif
+	
+	if (me.race == RACE_ELF)
+		me.graphic := 605+me.gender;
+	elseif (me.race == RACE_GARGOYLE)
+		me.graphic := 666+me.gender;
+	else
+		me.graphic := 400+me.gender;
+	endif
+	SetObjProperty (me, "gender", me.gender);
+	me.title_suffix := " the Warrior";
+	me.title_race := "";
+
+	//if they have a master, they shouldn't be using this script
+	if (GetObjProperty (me, "master"))
+		me.script := ":guards:henchman";
+		RestartScript (me);
+		return;
+	endif
+
+	post_combat ();
+	main_AI_loop ();
+endprogram
+
+function process_combat_event (byref ev)
+	OpenDoors (ev.source);
+
+	case (ev.type)
+		EVID_DAMAGED:
+			if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life") * 0.75))
+				ApplyHealing ();
+			endif
+			if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/10))
+				EraseObjProperty (me, "#flees");
+				Flee (ev.source);
+			endif
+	endcase
+endfunction
+
+function in_combat_event_loop (byref opponent)
+	if (opponent)
+	endif
+endfunction
+
+function prepare_for_fight(opponent)
+	if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life") * 0.75))
+		ApplyHealing ();
+	endif
+	if (opponent)
+	endif
+	DisableMainEvents ();
+	EnableCombatEvents ();
+endfunction
+
+function post_combat()
+	if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life") * 0.75))
+		ApplyHealing ();
+	endif
+
+	DisableCombatEvents();
+	EnableMainEvents();
+
+	SetWarMode ( 0 );
+	SetOpponent ( 0 );
+
+	sleep(1);
+	look_around();
+endfunction
+
+function main_AI_loop (next_wander := 0)
+
+	var ev;
+	var wanders := 100;
+	next_look_around := ReadGameClock () + 300;
+	look_around();
+	EnableMainEvents();
+
+	while (me)
+		if (wanders > 60)
+			wanders := 0;
+			ev := sleepmode();
+		else
+			ev := wait_for_event (2);
+		endif
+
+		if (ReadGameClock () > next_wander)
+			if (GetObjProperty (me, "destinationx"))
+				var mydestx := GetObjProperty (me, "destinationx");
+				var mydesty := GetObjProperty (me, "destinationy");
+				var steps := CINT (GetObjProperty (me, "destinationsteps"));
+				SetObjProperty (me, "destinationsteps", CINT(steps + 1));
+				WalkTowardLocation (mydestx, mydesty);
+				if ( (me.x == mydestx and me.y == mydesty) or ( steps > 10 ) )
+					EraseObjProperty (me, "destinationx");
+					EraseObjProperty (me, "destinationy");
+					EraseObjProperty (me, "destinationsteps");
+				endif
+				next_wander := ReadGameClock ();
+			else	
+				wander();
+				wanders := wanders + 1;
+				next_wander := ReadGameClock () + 3;
+			endif
+		endif
+
+		if (ev)
+			repeat
+				case (ev.type)
+					EVID_CONTEXT_MENU:
+						if (ev.result == eCMR_Hire)
+							var newev := struct;
+							newev.+type := EVID_SPEECH;
+							newev.+source := ev.source;
+							newev.text := "join";
+							sendevent (me, newev);
+						endif
+					EVID_SPEECH:
+						wanders := 0;
+						next_wander := ReadGameClock() + 60;
+						var evtext := lower (ev.text);
+						if (evtext[lower(me.name)])
+						TurnToward (ev.source);
+							say ("Hi there, " + ev.source.name);
+						elseif (evtext ["join"])
+							TurnToward (ev.source);
+							JoinPlayer (ev.source);
+						elseif (!AskToJoin (ev.source))
+							check_speech (ev.text, ev.source);
+						endif
+					EVID_ITEM_GIVEN:
+						TakeItem (ev.source,ev.item);
+						next_wander := ReadGameClock () + 60;
+					EVID_ALL_ATTACK_CMD:
+						Fight ( ev.source );
+					EVID_ENGAGED:
+					EVID_DAMAGED:
+						if (ev.source)
+							GetHelpFromAllies ( ev.source );
+							Fight (ev.source);
+						endif
+					EVID_ALL_FOLLOW_CMD:
+						SetObjProperty (me, "destinationx", ev.x);
+						SetObjProperty (me, "destinationy", ev.y);
+						SetObjProperty (me, "destinationsteps", 0);
+						drop_anchor ();
+						WalkTowardLocation (ev.x, ev.y);
+				endcase
+				ev := wait_for_event ( 2 );
+			until (!ev);
+		endif
+	endwhile
+endfunction
+
+
+
+
+///////////////////
+//  give out spam about joining players that they come across
+///////////////////
+
+function AskToJoin (byref player)
+	if (ReadGameClock() > last_error_message + 20)
+		return 0;
+	endif
+
+	var leadership := GetAttribute (player, ATTRIBUTEID_LEADERSHIP);
+	if (leadership < CINT (GetAttributeBaseValue (me, "Strength")/10))
+		return 0;
+	endif
+
+	last_error_message := ReadGameClock();
+	say ("I want to be a great warrior someday.");
+	sleep (1);
+	say ("You look like a capable leader.  If you will train me, I would follow you.");
+	sleep (1);
+	say ("Would you like for me to JOIN you?");
+	return 1;
+
+endfunction
+
+
+
+
+///////////////////
+//  if the player asks the warrior to join them
+///////////////////
+
+function JoinPlayer (byref player)
+	var leadership := GetAttribute (player, ATTRIBUTEID_LEADERSHIP);
+	if (leadership < CINT (GetAttributeBaseValue (me, "Strength")/10))
+		say ("You don't look like much of a leader, to me.");
+		return 0;
+	endif
+
+	if (CountAccountHenchmen (player.serial) >= MAX_HENCHMEN_PER_ACCOUNT)
+		Say ("I think you have your hands full already.");
+		return 0;
+	endif
+
+	set_critical (1);
+	var men := 0;
+	foreach mobile in ListMobilesNearLocation (me.x, me.y, me.z, 20, me.realm)
+		if (mobile.script[":guards:henchman"] and GetObjProperty (mobile, "master") == player.serial)
+			men := men + 1;
+		endif
+	endforeach
+	set_critical(0);
+
+	if (men >= MAX_HENCHMEN_AT_A_TIME)
+		Say ("I think you have your hands full already.");
+		return;
+	endif
+
+	foreach attributeid in ListSkillAttributes ()
+		var skill := GetAttribute (player, attributeid);
+		if (skill > (leadership + 20))
+			skill := leadership + 20;
+		endif
+		SetAttributeBaseValue (me, attributeid, skill*10);
+	endforeach
+
+	var basestr := GetAttributeBaseValue (me, "Strength");
+	if (basestr > leadership*100)
+		SetAttributeBaseValue (me, "Strength", leadership*10);
+	endif
+
+	var baseint := GetAttributeBaseValue (me, "Intelligence");
+	if (baseint > leadership*100)
+		SetAttributeBaseValue (me, "Intelligence", leadership*10);
+	endif
+
+	var basedex := GetAttributeBaseValue (me, "Dexterity");
+	if (basedex > leadership*100)
+		SetAttributeBaseValue (me, "Dexterity", leadership*10);
+	endif
+
+	Say ("Wow, I've learned so much from you already!");
+	SetObjProperty (me, "master", player.serial);
+	SetObjProperty (me, "race", me.race);
+
+	set_critical (1);
+	if ( GetObjProperty (me, "regspawn") )
+		var SpawnName := GetObjProperty (me, "regspawn");
+		var numspawns := CINT (GetGlobalProperty (SpawnName))-1;
+		SetGlobalProperty (SpawnName, numspawns);
+		EraseObjProperty (me, "regspawn");
+	endif
+	set_critical (0);
+
+	me.script := ":guards:henchman";
+	RestartScript (me);
+	return;
+endfunction
+
+
+
+
+
+function look_around ()
+	return;
+endfunction
+
+function EnableMainEvents()
+	DisableEvents (SYSEVENT_LEFTAREA + SYSEVENT_DISENGAGED + SYSEVENT_OPPONENT_MOVED );
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_ENTEREDAREA, HALT_THRESHOLD);
+	EnableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN, 3);
+endfunction
+
+function DisableMainEvents()
+	DisableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED + SYSEVENT_ENTEREDAREA);
+	DisableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN + SYSEVENT_ITEM_GIVEN);
+endfunction
+
+

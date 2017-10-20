@@ -1,0 +1,25 @@
+use uo;
+use os;
+
+program cuthair (character)
+
+	SendSysMessage (character, "Who's hair do you want to do?");
+	var targetted := Target (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (targetted.graphic != 400 and targetted.graphic != 401 and targetted.graphic != 605 and targetted.graphic != 606 and targetted.graphic != 605 and targetted.graphic != 744 and targetted.graphic != 745 and targetted.graphic != 666 and targetted.graphic != 667)
+		SendSysMessage (character, "Invalid target!");
+		return;
+	endif
+
+	var parms := array;
+	parms[1] := 0;
+	parms[2] := character;
+	parms[3] := targetted;
+
+	start_script (":barber:dohairstyle", parms);
+
+endprogram

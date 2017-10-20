@@ -1,0 +1,11 @@
+use uo;
+use os;
+use guilds;
+
+program createaguild( who, params )
+	if (who)
+	endif
+	var guild := CreateGuild();
+	guild.setprop("name", params);
+	SendSysMessage(who, "Guild " + params + " created with id " + guild.guildid);
+endprogram

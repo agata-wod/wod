@@ -1,0 +1,38 @@
+use uo;
+use util;
+use os;
+
+include "include/client";
+include "include/dotempmods";
+include "include/magic";
+
+Const SOUND_EFFECT_POISONFIELD := 0x020d;
+
+program field_control (field)
+	var creator;
+	var creator_serial := getobjproperty (field, "creator");
+	if (creator_serial)
+		creator := SystemFindObjectBySerial (CInt(creator_serial));
+		if (creator)
+			SetScriptController (creator);
+		endif
+	endif
+
+	caster_evalint := GetObjProperty (field, "caster_evalint");
+	if (!caster_evalint)
+		caster_evalint := 100;
+	endif
+
+	PlaySoundEffect (field, SOUND_EFFECT_POISONFIELD);
+	repeat
+		foreach mobile in ListMobilesNearLocation (field.x, field.y, field.z, 0, field.realm)
+			if (	(!checkskill (mobile, SKILLID_MAGICRESISTANCE, caster_evalint, 0)) and
+				(!mobile.concealed) )
+				SetPoison (mobile, RandomInt(5)+2, "You've been poisoned!");
+			endif
+		endforeach
+
+		sleep (2);
+	until (!field);
+
+endprogram

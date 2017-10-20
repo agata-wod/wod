@@ -1,0 +1,36 @@
+use uo;
+use os;
+use util;
+
+program control_head (head)
+	if (GetObjProperty (head, "preserved") )
+		EraseObjProperty (head, "timer");
+		return;
+	endif
+
+	sleep (RandomInt (3600));
+
+	while (head)
+		sleep (30*60);
+		if (GetObjProperty (head, "preserved") )
+			EraseObjProperty (head, "timer");
+			return;
+		endif
+
+		var timer := GetObjProperty (head, "timer");
+		if (!timer)
+			timer := 0;
+		endif
+		
+		timer := timer + (30*60);
+		SetObjProperty (head, "timer", timer);
+		if (timer > 345600)
+			DestroyItem (head);
+			return;
+		endif
+	endwhile
+
+	return;
+
+endprogram
+

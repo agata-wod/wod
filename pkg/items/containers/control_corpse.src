@@ -1,0 +1,65 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+
+program control_corpse (corpse)
+	if (GetObjProperty (corpse, "nodecay"))
+		return;
+	endif
+
+	corpse.decayat := 0;
+	//players and pets decay slower
+	if (GetObjProperty (corpse, "npctemplate") and !GetObjProperty (corpse, "master"))
+		sleep (600);
+	else
+		sleep (1200);
+	endif
+
+	if (GetObjProperty (corpse, "nodecay"))
+		return;
+	endif
+
+	//check to see if the server is shutting down.  if so, don't do anything
+	If (GetGlobalProperty ("#restartingserver"))
+		Syslog ("Would have destroyed " + corpse.desc + " but won't because of server restart.");
+		return;
+	endif
+
+	//check to see if the server is restarting.  if so, give them another 10 minutes
+	If (GetGlobalProperty ("#starting_server"))
+		Syslog ("Would have destroyed " + corpse.desc + " but will wait because of server restart.");
+		sleep (600);
+	endif
+
+	//if there's only a couple of players online, possibly the server's connection is down.
+	//Give them more time (only with player's corpses)
+	if (!GetObjProperty (corpse, "npctemplate"))
+		var all_players := EnumerateOnlineCharacters ();
+		if (len (all_players) < 3)
+			repeat
+				sleep (60);
+				all_players := EnumerateOnlineCharacters ();
+			until (len (all_players) > 3);
+		elseif (len (all_players) < 5)
+			sleep (300);
+		endif
+	endif
+
+	foreach item in ListRootItemsInContainer (corpse)
+		if (!item.newbie and item.movable)
+			if ((item.objtype < UOBJ_STARTHAIR or item.objtype > UOBJ_ENDHAIR) and item.movable)
+				MoveObjectToLocation( item, corpse.x, corpse.y, corpse.z, corpse.realm, MOVEOBJECT_FORCELOCATION );
+				if (item.decayat)
+					item.decayat := ReadGameClock() + 600;
+				endif
+			endif
+		endif
+	endforeach
+
+	DestroyItem (corpse);
+
+endprogram
+

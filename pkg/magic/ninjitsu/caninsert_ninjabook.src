@@ -1,0 +1,13 @@
+use uo;
+use os;
+
+program caninsert_mysticbook (character, spellbook, movetype, inserttype, scroll, existing_stack, amt_to_add)
+	if (existing_stack)
+		SendSysMessage (character, "You already have that spell in your spellbook!");
+		return 0;
+	endif
+	if (spellbook and movetype and inserttype and scroll and amt_to_add)
+	endif
+
+	return 1;
+endprogram

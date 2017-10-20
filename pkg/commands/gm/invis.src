@@ -1,0 +1,20 @@
+use os;
+use uo;
+
+program textcmd_lock( speaker )
+
+    SendSysMessage( speaker, "What do you wish to make invisible?" );
+    var what := Target( speaker );
+    if (what)
+        if (what.invisible)
+		what.invisible := 0;
+		SendSysMessage( speaker, "Item is no longer invisible" );
+	else
+		what.invisible := 1;
+		SendSysMessage( speaker, "Item is now invisible" );
+	endif
+    else
+	SendSysMessage( speaker, "Canceled" );
+    endif
+
+endprogram

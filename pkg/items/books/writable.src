@@ -1,0 +1,126 @@
+use uo;
+use os;
+
+Const MAX_LINES := 160;		//should be divisible by 8
+
+exported function IsWritable (book)
+	if (GetObjProperty (book, "readonly"))
+		return 0;
+	endif
+	
+	//books in display containers can't be written in
+	if (book.container)
+		if (GetObjProperty (book.container, "displaycontainer"))
+			return 0;
+		endif
+	endif
+	return 1;
+endfunction
+
+exported function GetNumLines (book)
+	if (!IsWritable (book))
+		var contents := book.getprop ("contents");
+		if (contents != error)
+			return contents.size();
+		endif
+	endif
+	return MAX_LINES;
+endfunction
+
+
+exported function GetTitle( book )
+	var res := book.getprop ("title");
+	if (res)
+		return res;
+	else
+		return "";
+	endif
+endfunction
+
+exported function SetTitle (book, title)
+	var newtitle := "";
+	for i := 1 to len (title)
+		var char := title[i];
+		if (char and char != "" and Hex (char))
+			newtitle := newtitle + char;
+		endif
+	endfor
+	
+	book.setprop ("title", title);
+	book.name := title;
+endfunction
+
+
+exported function GetAuthor (book)
+	var res := book.getprop ("author");
+	if (res)
+		return res;
+	else
+		return "";
+	endif
+endfunction
+
+exported function SetAuthor ( book, author )
+	var newauthor := "";
+	for i := 1 to len (author)
+		var char := author[i];
+		if (char and char != "" and Hex (char))
+			newauthor := newauthor + char;
+		endif
+	endfor
+
+	book.setprop ("author", author);
+endfunction
+
+
+exported function GetContents (book)
+	var contents := book.getprop ("contents");
+	if (contents == error)
+		contents := array;
+	endif
+	return contents;
+endfunction
+
+exported function GetLine( book, line )
+	var contents := book.getprop ("contents");
+	if (contents == error)
+		contents := array;
+	endif
+	if (line <= contents.size())
+		var text := contents[line];
+		if (text)
+			return text;
+		else
+			return "";
+		endif
+	else
+		return "";
+	endif
+endfunction
+
+exported function SetLine (book, line, text)
+	var newtext := "";
+	for i := 1 to len (text)
+		var char := text[i];
+		if (char and char != "" and Hex (char))
+			newtext := newtext + char;
+		endif
+	endfor
+
+	if (line > MAX_LINES)
+		return 1;
+	endif
+
+	var contents := book.getprop ( "contents" );
+	if (contents == error)
+		contents := array;
+	endif
+	contents[line] := text;
+	book.setprop ("contents", contents);
+	return 1;
+endfunction
+
+
+program BookInterface()
+	return 1;
+endprogram

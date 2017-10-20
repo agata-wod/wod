@@ -1,0 +1,46 @@
+use uo;
+use os;
+
+program view_painting (character, painting)
+	var gump_layout := array{
+		"nomove",
+		"nodispose",
+		"page 0"
+	};
+	var gump_data := array{""};
+	case (painting.graphic)
+		0xa083:
+		0xa084:
+			gump_layout.append ("gumppic 50 50 7425");
+		0xa085:
+		0xa086:
+			gump_layout.append ("gumppic 50 50 7426");
+		0xa087:
+		0xa088:
+			gump_layout.append ("gumppic 50 50 7427");
+		0xa089:
+		0xa08a:
+			gump_layout.append ("gumppic 50 50 7428");
+		0xa08b:
+		0xa08c:
+			gump_layout.append ("gumppic 50 50 7429");
+		0xa08d:
+		0xa08e:
+			gump_layout.append ("gumppic 50 50 7430");
+		0xa08f:
+		0xa090:
+			gump_layout.append ("gumppic 50 50 7431");
+		0xa091:
+		0xa092:
+			gump_layout.append ("gumppic 50 50 7432");
+		0xa093:
+		0xa094:
+			gump_layout.append ("gumppic 50 50 7433");
+	
+		default:
+			return;
+	endcase;
+	
+	Detach ();
+	SendDialogGump (character, gump_layout, gump_data);
+endprogram

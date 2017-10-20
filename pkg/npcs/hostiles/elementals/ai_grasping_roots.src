@@ -1,0 +1,55 @@
+use os;
+use uo;
+use npc;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/effects";
+include "include/eventid";
+include "include/sysevent";
+include "include/string";
+include "include/utility";
+include "include/dotempmods";
+include "include/magic";
+include "include/attributes";
+include "../pkg/npcs/npc_util";
+include "../pkg/npcs/npcinfo";
+include "../pkg/npcs/main_ai/combat/pathfinding";
+include "../pkg/npcs/main_ai/combat/spellcasting";
+
+var me := Self();
+
+program ai_grasping_roots ()
+	sleep (1);
+	var endtime := GetObjProperty (me, "endtime");
+	if (!endtime)
+		KillMe ();
+		return;
+	endif
+	
+	var difficulty := GetObjProperty (me, "resistdifficulty");
+	if (!difficulty)
+		difficulty := -1;
+	endif
+
+	repeat
+		if (endtime < ReadGameClock())
+			KillMe();
+			return;
+		endif
+
+		foreach critter in ListMobilesNearLocation (me.x, me.y, me.z, 1, me.realm)
+			if (critter != me)
+				if (!CheckSkill (critter, SKILLID_MAGICRESISTANCE, difficulty, 0))
+					PerformAction (me, RandomInt (3) + 4);
+					DoDamageByType (me, critter, (RandomInt (5) + 1), DAMAGETYPE_PHYSICAL);
+					DoMagicStatMod (critter, STATMOD_PARALYZE, 1, 10, "Grasping Roots");
+				elseif (RandomInt (5) == 1)
+					DoMagicStatMod (critter, STATMOD_PARALYZE, 1, 10, "Grasping Roots");
+				endif
+			endif
+		endforeach
+		sleep (1);
+	until (!me);
+endprogram

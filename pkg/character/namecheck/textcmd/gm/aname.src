@@ -1,0 +1,31 @@
+use os;
+use uo;
+use cfgfile;
+
+include "include/client";
+include "include/clock";
+include "include/wodinc";
+include "include/accounts";
+include "../pkg/npcs/npc_util";
+include "../pkg/world/weather/weather";
+include "../pkg/character/virtue/virtue";
+
+program april_fool (character)
+	if (character)
+	endif
+	foreach player in EnumerateOnlineCharacters()
+		if (CanMod (player, "name", 1))
+			if (player.cmdlevel)
+				DoPersistedMod (player, "name", "GM Larry", player.name, 300, "");
+			else
+				DoPersistedMod (player, "name", "Larry", player.name, 300, "");
+			endif
+		else
+			if (player.cmdlevel)
+				player.name := "GM Larry";
+			else
+				player.name := "Larry";
+			endif
+		endif	
+	endforeach
+endprogram

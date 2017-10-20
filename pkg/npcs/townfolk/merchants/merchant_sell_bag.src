@@ -1,0 +1,467 @@
+use os;
+use uo;
+use cfgfile;
+
+include "include/utility";
+include "include/eventid";
+include "include/magicitems";
+
+///////////////////
+//  called by 'sell bag' and 'sell all'
+///////////////////
+
+Program BuyBag (parms)
+	var merchant := parms[1];
+	var player := parms[2];
+	var sell_type := parms[3];
+	if (!player or !merchant)
+		return;
+	endif
+	
+	if (GetObjProperty (player, "#merchant_sell_bag"))
+		if (GetProcess (GetObjProperty (player, "#merchant_sell_bag")))
+			return;
+		endif
+	endif
+	SetObjProperty (player, "#merchant_sell_bag", GetPID());
+
+	if (sell_type)
+		if (sell_type == "sell all");
+			SellAll (merchant, player);
+		elseif (sell_type == "sell bag")
+			SellBag (merchant, player);
+		else
+			PrintTextAbovePrivate (merchant, "I'm sorry, but something went wrong.", player);
+		endif
+	else
+		//default to sell bag
+		SellBag (merchant, player);
+	endif
+
+	EraseObjProperty (player, "#merchant_sell_bag");
+endprogram
+
+
+
+
+///////////////////
+//  This function handles 'sell bag'
+///////////////////
+
+function SellBag (merchant, player)
+	PrintTextAbovePrivate (merchant, "What bag of stuff would you like to sell me?", player);
+	var bag := Target (player);
+	if (!bag)
+		MerchantTurnToward (merchant, player);
+		PrintTextAbovePrivate (merchant, "OK, never mind then.", player);
+		return;
+	endif
+	
+	if (!merchant)
+		SendSysMessage (player, "Now where did he go?");
+		return;
+	elseif (Distance (player, merchant) > 4)
+		SendSysMessage (player, "You're too far away from the merchant!");
+		return;
+	elseif (merchant.warmode)
+		SendSysMessage (player, "The merchant looks a bit busy right now...");
+		return;
+	endif
+
+	if (!bag.isa (POLCLASS_CONTAINER))
+		MerchantTurnToward (merchant, player);
+		PrintTextAbovePrivate (merchant, "But that's not even a bag!", player);
+		return;
+	elseif (bag.locked)
+		MerchantTurnToward (merchant, player);
+		PrintTextAbovePrivate (merchant, "What do I look like, a locksmith?", player);
+		return;
+	endif
+	
+	if (bag != player.backpack)
+		if (!InInventory (player.backpack, bag))
+			MerchantTurnToward (merchant, player);
+			PrintTextAbovePrivate (merchant, "That bag isn't in your inventory.", player);
+			return;
+		endif
+	endif
+
+	if (!len (EnumerateItemsInContainer (bag)))
+		MerchantTurnToward (merchant, player);
+		PrintTextAbovePrivate (merchant, "But that bag is empty!", player);
+		return;
+	endif
+
+	var elem, itemprice, itemamount;
+	var itemdesc := ReadConfigFile (":*:itemdesc");
+	var totalsale := 0;
+
+	foreach item in ListRootItemsInContainer (bag)
+		if (IsBuyableItem (player, merchant, item, 1))
+			elem := FindConfigElem (itemdesc, item.objtype);
+			if (elem)
+				itemprice := GetConfigInt (elem, "vendorbuysfor");
+				if (itemprice)
+					itemamount := item.amount;
+					if (DestroyItem (item))
+						totalsale := totalsale + (itemprice * itemamount);
+						sleepms (100);
+
+						if (totalsale > 50000)
+							break;
+						endif
+					else
+						PrintTextAbovePrivate (merchant, "Someone seems to be using " + item.desc, player);
+					endif
+				endif
+			endif				
+		endif
+	endforeach
+	
+	if (!totalsale)
+		MerchantTurnToward (merchant, player);
+		PrintTextAbovePrivate (merchant, "I'm afraid I don't want any of those items.", player);
+		return;
+	endif
+
+	MerchantTurnToward (merchant, player);
+	PrintTextAbovePrivate (merchant, "The total of your sale is " + totalsale, player);
+	PlaySoundEffect (player, 0x38);
+	bag.name := bag.desc;
+	if (totalsale > 60000)
+		repeat
+			var thegold := CreateItemInContainer (player.backpack, UOBJ_GOLD_COIN, 60000);
+			if (!thegold)
+				PrintTextAbovePrivate (player, "*Your backpack is full!*", player);
+				CreateItemAtLocation (player.x, player.y, player.z, UOBJ_GOLD_COIN, 60000, player.realm);
+			endif
+			totalsale := totalsale - 60000;
+		until (totalsale <= 60000);
+	endif
+	var thegold := CreateItemInContainer (player.backpack, UOBJ_GOLD_COIN, totalsale);
+	if (!thegold)
+		PrintTextAbovePrivate (player, "*Your backpack is full!*", player);
+		CreateItemAtLocation (player.x, player.y, player.z, UOBJ_GOLD_COIN, totalsale, player.realm);
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  called by 'sell all'
+///////////////////
+
+function SellAll (merchant, player)
+	PrintTextAbovePrivate (merchant, "What would you like me to buy all of?", player);
+	var selected_item := Target (player);
+	if (!selected_item)
+		MerchantTurnToward (merchant, player);
+		PrintTextAbovePrivate (merchant, "OK, never mind then.", player);
+		return;
+	elseif (selected_item == player.backpack)
+		SendSysMessage (player, "You can't sell your backpack!");
+		return;
+	elseif (!ReserveItem (selected_item))
+		SendSysMessage (player, "That item seems to be in use.");
+		return;
+	elseif (selected_item.isa (POLCLASS_CONTAINER))
+		if (len (EnumerateItemsInContainer (selected_item)))
+			SendSysMessage (player, "But that has stuff in it!  (try 'sell bag')");
+			return;
+		endif
+	endif
+
+	if (!InInventory (player.backpack, selected_item))
+		MerchantTurnToward (merchant, player);
+		PrintTextAbovePrivate (merchant, "That bag isn't in your inventory.", player);
+		return;
+	elseif (!IsBuyableItem (player, merchant, selected_item, 0))
+		MerchantTurnToward (merchant, player);
+		PrintTextAbovePrivate (merchant, "Sorry, I can't buy that.", player);
+		return;
+	endif
+
+	if (!merchant)
+		SendSysMessage (player, "Now where did he go?");
+		return;
+	elseif (Distance (player, merchant) > 4)
+		SendSysMessage (player, "You're too far away from the merchant!");
+		return;
+	elseif (merchant.warmode)
+		SendSysMessage (player, "The merchant looks a bit busy right now...");
+		return;
+	endif
+
+	var itemdesc := ReadConfigFile (":*:itemdesc");
+	var elem := FindConfigElem (itemdesc, selected_item.objtype);
+	if (!elem)
+		PrintTextAbovePrivate (merchant, "Sorry, but I don't want that.", player);
+		return;
+	endif
+
+	var itemprice := GetConfigInt (elem, "vendorbuysfor");
+	//crude hack because the sell window can't handle prices > 60000
+	if (!itemprice)
+		itemprice := GetConfigInt (elem, "BuyPrice");
+	endif
+
+	if (!itemprice)
+		PrintTextAbovePrivate (merchant, "Sorry, but I don't want that.", player);
+		return;
+	endif
+
+	//you can only sell one of high-priced items (mostly house deeds)
+	if (itemprice > 30000)
+		if (!DestroyItem (selected_item))
+			SendSysMessage (player, "You can't sell that item right now.");
+			return;
+		endif
+
+		PrintTextAbovePrivate (merchant, "Ooh, an expensive one!", player);
+		while (itemprice > 60000)
+			CreateItemInContainer (player.backpack, "goldcoin", 60000);
+			itemprice := itemprice - 60000;
+		endwhile
+		CreateItemInContainer (player.backpack, "goldcoin", itemprice);
+		return;
+	endif
+
+	var thecolor := selected_item.color;
+	var totalsale := 0;
+	var itemamount;
+
+	foreach item in ListRootItemsInContainerOfObjtype (selected_item.container, selected_item.objtype)
+		if (item.color == thecolor)
+			if (IsBuyableItem (player, merchant, item, 0))
+				itemamount := item.amount;
+				if (DestroyItem (item))
+					totalsale := totalsale + (itemprice * itemamount);
+				endif
+			endif
+		endif
+		sleepms (100);
+		if (totalsale > 50000)
+			break;
+		endif
+	endforeach
+
+	if (!totalsale)
+		MerchantTurnToward (merchant, player);
+		PrintTextAbovePrivate (merchant, "I'm afraid I don't want that.", player);
+		return;
+	endif
+
+	MerchantTurnToward (merchant, player);
+	PrintTextAbovePrivate (merchant, "The total of your sale is " + totalsale, player);
+	PlaySoundEffect (player, 0x38);
+	while (totalsale > 60000)
+		CreateItemInContainer (player.backpack, "goldcoin", 60000);
+		totalsale := totalsale - 60000;
+	endwhile
+	CreateItemInContainer (player.backpack, "goldcoin", totalsale);
+endfunction
+
+
+
+
+///////////////////
+//  determines if the item is one that can be bought when using 'sell bag', 'sell all', or one of
+//  other others
+///////////////////
+
+function IsBuyableItem (player, merchant, item, from_bag)
+	if (item.newbie)
+		return 0;
+	elseif (IsMagicalItem (item))
+		PrintTextAbove (merchant, "Ooh, " + item.desc);
+		return 0;
+	elseif (GetObjProperty (item, "questitem") )
+		PrintTextAbove (merchant, "Ooh, this looks important.");
+		return 0;
+	elseif (GetObjProperty (item, "ownerserial") )
+		PrintTextAbove (merchant, item.desc + " is marked!");
+		return 0;
+	elseif (GetObjProperty (item, "slave") )
+		PrintTextAbove (merchant, item.desc + " is marked!");
+		return 0;
+	elseif (item.buyprice and item.buyprice < 0)
+		return 0;
+	endif
+
+	if (!from_bag)
+		if (item.objtype == UOBJ_GOLD_COIN)
+			return 0;
+		elseif (IsContainer (item))
+			if (len (EnumerateItemsIncontainer (item)))
+				return 0;
+			endif
+		endif
+
+		return 1;
+	endif
+
+	var account := player.acct;
+	if (!account)
+		return;
+	endif
+
+	var sell_options := account.GetProp ("sell_options");
+	if (!sell_options)
+		sell_options := {0, 0, 0, 0, 0, 0, 0, 0};
+	elseif (len (sell_options) < 8)
+		SendSysMessage (player, "Resetting 'sell bag' options");
+		account.EraseProp ("sell_options");
+		sell_options := {0, 0, 0, 0, 0, 0, 0, 0};
+	elseif (len (sell_options) < 9)
+		repeat
+			sell_options.append (0);
+		until (len (sell_options) == 9);
+	endif
+
+	case (item.objtype)
+		UOBJ_GOLD_COIN:
+			return 0;
+
+		UOBJ_GEM_AMBER:
+		UOBJ_GEM_STAR_SAPPHIRE:
+		UOBJ_GEM_EMERALD:
+		UOBJ_GEM_SAPPHIRE:
+		UOBJ_GEM_RUBY:
+		UOBJ_GEM_CITRINE:
+		UOBJ_GEM_AMETHYST:
+		UOBJ_GEM_TOURMALINE:
+		UOBJ_GEM_DIAMOND:
+			return sell_options[1];
+
+		UOBJ_BLACK_PEARL:
+		UOBJ_BLOOD_MOSS:
+		UOBJ_GARLIC:
+		UOBJ_GINSENG:
+		UOBJ_MANDRAKE_ROOT:
+		UOBJ_NIGHTSHADE:
+		UOBJ_SULFUROUS_ASH:
+		UOBJ_SPIDER_SILK:
+		UOBJ_BATWING:
+		UOBJ_BLACKMOOR:
+		UOBJ_BLOODSPAWN:
+		UOBJ_VIAL_OF_BLOOD:
+		UOBJ_BONE:
+		UOBJ_BRIMSTONE:
+		UOBJ_DAEMON_BONE:
+		UOBJ_FERTILE_DIRT:
+		UOBJ_DRAGONS_BLOOD:
+		UOBJ_EXECUTIONERS_CAP:
+		UOBJ_EYE_OF_NEWT:
+		UOBJ_OBSIDIAN:
+		UOBJ_PIG_IRON:
+		UOBJ_PUMICE:
+		UOBJ_SERPENT_SCALE:
+		UOBJ_VOLCANIC_ASH:
+		UOBJ_DEAD_WOOD:
+		UOBJ_WYRMS_HEART:
+		UOBJ_REAPER_HEARTWOOD:
+		UOBJ_ENT_HEARTWOOD:
+		UOBJ_ENCHANTED_BONE:
+			return sell_options[2];
+
+		UOBJ_LIGHT_HEAL_POTION:
+		UOBJ_HEAL_POTION:
+		UOBJ_GREATER_HEAL_POTION:
+		UOBJ_LESSER_POISON_POTION:
+		UOBJ_POISON_POTION:
+		UOBJ_GREATER_POISON_POTION:
+		UOBJ_DEADLY_POISON_POTION:
+		UOBJ_LESSER_EXPLOSION_POTION:
+		UOBJ_EXPLOSION_POTION:
+		UOBJ_GREATER_EXPLOSION_POTION:
+		UOBJ_LESSER_AGILITY_POTION:
+		UOBJ_AGILITY_POTION:
+		UOBJ_GREATER_AGILITY_POTION:
+		UOBJ_REFRESH_POTION:
+		UOBJ_FULL_REFRESH_POTION:
+		UOBJ_LESSER_STRENGTH_POTION:
+		UOBJ_STRENGTH_POTION:
+		UOBJ_GREATER_STRENGTH_POTION:
+		UOBJ_LESSER_CURE_POTION:
+		UOBJ_CURE_POTION:
+		UOBJ_GREATER_CURE_POTION:
+		UOBJ_NIGHTSIGHT_POTION:
+			return sell_options[3];
+			
+		UOBJ_HIDE:
+		UOBJ_RED_HIDE:
+		UOBJ_BLUE_HIDE:
+		UOBJ_BROWN_HIDE:
+		UOBJ_GREEN_HIDE:
+		UOBJ_SILVER_HIDE:
+		0x26b1:
+		0x26b2:
+		0x26b3:
+		0x26b4:
+		0x26b5:
+		0x26b6:
+			return sell_options[4];
+
+		UOBJ_EGG:
+		UOBJ_RAW_RIB:
+		UOBJ_RAW_FISHSTEAK:
+		UOBJ_RAW_BIRD:
+		UOBJ_RAW_HAM:
+		UOBJ_BACON_SLAB:
+		UOBJ_RAW_SAUSAGE:
+		UOBJ_RAW_CHICKEN_LEG:
+		UOBJ_RAW_LEG_OF_LAMB:
+			return sell_options[5];
+
+		0x0DF2:	//wand
+		0x0DF3:	//wand
+		0x0DF4:	//wand
+		0x0DF5:	//wand
+			return sell_options[6];
+			
+		UOBJ_SHOVEL:
+		UOBJ_IRON_SHOVEL:
+		UOBJ_BRONZE_SHOVEL:
+		UOBJ_DULL_COPPER_SHOVEL:
+		UOBJ_COPPER_SHOVEL:
+		UOBJ_ONYX_SHOVEL:
+		UOBJ_PYRITE_SHOVEL:
+		UOBJ_MALACHITE_SHOVEL:
+		UOBJ_AZURITE_SHOVEL:
+		UOBJ_RUBYSTEEL_SHOVEL:
+		UOBJ_BLUESTEEL_SHOVEL:
+			return sell_options[8];
+	endcase
+
+	if (IsContainer (item))
+		if (len (EnumerateItemsIncontainer (item)))
+			return 0;
+		endif
+		return sell_options[7];
+	endif
+	
+	//Scrolls
+	if (item.objtype >= 0x1f2d and item.objtype <= 0x1f6c)
+		return sell_options[9];
+	elseif (item.objtype == UOBJ_BLANK_SCROLL)
+		return sell_options[9];
+	endif
+
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  This function makes the merchant turn toward the player
+///////////////////
+
+function MerchantTurnToward (merchant, player)
+	var ev := struct;
+	ev.+type := EVID_MERCHANT_SOLD;
+	ev.+source := player;
+	ev.+amount := 0;
+	SendEvent (merchant, ev);
+endfunction

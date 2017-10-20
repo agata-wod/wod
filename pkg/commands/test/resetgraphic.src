@@ -1,0 +1,8 @@
+use os;
+use uo;
+
+program textcmd_start( character)
+	var item := Target (character);
+	item.set_member("graphic", 41034);
+endprogram
+

@@ -1,0 +1,1462 @@
+use uo;
+use os;
+use npc;
+
+///pet setup was moved to an .inc file (its a bit neater looking)
+include "../pkg/npcs/main_ai/setup/tamedsetup";
+
+program TamedAI()
+	if (GetAttributeTemporaryMod (me, "Dexterity") > 5000)
+		SetAttributeTemporaryMod (me, "Dexterity", GetAttributeTemporaryMod (me, "Dexterity") - 5000);
+	endif
+
+	//do a search for our master.  If they're not online, hide.  If they don't exist, commit suicide
+	master := SystemFindObjectBySerial (masterserial);
+	if (!master)
+		var mymaster := SystemFindObjectBySerial (masterserial, SYSFIND_SEARCH_OFFLINE_MOBILES);
+		if (!mymaster)
+			KillMe ();
+		endif
+
+		SetObjProperty (me, "#specialhidden_nodamage", 1);
+		if (CheckForNoLogoutArea (me))
+			TeleportFromNoLogoutArea (me);
+			SetObjProperty (mymaster, "follower_moved_to_inn", 1);
+		endif
+
+		var ev;
+		while (!master)
+			master := SystemFindObjectBySerial (masterserial);
+			if (!master)
+				if (!me.concealed)
+					me.hidden := 1;
+					me.frozen := 1;
+				endif
+				ev := wait_for_event (60);
+			endif
+		endwhile
+	endif
+
+	EraseObjProperty (me, "#specialhidden_nodamage");
+	me.setmaster (master);
+	me.cmdlevel := 0;
+	me.concealed := 0;
+	me.hidden := 0;
+	me.frozen := 0;
+	me.run_speed := 250;
+
+	if (getobjproperty(me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	//This code makes it so that if a tamed creature is subordinate to another tamed creature, the
+	// creature will move up the chain of command, more or less, until it reaches a player
+	if (master.npctemplate)
+		if (GetObjProperty (me, "#restarting"))
+			EraseObjProperty (me, "#restarting");
+			GoWild ();
+		else
+			SetObjProperty (me, "master", getobjproperty (master, "master") );
+			SetObjProperty (me, "#restarting", 1);
+			RestartScript (me);
+		endif
+	endif
+	EraseObjProperty(me,"#restarting");
+
+	//save info about the NPC
+	if (GetObjProperty (me, "color") == error)
+		SetObjProperty (me, "color", me.color);
+	endif
+	SetObjProperty (me, "serial", me.serial);
+
+	//take the NPC out of the spawn, if they were in it
+	if (GetObjProperty (me, "regspawn"))
+		set_critical (1);
+		var SpawnName := GetObjProperty (me, "regspawn");
+		var numspawns := CINT (GetGlobalProperty (SpawnName))-1;
+		SetGlobalProperty (SpawnName, numspawns);
+		EraseObjProperty (me, "regspawn");
+		set_critical (0);
+	endif
+
+	//anchor the NPC here and turn on events
+	SetAnchor    (me.x, me.y, 20, 0 );
+	EnableEvents (SYSEVENT_SPEECH, 12);
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_DOUBLECLICKED + SYSEVENT_ITEM_GIVEN, 2);
+	SetWarMode (0);
+
+	//go to a seperate function for the main AI loop
+	DoStartupSetup ();
+	MainAILoop ();
+endprogram
+
+
+
+
+///////////////////
+//  the main AI loop that does most of the work
+///////////////////
+
+function MainAILoop ()
+	var ev;
+	var warnings := 0;
+	nextwatch := ReadGameClock ();
+
+	//if there's players around, we need to react faster
+	var waittime := 120;
+	if (!GoToSleep())
+		waittime := 2;
+	endif
+
+	var loops := 60;
+	var firstwander := 1;
+
+	while (me)
+		ev := wait_for_event (waittime);
+		if (ev)
+			if (!ev.source.npctemplate)
+				waittime := 2;
+				loops := 0;
+			endif
+			case (ev.type)
+				EVID_SPEECH:
+					ProcessSpeech (ev);
+				EVID_ENGAGED:
+				EVID_DAMAGED:
+					if (nextwatch < ReadGameClock())
+						if (ev.source)
+							if (dragonspeak)
+								dragontalk ("attacked", ev.source.name);
+							endif
+							Fight (ev.source);
+						endif
+					endif
+				EVID_DOUBLECLICKED:
+					if (ev.source.serial == masterserial)
+						DoDoubleClickEvent ();
+					endif
+				EVID_ITEM_GIVEN:
+					if (ev.source.serial == masterserial)
+						TakeItem (ev);
+					endif
+				EVID_ALL_ATTACK_CMD:
+					nextwatch := ReadGameClock() + 10;
+					guarding := 0;
+					fight (ev.target);
+				EVID_ALL_FOLLOW_CMD:
+					following := ev.target;
+				EVID_ALL_GUARD_CMD:
+					guarding := ev.target;
+					PrintTextAbove (me,"*guarding " + guarding.name + "*");
+			endcase
+		endif
+		
+		if (!master)
+			RestartScript (me);
+		elseif (immobile and following)
+			following := 0;
+		endif
+
+		if (following and master)
+			waittime := 0;
+			firstwander := 1;
+			staying := 0;
+			loops := 0;
+			SetAnchor (me.x, me.y, 20, 0);
+			Follow ();
+		elseif (guarding and master)
+			waittime := 7;
+			firstwander := 1;
+			loops := 0;
+			SetAnchor (me.x, me.y, 20, 0);
+			Guard();
+		else
+			if ( firstwander )
+				SetAnchor( me.x, me.y, 2, 80 );
+				waittime := 2;
+			endif
+			firstwander := 0;
+			if (master and !staying and !immobile)
+				wander();
+			endif
+			EraseObjProperty (me,"#flees");
+			loops := loops + 1;
+		endif
+
+		if (healer)
+			if (nexthealingtime <= ReadGameClock())
+				sleep(1);
+				CastHealingSpells (me, 0);
+				nexthealingtime := ReadGameClock() + RandomInt(2) + 1;
+			endif
+		endif
+
+		if (loops > 60)
+			if ( GoToSleep() )
+				waittime := 120;
+			else
+				waittime := 2;
+				loops := 0;
+			endif
+		endif
+
+		if (ReadGameClock() > freetime )
+			if ( GetObjProperty (me, "totem") )
+				freetime := cint(ReadGameClock()+1200);	
+				SetObjProperty (me, "freetime", freetime);
+			elseif (!GetObjProperty ( me , "summoned") )
+				warnings := warnings + 1;
+				if ( warnings > 4 )
+					Release();
+					freetime := cint(ReadGameClock()+1200);
+					SetObjProperty (me, "freetime", freetime);
+				else
+					say("*Looks Hungry*");
+					speak();
+					freetime := cint(ReadGameClock()+1200);
+					SetObjProperty (me, "freetime", freetime);
+				endif
+			else
+				release();
+				return;
+			endif
+		elseif (!GetObjProperty (me, "totem") )
+			warnings := 0;
+			Poop ();
+		endif
+	endwhile
+
+endfunction
+
+
+
+
+///////////////////
+//  processes any speech that the NPC overhears
+///////////////////
+
+function ProcessSpeech(ev)
+	if (ev.source.serial != masterserial or ev.source.dead)
+		return;
+	endif
+
+	speak ();
+	var evtext := lower (ev.text);
+	var mename := lower (me.name);
+
+	//a few commands that are always followed
+	if (evtext[mename + " transfer"] or (evtext["all transfer"]))
+		Transfer();
+	elseif (evtext == CSTR (mename + " release") or (evtext == "all release"))
+		if (GetPetCountOfNPC (me) > 1)
+			if (GetObjProperty (me, "summoned"))
+				Release();
+			else
+				if (YesNo (ev.source, "Release " + me.name + "?"))
+					Release();
+				endif
+			endif
+		else
+			Release();
+		endif
+	endif
+
+	//If we're above the pet limit, refuse to follow orders
+	if (AbovePetCount ())
+		PrintTextAbove (me, "*refuses to obey*");
+		return;
+	endif
+	
+	//otherwise, follow orders
+	if (evtext[mename + " kill"] or evtext[mename + " attack"] or 
+			evtext["all kill"] or evtext["all attack"] )
+		var what := Target( master , TGTOPT_HARMFUL + TGTOPT_CHECK_LOS );
+		if (what)
+			if (dragonspeak)
+				dragontalk("attack", what.name);
+			endif
+			if (evtext["all kill"] or evtext["all attack"] )
+				AllCommand (EVID_ALL_ATTACK_CMD, what);
+			else
+				guarding := 0;
+				Fight (what);
+			endif
+		endif
+	elseif( evtext[mename + " stop"] or evtext["all stop"])
+		guarding := 0;
+		following := 0;
+	elseif ((evtext[mename + " come"]) or (evtext["all come"]))
+		nextwatch := ReadGameClock() + 10;
+		var done := 0;
+		chaseloop := 0;
+		while (done == 0)
+			RunToward (ev.source);
+			chaseloop := chaseloop +1;
+			if (Distance (me, ev.source) < 2)
+				done := 1;
+			endif
+		endwhile
+	elseif (evtext[mename + " follow"])
+		nextwatch := ReadGameClock() + 10;
+		if (evtext["follow me"])
+			following := ev.source;
+		else
+			var what := Target (master, TGTOPT_CHECK_LOS);
+			if (what)
+				following := what;
+			endif
+		endif	
+		if (dragonspeak)
+			dragontalk ("follow", following.name);
+		endif	
+	elseif (evtext["all follow"])
+		nextwatch := ReadGameClock() + 10;
+		if (evtext["follow me"])
+			following  := ev.source;
+		else
+			var what := Target (master, TGTOPT_CHECK_LOS);
+			if (what)
+				AllCommand (EVID_ALL_FOLLOW_CMD, what);
+			endif
+		endif
+		if (dragonspeak)
+			dragontalk ("follow", following.name);
+		endif
+	elseif (evtext[mename + " guard"])
+		if (evtext["guard me"])
+			guarding := ev.source;
+			PrintTextAbove (me, "*guarding " + guarding.name + "*");
+		else
+			var what := Target (master, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+			if (GetVital (what, "Life"))
+				guarding := what;
+				PrintTextAbove (me, "*guarding " + guarding.name + "*");
+			endif
+		endif		
+	elseif (evtext["all guard"])
+		if (evtext["guard me"])
+			guarding := ev.source;
+			PrintTextAbove (me, "*guarding " + guarding.name + "*");
+		else
+			var what := Target ( master, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS );
+			if (GetVital (what, "Life"))
+				AllCommand (EVID_ALL_GUARD_CMD, what);
+			endif
+		endif		
+	elseif (evtext[mename + " fetch"]  or (evtext[mename + " get"]))
+		if (dragonspeak)
+			dragontalk ("fetch", master.name);
+		endif	
+		fetch ();
+	elseif (evtext[mename + " drop"])
+		if (dragonspeak)
+			dragontalk ("drop", master.name);
+		endif	
+		drop();
+	elseif (evtext[mename + " speak"]  or (evtext["all speak"]))
+		if (dragonspeak)
+			dragontalk ("speak", me.name);
+		else
+			speak();
+		endif
+	elseif (evtext[mename + " stay"]  or (evtext["all stay"]))
+		staying := 1;
+	elseif (evtext[mename + " battle orders"] or evtext[mename + " battleorders"])
+		SetBattleOrders ();
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  allows the pet's controller to give orders
+///////////////////
+
+function SetBattleOrders ()
+	if (firebreather)
+		var orders_menu := CreateMenu ("What shall I do?");
+		AddMenuItem (orders_menu, 0, "Never breath fire");
+		AddMenuItem (orders_menu, 0, "Always breath fire");
+		AddMenuItem (orders_menu, 0, "Check area before breathing fire");
+
+		var new_orders := SelectMenuItem2 (master, orders_menu);
+		if (new_orders.index)
+			battle_orders := new_orders.index;
+		endif
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  transfers control of the pet to another player
+///////////////////
+
+function Transfer()
+	if (GetObjProperty (me , "summoned") or GetObjProperty (me, "totem"))
+		return;
+	endif
+
+	SendSysmessage (master, "Transfer " + me.name + " to whom?");
+ 	var whom := Target (master, TGTOPT_NOCHECK_LOS );
+	if (!whom)
+		SendSysmessage (master , "Canceled.");
+		return;
+	endif
+
+	if (!whom.acctname)
+		SendSysmessage (master, "You can't transfer the pet to that!");
+		return;
+	endif
+
+	if (master == whom)
+		SendSysmessage (master, "Done.  That was easy.");
+		return;
+	endif
+
+	var MyTemplateElem := GetNpcTemplateElem (me.npctemplate);
+	var tameskill := MyTemplateElem.tameskill;
+	var tgttaming := GetAttribute (whom, ATTRIBUTEID_TAMING) + 20;
+	if (tgttaming < tameskill)
+		SendSysmessage (master, "That has no chance of controlling this beast!");
+		return;
+	endif
+
+	SetObjProperty ( me, "master", whom.serial );
+	PrintTextAbove ( me, me.name + " accepts " + whom.name+ " as its new master" );
+	RestartScript ( me );
+endfunction
+
+
+
+
+///////////////////
+//  NPC tries to pick up the given item
+///////////////////
+
+function Fetch()
+	if (immobile)
+		return;
+	endif
+
+	//if they're already carrying someing, drop it
+	if ( len (EnumerateItemsInContainer (me.backpack)) )
+		drop ();
+	endif
+
+	var tobj := Target (master);
+	if (tobj.container)        
+		return;
+	endif
+
+	var times := 0;
+	while ( (distance (me, tobj) > 1) and times < 20 and CheckLoSAt (me,tobj.x,tobj.y,tobj.z) )
+		if ( !runtoward (tobj))
+			sleep (1);
+			times := times + 3;
+		else
+			times := times + 1;
+		endif
+	endwhile
+
+	if (Accessible (me, tobj))
+		MoveItemToContainer(tobj, me.backpack);
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  drops all items that the NPC is carrying
+///////////////////
+
+function drop()
+	foreach item in ListRootItemsInContainer (me.backpack)
+		MoveObjectToLocation (item, me.x, me.y, me.z, me.realm, 0);
+	endforeach
+endfunction
+
+
+
+
+///////////////////
+//  causes the pet to make a noise
+///////////////////
+
+function speak()
+	if (RandomInt (8))
+		return;
+	endif
+	
+	var MyTemplateElem := GetNpcTemplateElem (me.npctemplate);
+	var sound_number := MyTemplateElem.attackhitsound;
+	if (sound_number)
+		PlaySoundEffect (me, sound_number);
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  checks how many pets they have, and releases some if there's too many
+///////////////////
+
+function AbovePetCount (range := 10)
+//	if (master.cmdlevel and !GetObjProperty (master, "attackable"))
+//		return 0;
+//	endif
+
+	var normal_pets := 0;
+	var summoned_pets := 0;
+	foreach mob in ListMobilesNearLocation (me.x, me.y, me.z, range, me.realm)
+		if ( (mob.script["tamed"]) and (GetObjProperty (mob, "master") == masterserial) )
+			//If there's 2 daemons, they always fight one another
+			if (me.npctemplate["daemon"])
+				if (mob != me)
+					if (mob.npctemplate["daemon"])
+						Fight (mob);
+					endif
+				endif
+			endif
+
+			if (GetObjProperty (mob, "summoned"))
+				summoned_pets := summoned_pets + GetPetCountOfNPC (mob);
+			else
+				normal_pets := normal_pets + GetPetCountOfNPC (mob);
+			endif
+		endif
+	endforeach
+	
+	//Do seperate checks for summoned and tamed pets
+	if (GetObjProperty (me, "summoned"))
+		var mymaxpets := 5;
+		if (GetAttribute (master, ATTRIBUTEID_MAGERY) >= 120)
+			mymaxpets := 12;
+		elseif (GetAttribute (master, ATTRIBUTEID_MAGERY) >= 118)
+			mymaxpets := 11;
+		elseif (GetAttribute (master, ATTRIBUTEID_MAGERY) >= 108)
+			mymaxpets := 10;
+		elseif (GetAttribute (master, ATTRIBUTEID_MAGERY) >= 98)
+			mymaxpets := 9;
+		elseif (GetAttribute (master, ATTRIBUTEID_MAGERY) >= 88)
+			mymaxpets := 8;
+		elseif (GetAttribute (master, ATTRIBUTEID_MAGERY) >= 78)
+			mymaxpets := 7;
+		endif
+
+		//if there's too many pets, check around for other pets.  Summoned pets get released first.  If there's
+		//No summoned pets to release, quit
+		if ( (summoned_pets > mymaxpets) and ((RandomInt(15)+3) < summoned_pets) )
+			Release ();
+			return 1;
+		endif
+	else
+		var mymaxpets := 5;
+		if (GetAttribute (master, ATTRIBUTEID_TAMING) >= 120)
+			mymaxpets := 12;
+		elseif (GetAttribute (master, ATTRIBUTEID_TAMING) >= 118)
+			mymaxpets := 11;
+		elseif (GetAttribute (master, ATTRIBUTEID_TAMING) >= 108)
+			mymaxpets := 10;
+		elseif (GetAttribute (master, ATTRIBUTEID_TAMING) >= 98)
+			mymaxpets := 9;
+		elseif (GetAttribute (master, ATTRIBUTEID_TAMING) >= 88)
+			mymaxpets := 8;
+		elseif (GetAttribute (master, ATTRIBUTEID_TAMING) >= 78)
+			mymaxpets := 7;
+		endif
+		if (normal_pets > mymaxpets)
+			return 1;
+		endif
+		return 0;
+	endif
+
+	//There's also a check for the total number of pets, summoned and tamed combined
+	//Summoned pets get released first.  If there's no summoned pets to release, quit
+	if ((normal_pets + summoned_pets) > 16)
+		if ((RandomInt(15)+3) < (normal_pets + summoned_pets))
+			if (GetObjProperty (me, "summoned"))
+				Release ();
+				return;
+			endif
+	
+			foreach mob in ListMobilesNearLocation (me.x, me.y, me.z, range, me.realm)
+				if ( (mob.script["tamed"]) and (GetObjProperty (mob, "master") == masterserial) )
+					if (GetObjProperty (mob, "summoned"))
+						return 1;
+					elseif (GetPetCountOfNPC (mob) < GetPetCountOfNPC (me))
+						return 1;
+					endif
+				endif
+			endforeach
+			return 1;
+		endif
+	endif
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Figures out how much a given pet is worth, in terms of 'pet points'
+///////////////////
+
+function GetPetCountOfNPC (mob)
+	var mobelem := GetNpcTemplateElem (mob.npctemplate);
+	var mobstr := GetAttribute (mob, "Strength");
+
+	//Totem pets always count as 1
+	if (GetObjProperty (mob, "totem"))
+		return 1;
+	endif
+
+	//check to see if there's a default petvalue in the npcdesc elem
+	var tamingvalue := CINT (mobelem.tamingvalue);
+	if (tamingvalue)
+		return tamingvalue;
+	endif
+
+	//Summoned pets count for less
+	if (GetObjProperty (mob, "summoned"))
+		if (mobelem.script ["spell"] or mobelem.script["fire"] or mobelem.script["vampire"])
+			if (mobstr > 120)
+				return 3;
+			else
+				return 2;
+			endif
+		elseif (mobstr > 120)
+			return 2;
+		else
+			return 1;
+		endif
+		return 1;
+	endif
+
+	var tameskill := CINT (mobelem.tameskill);
+	if (!tameskill)
+		return 7;
+	endif
+
+	if (tameskill <= 60)
+		return 1;
+	elseif (tameskill <= 70)
+		return 2;
+	elseif (tameskill <= 80)
+		return 3;
+	elseif (tameskill <= 90)
+		return 4;
+	elseif (tameskill <= 100)
+		return 5;
+	elseif (tameskill <= 110)
+		return 6;
+	else
+		return 7;
+	endif
+
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  summoned pets disappear, totems go back to item form ,and otherwise the NPC goes wild
+///////////////////
+
+function Release()
+	me.cmdlevel := 0;
+	me.concealed := 0;
+	me.hidden := 0;
+	me.frozen := 0;
+
+	var summoned := GetObjProperty (me , "summoned");
+	if (summoned)
+		PlaySoundEffect (me, SFX_SPELL_DISPEL);
+		KillMe ();
+		return;
+	endif
+
+	var totem := CINT (GetObjProperty (me , "totem"));
+	if (totem)
+		set_critical (1);
+		var it := CreateItemAtLocation (me.x, me.y, me.z, totem, 1, me.realm);
+		if (!it)
+			say ("*Argh*");
+			set_critical (0);
+			return;
+		endif
+
+		it.decayat := 0;
+		it.movable := 1;
+		it.name := me.name;
+		it.usescript := ":dundee:totem";
+		it.color := CINT (GetObjProperty (me, "totemcolor"));
+		SetObjProperty (it, "critter", me.npctemplate);
+		if (GetObjProperty (it, "color"))
+			SetObjProperty (it, "critcolor", GetObjProperty (it, "color"));
+		else
+			SetObjProperty (it, "critcolor", me.color);
+		endif
+		SetObjProperty (it, "critgraphic", me.graphic);
+		SetObjProperty (it, "totemhp", CINT (GetVital (me, "Life")/100));
+
+		if (GetObjProperty (me, "ownerserial"))
+			SetObjProperty (it, "ownerserial", GetObjProperty (me, "ownerserial"));
+			SetObjProperty (it, "ownername", GetObjProperty (me, "ownername"));
+			SetObjProperty (it, "oldname", GetObjProperty (me, "oldname"));
+		endif
+
+		Drop ();
+		PlaySoundEffect (me, SFX_SPELL_DISPEL);
+		PlayStationaryEffect (me.x, me.y, me.z, FX_SMOKE, 0xA, 0xA, 0, me.realm);
+		KillMe ();
+		set_critical(0);
+		return;
+	endif
+
+	GoWild ();
+endfunction
+
+
+
+
+///////////////////
+//  NPC leaves its master
+///////////////////
+
+function GoWild ()
+	var MyTemplateElem := GetNpcTemplateElem (me.npctemplate);
+	if (MyTemplateElem.script)
+		me.script := MyTemplateElem.script;
+	else
+		me.script := "::barker";
+	endif
+	if (!MyTemplateElem.name["<random>"])
+		me.name := MyTemplateElem.name;
+	endif
+	if ( me.name["<random>"] )
+		var temp_string := me.name;
+		temp_string["<random>"] := RandomName (me);
+		me.name := temp_string;
+	endif
+
+	PrintTextAbove (me, me.name + " can roam free again!");
+	me.setmaster (0);
+	EraseObjProperty (me, "master");
+	SetAnchor (me.x, me.y, 10, 1 );
+	sleep (1);
+	me.run_speed := CINT (GetAttributeBaseValue (me, "Dexterity")/10)+1;
+	RestartScript (me);
+endfunction
+
+
+
+
+///////////////////
+//  Makes the NPC poop (Whee!)
+///////////////////
+
+function poop();
+	if ( ReadGameClock() > cint(GetObjProperty (me, "#nextpoop")) )
+		if (randomint(4) == 1)
+			case (me.graphic)
+				0xcc:
+				0xe4:
+				0xc8:
+				0xe2:
+				0x123:
+					var poopoo := CreateItemAtLocation (me.x, me.y, me.z, 0x0f3c, 1, me.realm);
+					poopoo.decayat := ReadGameClock() + 300;
+					poopoo.movable := 0;
+				default:
+					return;
+			endcase
+		endif
+		SetObjProperty (me, "#nextpoop", ReadGameClock() + 1800);
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  makes pet dragons say things
+///////////////////
+
+function dragontalk (responsekey, targetname)
+	if (RandomInt (3) != 1)
+		return;
+	endif
+
+	targetname := TruncateArticle (targetname);
+	var speechfile := ReadConfigFile (":dundee:dragonspeak");
+	if (!speechfile)
+		return;
+	endif
+
+	var elem := FindConfigElem (speechfile, responsekey);
+	if (!elem)
+		return;
+	endif
+
+	var responses := GetConfigStringArray (elem, "response");
+	if (!len (responses))
+		return;
+	endif
+
+	var response := responses [ RandomInt(len(responses))+1 ];
+	response["mastername"] := master.name;
+	response["targetname"] := targetname;
+
+	say (response);
+endfunction
+
+
+
+
+///////////////////
+//  This function is called when a tamed NPC is double clicked on.  Depending on what type of NPC it is,
+//  it either opens their pack or mounts them
+///////////////////
+
+function DoDoubleClickEvent ();
+	if (distance (me, master) > 1)
+		return;
+	endif
+
+	case (me.graphic)
+		CID_PACK_HORSE:
+		CID_PACK_LLAMA:
+			if (!me.backpack)
+				var newbackpack := CreateItemAtLocation (5288, 1176, 0, UOBJ_BACKPACK, 1, REALM_BRITANNIA);
+				if (!EquipItem (me, newbackpack))
+					DestroyItem (newbackpack);
+				endif
+			endif
+			SendOpenSpecialContainer (master, me.backpack);
+			return;
+	endcase
+
+	if (dragonspeak)
+		dragontalk ("doubleclick", master.name);
+	endif	
+
+	//make sure they aren't already mounted
+	if (GetEquipmentByLayer (master, LAYER_MOUNT))
+		return;
+	endif
+
+	master.hidden := 0;
+	var mounttype := 0;
+
+	case (me.graphic)
+		CID_BROWN_HORSE:
+			mounttype := 0x3ea2;
+		CID_TAN_HORSE:
+			mounttype := 0x3e9f;
+		CID_LIGHT_HORSE:
+			mounttype := 0x3ea0;
+		CID_GREY_HORSE:
+			mounttype := 0x3ea1;
+		CID_LLAMA:
+			mounttype := 0x3ea6;
+		CID_DESERT_OSTARD:
+			mounttype := 0x3ea3;
+		CID_FRENZIED_OSTARD:
+			mounttype := 0x3ea4;
+		CID_FOREST_OSTARD:
+			mounttype := 0x3ea5;
+		CID_REPTALON:
+			mounttype := 0x3e90;
+		CID_CU_SIDHE:
+			mounttype := 0x3e91;
+		CID_CHARGER_HORSE:
+			mounttype := 0x3e92;
+		CID_HIRYU:
+			mounttype := 0x3e94;
+		CID_GIANT_BEETLE:
+			mounttype := 0x3ebc;
+		CID_FIRE_BEETLE:
+			mounttype := 0x3e95;
+		CID_SWAMP_DRAGON:
+			mounttype := 0x3ebd;
+		CID_RIDGEBACK:
+			mounttype := 0x3eba;
+		CID_UNICORN:
+			mounttype := 0x3eb4;
+		CID_KIRIN:
+			mounttype := 0x3ead;
+		CID_FIRESTEED:
+			mounttype := 0x3e9e;
+		CID_SAVAGE_RIDGEBACK:
+			mounttype := 0x3eb8;
+		CID_HELLSTEED:
+			mounttype := 0x3ebb;
+		CID_ARMORED_SWAMP_DRAGON:
+			mounttype := 0x3ebe;
+		CID_POLAR_BEAR:
+			mounttype := 0x3ec5;
+		CID_ARMORED_BOURA:
+			mounttype := 0x3ec6;
+
+	endcase
+
+	if (mounttype)
+		if (master.race == RACE_GARGOYLE)
+			SendSysMessage(master, "You would rather fly than ride.");
+			return;
+		elseif (MoveObjectToLocation (master, me.x, me.y, me.z, me.realm, 0))
+			drop();
+			set_critical (1);
+			RecordStatsAndSkills();
+			master.facing := me.facing;
+			var mount := CreateItemAtLocation (5288, 1176, 0, UOBJ_MOUNT, 1, REALM_BRITANNIA);
+			if (!mount)
+				set_critical(0);
+				return;
+			endif
+			mount.color := me.color;
+			mount.graphic := mounttype;
+			mount.name := me.name;
+
+			foreach property in GetObjPropertyNames (me)
+				if (property != "master")
+					var value := GetObjProperty (me, property);
+					SetObjProperty (mount, property, value);
+				endif
+			endforeach
+
+			SetObjProperty (mount, "petname", me.name);
+			SetObjProperty (mount, "npctemplate", me.npctemplate);
+			SetObjProperty (mount, "pethp", CINT (GetVital (me, "Life")/100));
+			SetObjProperty (mount, "petmana", CINT (GetVital (me, "Mana")/100));
+			SetObjProperty (mount, "petgraphic", me.graphic);
+			SetObjProperty (mount, "freetime", freetime);
+			if (Getobjproperty (me, "summoned"))
+				SetObjProperty (mount, "summoned", 1);
+			endif
+
+			if (!EquipItem (master, mount))
+				DestroyItem (mount);
+				set_critical(0);
+				return;
+			endif
+			KillMe ();
+			set_critical(0);
+			following := 0;
+			guarding := 0;
+			sleep (5);
+		endif
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  called when someone drops an item on their pet
+///////////////////
+
+function TakeItem (ev)
+	if (!GetObjProperty (me, "totem"))
+		var MyTemplateElem := GetNpcTemplateElem (me.npctemplate);
+		var foodtype := MyTemplateElem.food;
+		if (!foodtype)
+			foodtype := "all";
+		endif
+
+		//find out if the item given was a kind of food that the NPC eats
+		var food_cfg_file := readconfigfile ("::food");
+		var elem := findconfigelem (food_cfg_file, foodtype);
+		var foodarray := GetConfigStringArray (elem, "food");
+		if (cstr(ev.item.objtype) in foodarray )
+			PlaySoundEffect (me, cint(0x3b) + RandomInt(3));
+			SubtractAmount (ev.item, 1);
+			MoveItemToContainer (ev.item, ev.source.backpack);
+			PrintTextAbovePrivate (me, "*Yum!*", ev.source);
+			freetime := ReadGameClock() + 14400;
+			Setobjproperty (me, "freetime", freetime);
+			return;
+		endif
+	endif
+
+	//pack animal put anything other than food in their backpacks
+	if ( (me.graphic == CID_PACK_HORSE ) or (me.graphic == CID_PACK_LLAMA) )
+		if (!me.backpack)
+			var newbackpack := CreateItemAtLocation (5288, 1176, 0, UOBJ_BACKPACK, 1, REALM_BRITANNIA);
+			EquipItem (me, newbackpack);
+		endif
+		MoveItemToContainer (ev.item, me.backpack);
+		PlaySoundEffect (me, 0x49);
+
+	//otherwise, give it back
+	else
+		var yourpack := ev.source.backpack;
+		MoveItemToContainer (ev.item, yourpack);
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  the main fight AI
+///////////////////
+
+function Fight (opponent)
+	var targetname := opponent.name;
+	var oldfollowing := following;
+	following := 0;
+
+	if (opponent == me or opponent == master or opponent.script["humuc"])
+		setwarmode (0);
+		return;
+	endif
+
+	if (opponent.cmdlevel)
+		if (!GetObjProperty (opponent, "attackable"))
+			setwarmode (0);
+			return;
+		endif
+	endif
+
+	TurnToward (opponent);
+	SetOpponent (opponent);
+
+	var nextbreath := ReadGameClock ();
+	var loops := 0;
+	var waittime := 0;
+	var ev;
+
+	while (opponent and !opponent.dead and !opponent.hidden and !opponent.concealed)
+		if (Distance (me, opponent) > 20);
+			SetWarMode (0);
+			return;
+		endif
+		RecordStatsAndSkills();
+
+		if (!CloseDistance (opponent))
+			loops := loops + 1;
+			waittime := 0;
+		else
+			loops := 0;
+			waittime := 1;
+		endif
+
+		ev := wait_for_event ( waittime );
+		if (ev)
+			repeat
+				case (ev.type)
+					EVID_ALL_ATTACK_CMD:
+						opponent := ev.target;
+						SetOpponent ( ev.target );
+					EVID_ALL_FOLLOW_CMD:
+						following := ev.target;
+					EVID_ALL_GUARD_CMD:
+						guarding := ev.target;
+						PrintTextAbove (me, "*guarding " + guarding.name + "*");
+					EVID_SPEECH:
+						ProcessSpeech (ev);
+					EVID_ENGAGED:
+					EVID_DAMAGED:
+						if (ev.source) 
+							if ( (ev.source != opponent) and (ev.source != master) and (ev.source != me) )
+								if( (!CheckLoSAt ( me, opponent.x, opponent.y, opponent.z )) or (RandomInt(8)==1) )
+									opponent := ev.source;
+									SetOpponent ( opponent );
+								endif
+							endif
+							TurnToward ( opponent );
+						endif
+					EVID_PEACEMADE:
+						SetWarMode ( 0 );
+						opponent := 0;
+						following := oldfollowing;
+						return;
+				endcase
+				ev := wait_for_event (0);
+			until (!ev);
+		endif
+
+		//if we got a follow command, quit warmode and follow
+		if (following)
+			SetWarMode (0);
+			staying := 0;
+			return;
+		endif
+
+		if (firebreather)
+			if ( nextbreath <= ReadGameClock() )
+				BreathFire (opponent, nextbreath);
+			endif
+		elseif (healer)
+			if ( nextbreath <= ReadGameClock() )
+				sleep(1);
+				CastHealingSpells (me, opponent);
+				nextbreath := ReadGameClock() + RandomInt(2)+1;
+			endif
+		elseif (caster)
+			if (nextbreath <= ReadGameClock())
+				sleep(1);
+				cast_offensive_spell (me, opponent);
+				nextbreath := ReadGameClock() + RandomInt(5) + 3;
+			endif
+		endif
+
+		//if we can't get to our opponent by now, forget it
+		if ( loops > 100 )
+			flee (opponent);
+			return;
+		endif
+	endwhile
+
+	SetWarMode (0);
+
+	foreach mob in ListHostiles (me, 9, 0)
+		Fight (mob);
+		return;
+	endforeach
+
+	if (distance (me, master) < 12)
+		following := oldfollowing;
+	else
+		following := 0;
+		staying := 0;
+	endif
+
+	if (dragonspeak)
+		dragontalk ("aftercombat", targetname);
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  tries to get get closer to the opponent
+///////////////////
+
+function CloseDistance (byref opponent)
+	if (immobile)
+		return 1;
+	endif
+	
+	if (purecaster)
+		if (GetVital (me, "Mana") * 5 < GetVitalMaximumValue (me, "Mana"))
+//			purecaster := 0;
+		else
+			if (guarding)
+				if (Distance (me, guarding) > 4)
+					RunToward (guarding);
+					RunToward (guarding);
+					return 1;
+				else
+					return 1;
+				endif
+			else
+				if (!CheckLoSAt (me, opponent.x, opponent.y, opponent.z))
+					RunToward (opponent);
+					RunToward (opponent);
+					return 0;
+				else
+					return 1;
+				endif
+			endif
+		endif
+	endif
+	
+	var d := Distance (me, opponent);
+	if (guarding)
+		var gd := Distance (me, guarding);
+		if ( gd > 15 )
+			guarding := 0;
+		elseif (d <= 1)
+			return 1;
+		elseif (gd > 5)
+			RunToward (guarding);
+			RunToward (guarding);
+			return 1;
+		elseif (Distance (opponent, guarding) < 5)
+			RunToward (opponent);
+			RunToward (opponent);
+			return 0;
+		else
+			foreach possible_opponent in ListHostiles (guarding, 3)
+				opponent := possible_opponent;
+				break;
+			endforeach
+			return 1;
+		endif
+	endif
+
+	case (d)
+		1:
+		0:
+			return 1;
+		default:
+			RunToward (opponent);
+			RunToward (opponent);
+			return 0;
+    endcase
+endfunction
+
+
+
+
+///////////////////
+//  Guard the master
+///////////////////
+
+function Guard()
+	if (nextwatch <= readgameclock()) 
+		nextwatch := readgameclock() + 7;
+		if ( randomint(20)==1 )
+			PrintTextAbove(me,"*guarding " + guarding.name + "*");
+		endif
+		foreach mob in ListHostiles( guarding, 9, 0 );
+			if (dragonspeak)
+				dragontalk ("guardingattacked", mob.name);
+			endif
+			Fight(mob);
+			return;
+		endforeach
+	endif
+
+	if (!GetVital (guarding, "Life") or guarding.dead or distance (me, guarding) > 15)
+		guarding := 0;
+	endif
+endfunction
+
+function Follow ()
+	if ((me.frozen))
+		sleep (10);
+		return;
+	endif
+	if (immobile)
+		sleep (10);
+		return;
+	endif
+
+	var d := Distance (me, following);
+	if (d < 3)
+		sleepms (100);
+		chaseloop := 0;
+	elseif (( d > 10 ) or ( chaseloop > 50 ))
+		if (!me.frozen)
+			MoveObjectToLocation( me, following.x, following.y, following.z, following.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		chaseloop := 0;
+		sleepms (100);
+	else
+		RunToward (following);
+		chaseloop := chaseloop + 1;
+	endif
+
+	if (!GetVital (following, "Life") or following.dead)
+		following := 0;
+	endif
+	if (guarding)
+		Guard();
+	endif
+
+endfunction
+
+function AllCommand (evtype,what)
+	var mobs := ListMobilesNearLocation( master.x, master.y, master.z, 9, master.realm );
+	var eve := struct;
+	eve.+type := evtype;
+	eve.+source := me;
+	eve.+target := what;
+	SendEvent( me , eve );
+	foreach mob in mobs 
+		if( GetObjProperty( mob , "master" ) == me.master.serial )
+			SendEvent( mob , eve );
+		endif
+	endforeach
+endfunction
+
+function BreathFire (opponent, byref nextbreath)
+	if (Distance (me, opponent) > 3)
+		nextbreath := ReadGameClock() + 2;
+		return;
+	endif
+
+	if (battle_orders == BATTLEORDERS_NEVER_BREATH_FIRE)
+		nextbreath := ReadGameClock() + 60;
+		return;
+	elseif (battle_orders == BATTLEORDERS_CHECK_FOR_FRIENDLIES)
+		nextbreath := ReadGameClock() + RandomInt(8) + 6;
+		foreach mobile in ListMobilesNearLocation (me.x, me.y, me.z, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, me.realm)
+			if (!mobile.hidden or !GetObjProperty (mobile, "#specialhidden_nodamage"))
+				if (!mobile.npctemplate)
+					return;
+				elseif (mobile.script == "warrior" or mobile.script["humuc"])
+					return;
+				elseif (mobile.script["tamed"] and mobile != me)
+					return;
+				endif
+			endif
+		endforeach
+	else
+		nextbreath := ReadGameClock() + RandomInt(5) + 5;
+	endif
+
+	var torch := CreateItemInContainer (me.backpack, 0x0a12, 1);
+	EquipItem (me, torch);
+
+	//Different NPC graphics require different animations
+	case (me.graphic)
+		CID_DRAGON_GREY:
+		CID_DRAGON_RED:
+		CID_DRAKE_GREY:
+		CID_DRAKE_RED:
+			PerformAction (me, 0x0c);
+		default:
+			performaction (me, 0x5);
+	endcase
+	PrintTextAbove (me, "*breathes fire*");
+
+	var percent_modifier := CDBL (GetVital (me, "Life")) / CDBL (GetVitalMaximumValue (me, "Life"));
+	var MyTemplateElem := GetNpcTemplateElem (me.npctemplate);
+	var firedamage := GetConfigString (MyTemplateElem, "firedamage");
+	if (!firedamage)
+		firedamage := "4d6";
+	endif
+
+	foreach mobile in ListMobilesNearLocationEx (me.x, me.y, me.z, 5, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, me.realm)
+		if (!mobile.hidden or !GetObjProperty (mobile, "#specialhidden_nodamage"))
+			if (!mobile.npctemplate["humuc"])
+				var dmg := CINT (RandomDiceRoll (firedamage) * percent_modifier);
+				if (!dmg or dmg < 5)
+					dmg := 5;
+				endif
+				PlayMovingEffect (me, mobile, MOVING_EFFECT_FIREBALL, 10, 1, 1);
+				DoDamageByType (me, mobile, dmg, DAMAGETYPE_FIRE);
+			endif
+		endif
+	endforeach
+
+	sleep (1);
+	DestroyItem (torch);
+endfunction
+
+
+
+
+function flee(opponent)
+	if (immobile)
+		return;
+	endif
+
+	var numflees := getobjproperty(me,"#flees");
+
+	if (numflees)
+		if ( numflees > 5 )
+			EraseObjProperty(me,"#flees");
+			var totem := Cint(GetObjProperty( me , "totem" ));
+			if (totem) 
+				sleep(30); 
+				return; 
+			else
+				KillMe ();
+			endif
+		else
+			numflees := numflees + 1;
+		endif
+	else
+		numflees := 1;
+	endif
+
+	setobjproperty(me,"#flees",numflees);
+
+	var runs := 0;
+	while ( (distance(me, opponent) < 20) and (runs < 50) )
+		runawayfrom(opponent);
+		runs := runs +1;
+		wait_for_event(0);
+	endwhile
+
+	RestartScript ( me );
+endfunction
+
+
+
+
+///////////////////
+//  Usually cast healing spells on anything friendly that's around.  Otherwise blast the enemy
+///////////////////
+
+function CastHealingSpells (me, opponent)
+	foreach mobile in ListMobilesNearLocation (me.x, me.y, me.z, 15, me.realm)
+		if (mobile.acctname or GetObjProperty (mobile, "master"))
+			if (mobile.poisoned)
+				CastSpell (me, mobile, ":poison_spells:cure");
+				sleep (3);
+				return;
+			endif
+		endif
+	endforeach
+
+	foreach mobile in ListMobilesNearLocation (me.x, me.y, me.z, 15, me.realm)
+		if (mobile.acctname or GetObjProperty (mobile, "master"))
+			if (GetVital (mobile, "Life") * 2 < GetVitalMaximumValue (mobile, "Life"))
+				CastSpell (me, mobile, ":misc_spells:gheal");
+				sleep (3);
+				return;
+			endif
+		endif
+	endforeach
+	
+	if (opponent)
+		if (RandomInt (2) == 1)
+			cast_offensive_spell (me, opponent);
+		endif
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  looks for players in the area.  if there aren't any, then we can be less active
+///////////////////
+
+function GoToSleep ()
+	foreach critter in ListMobilesNearLocation (me.x, me.y, me.z, 20, me.realm );
+		if (!critter.npctemplate)
+			return 0;
+		endif
+	endforeach
+
+	return 1;
+endfunction
+
+
+function RecordStatsAndSkills ()
+	var basestr := CINT (GetAttributeBaseValue (me, "Strength")/10);
+	var baseint := CINT (GetAttributeBaseValue (me, "Intelligence")/10);
+	var basedex := CINT (GetAttributeBaseValue (me, "Dexterity")/10);
+
+	var stats := array;
+	stats[1] := basestr;
+	stats[2] := baseint;
+	stats[3] := basedex;
+	SetObjProperty (me, "stats", stats);
+
+	var myskills := array {};
+	for i := 0 to 57
+		myskills[i] := GetAttribute (me, GetAttributeIDBySkillID (i));
+	endfor
+	SetObjProperty (me, "skills", myskills);
+
+endfunction
+

@@ -1,0 +1,16 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+
+program caninsert_specialmap (character, container, movetype, inserttype, item, existing_stack, amt_to_add)
+	if (GetObjProperty (container, "#addingitems"))
+		return 1;
+	endif
+	if (amt_to_add and character and movetype and inserttype and existing_stack and item)
+	endif
+	return 0;
+endprogram

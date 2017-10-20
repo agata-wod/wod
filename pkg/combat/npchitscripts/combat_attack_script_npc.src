@@ -1,0 +1,325 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "../pkg/combat/weapons/combat_attack_script";
+include "include/newperformaction";
+
+var attacker, defender;
+var armorcfgfile := ReadConfigFile (":armor:itemdesc");
+var attacker_npcdesc_elem, defender_npcdesc_elem;
+var defender_armor;
+
+program combat_attack_script (parms)
+	attacker := parms [1];
+	defender := parms [2];
+	if (!attacker or !defender)
+		SendSysMessage (attacker, "No defender!");
+		SendSysMessage (defender, "No attacker!");
+		return 0;
+	endif
+	
+	if (attacker.z > (defender.z + 20) or attacker.z < (defender.z - 20))
+		return 1;
+	endif
+	if (Distance (attacker, defender) > 20)
+		return 1;
+	endif
+
+	//Load the NPCdesc elems for any parties to this combat that are NPCs
+	if (attacker.npctemplate)
+		attacker_npcdesc_elem := GetNpcTemplateElem (attacker.npctemplate);
+	endif
+	if (defender.npctemplate)
+		defender_npcdesc_elem := GetNpcTemplateElem (defender.npctemplate);
+	endif
+
+	//Properly credit the attacker for anything that happens, but not in the arena
+	if (attacker.x >= 1385 and attacker.x <= 1414 and attacker.y >= 3729 and attacker.y <= 3758)
+		SetScriptController (0);
+	else
+		SetScriptController (attacker);
+	endif
+	PerformAttackAnimation ();
+
+	//Calc chance to hit and check for success
+	var chance_to_hit := CalculateToHitChance ();
+	if (RandomInt (100) > chance_to_hit)
+		PlayMissSoundEffect ();
+		return 1;
+	endif
+	
+	//Hit! Figure out how much raw damage the attack did, then modify it be tactics and strength
+	var raw_damage := CalculateAttackDamage ();
+	var modified_damage := CINT ((raw_damage * (GetAttribute (attacker, ATTRIBUTEID_TACTICS) + 50 + CINT (GetAttribute (attacker, ATTRIBUTEID_STRENGTH)/5)))/100);
+
+	//Get the defender's AR rating and reduce the damage by 50-100% of that value
+//	var defender_ar := CINT (GetDefendersAR (defender)/2);
+	var defender_ar := CINT (GetDefendersAR (defender));
+	if (defender_ar > 0)
+//		modified_damage := modified_damage - RandomInt (defender_ar) - defender_ar - 1;
+		modified_damage := CINT (modified_damage*(100 - defender_ar)/100);
+	endif
+
+	//Always do at least 1 damage
+	if (modified_damage < 1)
+		modified_damage := 1;
+	endif
+
+	//Now check parry, if the defender has a shield
+	var shield := GetEquipmentByLayer (defender, LAYER_HAND2);
+	if (shield and IsShield (shield))
+		var defender_parry_skill := GetAttribute (defender, ATTRIBUTEID_PARRY);
+		if (RandomInt (300) < defender_parry_skill)
+			//Successful parry, reduce damage
+			modified_damage := modified_damage - shield.ar;
+			SendSysMessage (defender, "You parry the attack!");
+			QuickAwardRawAttributePoints (defender, ATTRIBUTEID_PARRY, 30);
+			PlaySoundEffect (defender, 0x143);
+
+			//Do some damage to the shield
+			if (shield.hp or shield.hp == 0)
+				if (RandomInt (100) == 1)
+					if (DoDamageToEquipment (shield, 1))
+						SendSysMessage (defender, "Your shield breaks!");
+						DestroyItem (shield);
+					endif
+				endif
+			endif
+
+			//if no damage left, quit now
+			if (modified_damage <= 0)
+				return 1;
+			endif
+		else	//On unsuccesfull parry, play hit sound effect
+			PlayHitSoundEffect ();
+		endif
+	else	//On unsuccesfull parry, play hit sound effect
+		PlayHitSoundEffect ();
+	endif
+
+	//Players take 1/2 damage
+//	if (defender.acctname or defender.npctemplate == ":guards:warrior")
+//		modified_damage := CINT (modified_damage/2);
+//	endif
+
+	if (GetObjProperty (defender, "#reactive_armor"))
+		if (Distance (attacker, defender) <= 1)
+			var evalintskill := GetAttribute (defender, ATTRIBUTEID_INVOCATION);
+			var reactive_damage := CINT ( (evalintskill*modified_damage)/200);
+			PlaySoundEffect (attacker, SFX_SPELL_EXPLOSION);
+			PlayObjectCenteredEffect (attacker, FX_EXPLODE_3, 7, 0x10);
+			DoDamageByType (defender, attacker, reactive_damage, DAMAGETYPE_MAGIC);
+			EraseObjProperty (defender, "#reactive_armor");
+		endif
+	elseif (GetObjProperty (defender, "special_reactive_armor") and RandomInt (2))
+		if (Distance (attacker, defender) <= 1)
+			var reactive_damage := CINT (modified_damage/2);
+			PlaySoundEffect (attacker, SFX_SPELL_EXPLOSION);
+			PlayObjectCenteredEffect (attacker, FX_EXPLODE_3, 7, 0x10);
+			DoDamageByType (defender, attacker, reactive_damage, DAMAGETYPE_MAGIC);
+		endif
+	endif
+
+	DoDamageByType (attacker, defender, modified_damage, DAMAGETYPE_PHYSICAL);
+
+	QuickAwardRawAttributePoints (attacker, attacker_npcdesc_elem.AttackAttribute, 30);
+	QuickAwardRawAttributePoints (attacker, ATTRIBUTEID_TACTICS, 15);
+	QuickAwardRawAttributePoints (defender, ATTRIBUTEID_TACTICS, 15);
+
+	if (GetAttribute (attacker, ATTRIBUTEID_ANATOMY))
+		if (RandomInt (1000) < GetAttribute (attacker, ATTRIBUTEID_ANATOMY))
+			SendSysMessage (attacker, "Critical hit!");
+			if (CheckSkill (attacker, SKILLID_ANATOMY, 80, 0) )
+				DoDamageByType (attacker, defender, modified_damage, DAMAGETYPE_PHYSICAL);
+			else
+				DoDamageByType (attacker, defender, CINT (modified_damage/2), DAMAGETYPE_PHYSICAL);
+			endif
+		endif
+	endif
+	QuickAwardRawAttributePoints (defender, ATTRIBUTEID_ANATOMY, 15);
+	
+	if (GetAttribute (attacker, ATTRIBUTEID_POISONING))
+		DoNPCPoisonHit (attacker, defender);
+		QuickAwardRawAttributePoints (attacker, ATTRIBUTEID_POISONING, 15);
+	endif
+	return 1;
+endprogram
+
+
+
+
+///////////////////
+//  Perform the attack animation for both players and NPCs.  If the graphic of the attacker isn't
+//  a normal human, different animations need to be used
+///////////////////
+
+function PerformAttackAnimation ()
+	//If they're not human, use different attack animations based on their graphic
+	if (attacker.graphic != 400 and attacker.graphic != 401 and attacker.graphic != 605 and attacker.graphic != 606 and attacker.graphic != 666 and attacker.graphic != 667 and attacker.graphic != 744 and attacker.graphic != 745)
+		case (attacker.graphic)
+			CID_ALLIGATOR:
+			CID_PIG:
+			CID_BROWN_BEAR:
+			CID_GRIZZLY_BEAR:
+			CID_POLAR_BEAR:
+			CID_BOAR:
+			CID_BUNNY:
+			CID_CAT:
+			CID_DOG:
+			CID_WOLF:
+			CID_COW:
+			CID_COW2:
+			CID_BULL:
+			CID_BULL2:
+			CID_CHICKEN:
+			CID_GOAT:
+			CID_RAT:
+			CID_GIANT_RAT:
+			CID_PANTHER:
+				PerformAction (attacker, (RandomInt (3) + 5));
+			CID_EAGLE:
+				PerformAction (attacker, 4);
+			default:
+				PerformAction (attacker, (RandomInt (3) + 4));
+		endcase
+	
+		return;
+	endif
+
+	//Wrestling animations for humans
+//	if (GetEquipmentByLayer (attacker, LAYER_MOUNT))
+//		PerformAction (attacker, 0x09);
+//	else
+//		if (RandomInt (2))
+//			PerformAction (attacker, 0x0A);
+//			return;
+//		else
+//			PerformAction (attacker, 0x0B);
+//			return;
+//		endif
+//	endif
+//	PerformAction (attacker, 0x09);
+	if(attacker.graphic == 666 or attacker.graphic == 667)
+		NewPerformAction(attacker, 0, 4, RandomInt(3));
+		return;
+	endif
+	NewPerformAction(attacker, 0, 3+RandomInt(3), 0);
+	return;
+endfunction
+
+
+
+
+///////////////////
+//  Calculate the odds of a successful attack
+//////////////////
+
+function CalculateToHitChance ()
+	//First calculate the weaponskills for the attacker and defender
+	var attacker_weaponskill := GetAttribute (attacker, attacker_npcdesc_elem.AttackAttribute);
+
+	var defender_weaponskill := 0;
+	if (defender.acctname)
+		if (defender.weapon)
+			defender_weaponskill := GetAttribute (defender, (defender.weapon.attribute));
+		else
+			defender_weaponskill := GetAttribute (defender, ATTRIBUTEID_WRESTLING);
+		endif
+
+		//Increased chance of being missed for players
+		if (defender_weaponskill > 70)
+			defender_weaponskill := CINT (defender_weaponskill * 1.20);
+		endif
+	else
+		if (defender.weapon)
+			defender_weaponskill := GetAttribute (defender, (defender.weapon.attribute));
+		else
+			defender_weaponskill := GetAttribute (defender, defender_npcdesc_elem.AttackAttribute);
+		endif
+		if (!defender_weaponskill)
+			defender_weaponskill := GetAttribute (defender, ATTRIBUTEID_WRESTLING);
+		endif
+	endif
+
+	var chance_to_hit := CINT (((attacker_weaponskill + 50)*50)/(defender_weaponskill + 50));
+
+	//There's always a small chance to hit
+	if (!chance_to_hit)
+		chance_to_hit := 1;
+	endif
+
+	return chance_to_hit;
+endfunction
+
+
+
+
+///////////////////
+//  Figures out the raw weapon damage, unmodified by tactics, armor, etc
+///////////////////
+
+function CalculateAttackDamage ()
+	var raw_damage;
+	if (len (attacker_npcdesc_elem.AttackDamage))
+		raw_damage := RandomDiceRoll ((attacker_npcdesc_elem.AttackDamage));
+	else
+		raw_damage := RandomDiceRoll ("4d6+3");
+	endif
+	return raw_damage;
+endfunction
+
+
+
+
+///////////////////
+//  Miss!  Play a swoosh-type sound effect
+///////////////////
+
+function PlayMissSoundEffect ()
+	var sound_effect := attacker_npcdesc_elem.AttackMissSound;
+	if (!sound_effect)
+		sound_effect := 0x239;
+	endif
+	PlaySoundEffect (attacker, sound_effect);
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  Hit!  Play the hit sound effect
+///////////////////
+
+function PlayHitSoundEffect ()
+	var sound_effect := attacker_npcdesc_elem.AttackHitSound;
+	if (!sound_effect)
+		sound_effect := 0x534 + RandomInt(2);
+	endif
+	PlaySoundEffect (defender, sound_effect);
+	return 1;
+endfunction
+
+
+//For poisonous NPCs that don't use a weapon.  Snakes for example
+function DoNPCPoisonHit (byref attacker, byref defender)
+	if (GetAttribute (attacker, ATTRIBUTEID_POISONING) and Distance (attacker, defender) <= 1)
+		if (RandomInt (4) == 1)
+			if (CheckSkill (attacker, SKILLID_POISONING, 120, 0) and RandomInt (2))
+				SetPoison (defender, 12, "You have been poisoned by " + attacker.name);
+			elseif (CheckSkill (attacker, SKILLID_POISONING, 100, 0) and RandomInt (2))
+				SetPoison (defender, 10, "You have been poisoned by " + attacker.name);
+			elseif (CheckSkill (attacker, SKILLID_POISONING, 80, 0) and RandomInt (2))
+				SetPoison (defender, 8, "You have been poisoned by " + attacker.name);
+			elseif (CheckSkill (attacker, SKILLID_POISONING, 60, 0) and RandomInt (2))
+				SetPoison (defender, 6, "You have been poisoned by " + attacker.name);
+			elseif (CheckSkill (attacker, SKILLID_POISONING, 40, 0) and RandomInt (2))
+				SetPoison (defender, 4, "You have been poisoned by " + attacker.name);
+			elseif (CheckSkill (attacker, SKILLID_POISONING, 20, 0) and RandomInt (2))
+				SetPoison (defender, 2, "You have been poisoned by " + attacker.name);
+			endif
+		endif
+	endif	
+endfunction

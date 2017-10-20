@@ -1,0 +1,23 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/math";
+include "../pkg/npcs/townfolk/auctioneer/auctioneer";
+
+program display_forsale_items (character, text)
+	var category := SelectCategory (character);
+	if (!category)
+		EraseObjProperty (character, "#auctioneerwindow");
+		return;
+	endif
+
+	var itembox := find_or_create_item (storage, category, UOBJ_BANKBOX);
+	SendOpenSpecialContainer (character, itembox);
+	if (text)
+	endif
+endprogram
+

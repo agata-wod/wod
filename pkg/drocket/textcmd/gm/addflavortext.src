@@ -1,0 +1,122 @@
+use os;
+use uo;
+use http;
+
+program set_player_guild (character, text)
+	SendSysMessage (character, "Select an item to add flavor text to:");
+	var targetted := Target (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	if (targetted.amount > 1)
+		SendSysMessage (character, "This can't be used on stackable items!");
+		return;
+	endif
+	
+	if (text == "book")
+		SendSysMessage (character, "Select a book to copy text from:");
+		var book := Target (character);
+		if (!book)
+			SendSysMessage (character, "Canceled.");
+			return;
+		endif
+		if (book.objtype < 0x17020 or book.objtype > 0x17023)
+			SendSysMessage (character, "That's not a valid book!");
+			return;
+		endif
+		var contents := book.getprop ("contents");
+		if (!contents)
+			SendSysMessage (character, "The book is empty!");
+			return;
+		endif
+		
+		var flavortext := "";
+		foreach line in contents
+			flavortext := flavortext + " " + line;
+		endforeach
+		if (!flavortext)
+			SendSysMessage (character, "Canceled.");
+			return;
+		endif
+		SetObjProperty (targetted, "flavortext", flavortext);
+		SendSysMessage (character, "Done!");
+		return;
+	endif
+
+	var gump_layout := array {
+		"resizepic 100 100 2600 600 400",
+		"text 140 140 0 0",
+		"text 140 160 0 1",
+		"text 140 180 0 2",
+		"text 140 200 0 3",
+		"resizepic 140 220 3000 520 20",
+		"textentry 140 220 520 20 0 10 10",
+		"resizepic 140 240 3000 520 20",
+		"textentry 140 240 520 20 0 11 11",
+		"resizepic 140 260 3000 520 20",
+		"textentry 140 260 520 20 0 12 12",
+		"resizepic 140 280 3000 520 20",
+		"textentry 140 280 520 20 0 13 13",
+		"resizepic 140 300 3000 520 20",
+		"textentry 140 300 520 20 0 14 14",
+		"resizepic 140 320 3000 520 20",
+		"textentry 140 320 520 20 0 15 15",
+		"resizepic 140 340 3000 520 20",
+		"textentry 140 340 520 20 0 15 16",
+		"resizepic 140 360 3000 520 20",
+		"textentry 140 360 520 20 0 15 17",
+		"resizepic 140 380 3000 520 20",
+		"textentry 140 380 520 20 0 15 18",
+		"resizepic 140 400 3000 520 20",
+		"textentry 140 400 520 20 0 15 19",
+		"resizepic 140 420 3000 520 20",
+		"textentry 140 420 520 20 0 15 20",
+		"button 450 450 243 241 1 0 0",
+		"button 550 450 249 247 1 0 1"
+	};
+	var gump_data := array {
+		"Enter flavortext here",
+		"You can also enter flavortext in a book and",
+		"copy it to an item with '.flavortext book'",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		""
+	};
+
+	var gump_return := SendDialogGump (character, gump_layout, gump_data);
+	if (!gump_return[1])
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	var flavortext := "";
+	for i := 10 to 15
+		var thisline := CSTR (gump_return[i]);
+		thisline := thisline[(find(thisline, " ", 1)+1), len(thisline)];
+		if (thisline)
+			flavortext := flavortext + " " + thisline;
+		endif
+	endfor
+
+	if (!flavortext)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	SetObjProperty (targetted, "flavortext", flavortext);
+endprogram

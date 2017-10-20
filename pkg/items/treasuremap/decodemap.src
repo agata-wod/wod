@@ -1,0 +1,104 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/attributes";
+
+Const UOBJECT_DIGGINGTOOL := 0x16008;
+
+program decode_map (character, map)
+	var maplevel;
+	if (GetObjProperty (map, "chestserial"))
+		maplevel := GetObjProperty (map, "level");
+	else
+		var cfgfile := ReadConfigFile (":treasuremap:itemdesc" );
+		var elem := FindConfigElem (cfgfile, map.objtype);
+		maplevel := GetConfigInt (elem, "Level");
+	endif
+
+	var diffi := maplevel * 10;
+	if (diffi > GetAttribute (character, ATTRIBUTEID_CARTOGRAPHY) + 20)
+		SendSysmessage (character, "You cannot comprehend the map.");
+		return;
+	endif
+
+	if (CheckSkill (character, SKILLID_CARTOGRAPHY, (maplevel*10), 0))
+		CreateTreasureMap (character, map, maplevel);
+	else
+		SendSysmessage (character, "You understand the map, but fail to decode it.");
+	endif
+
+endprogram
+
+
+
+
+///////////////////
+//  makes a new, decoded map
+///////////////////
+
+function CreateTreasureMap( character , oldmap , maplevel);
+
+     var map := CreateItemInBackpack (character, UOBJ_MAP1, 1);
+	if (!map)
+		PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+		return;
+	endif
+
+	map.name := oldmap.desc;
+	SetObjProperty (map, "level", maplevel);
+	SetObjProperty (map, "decoder", character.serial);
+
+	SetTreasureCoords (oldmap, map);
+	SendSysmessage (character, "You successfully decode the map!");
+	DestroyItem (oldmap);
+
+endfunction
+
+
+
+
+///////////////////
+//  picks a place to bury the treasure and marks it on the map
+///////////////////
+
+function SetTreasureCoords (oldmap, map);
+
+	var cfgfile := ReadConfigFile ("treasure");
+	var pick := RandomInt (GetConfigMaxIntKey (cfgfile)) + 1;
+	var elem := FindConfigElem (cfgfile, pick);
+
+	var x := GetConfigInt (elem, "X");
+	var y := GetConfigInt (elem, "Y");
+
+	if (GetObjProperty (oldmap, "chestserial"))
+		x := GetObjProperty (oldmap, "chestx");
+		y := GetObjProperty (oldmap, "chesty");
+		SetObjProperty (map, "chestserial", GetObjProperty( oldmap,"chestserial"));
+	endif
+
+     SetObjProperty (map, "chestx", x);
+     SetObjProperty (map, "chesty", y);
+
+     if( x < 265 )
+        map.xwest := 0;
+     else
+        map.xwest := x-265;
+     endif
+
+     if( y < 260 )
+        map.ynorth := 0;
+     else
+        map.ynorth := y-260;
+     endif
+
+     map.xeast := x+265;
+     map.ysouth := y+260;
+     map.gumpwidth := 200;
+     map.gumpheight := 200;
+
+endfunction
+

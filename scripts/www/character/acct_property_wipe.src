@@ -1,0 +1,68 @@
+use uo;
+use os;
+use http;
+use cfgfile;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/string";
+include "include/skills";
+include "include/attributes";
+
+WriteHTML ("<html><head><title>Account Property Wipe</title></head>");
+WriteHTML ("<body bgcolor=\"#dcdeed\">");
+WriteHTML ("<p>Please don't use this page unless you know what you're doing, thanks");
+
+var prop_name := QueryParam ("prop_name");
+if (!prop_name or prop_name=="0")
+	WriteHTML ("<br><p>Enter a property name to erase");
+	WriteHTML ("<form method=GET action=acct_property_wipe.ecl>");
+	WriteHTML ("Name: <input name=prop_name>");
+	WriteHTML ("<input id=submit1 name=submit1 type=submit value=Search>");
+	WriteHTML ("</body></html>");
+	return;
+endif
+
+var confirm := QueryParam ("confirm");
+if (!confirm or confirm=="0")
+	var counter := 0;
+	var acct, theprop;
+	foreach acctname in ListAccounts ()
+		acct := FindAccount (acctname);
+		if (acct)
+			theprop := acct.GetProp (prop_name);
+			if (theprop != error)
+				counter := counter + 1;
+			endif
+		endif
+	endforeach
+	WriteHTML ("<p>" + counter + " accounts found with that property.");
+	WriteHTML ("<a href=acct_property_wipe.ecl?prop_name=" + prop_name + "&confirm=yes>Erase?</a>");
+	return;
+endif
+
+var counter := 0;
+var acct, theprop;
+foreach acctname in ListAccounts ()
+	acct := FindAccount (acctname);
+	if (acct)
+		theprop := acct.GetProp (prop_name);
+		if (theprop != error)
+			acct.EraseProp (prop_name);
+			counter := counter + 1;
+		endif
+	endif
+endforeach
+WriteHTML ("<p>" + counter + " properties erased.");
+
+
+
+
+
+
+
+
+
+

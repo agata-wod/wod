@@ -1,0 +1,1 @@
+.door will open every door within one tile of you.  You won't be able to open locked doors unless you have the key.

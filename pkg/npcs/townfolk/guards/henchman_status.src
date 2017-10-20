@@ -1,0 +1,175 @@
+use uo;
+use os;
+
+include "../pkg/character/virtue/virtue";
+
+program henchman_status (parms)
+	var master := parms [1];
+	var henchman := parms[2];
+	if (!master or !henchman)
+		return;
+	endif
+
+	if (GetObjProperty (henchman, "status_window_open"))
+		if (GetProcess (GetObjProperty (henchman, "status_window_open")))
+			return;
+		endif
+	endif
+	SetObjProperty (henchman, "status_window_open", GetPID ());
+	
+	
+	var gump_layout := array {
+		"nodispose",
+		"page 0",
+		"resizepic 20 20 2520 340 480",
+		"text 60 60 1310 0",
+		"text 60 80 0 1",		//
+		"text 60 100 0 2",		//
+		"text 60 120 0 3",		//
+		"text 60 140 0 4",		//
+		"text 60 160 0 5",		//	All the skill names
+		"text 60 180 0 6",		//
+		"text 60 200 0 7",		//
+		"text 60 220 0 8",		//
+		"text 60 240 0 9",		//
+		"text 60 260 0 10",		//
+
+		"text 220 80 40 11",	//
+		"text 220 100 40 12",	//
+		"text 220 120 40 13",	//
+		"text 220 140 40 14",	//
+		"text 220 160 40 15",	//	All the skill levels
+		"text 220 180 40 16",	//
+		"text 220 200 40 17",	//
+		"text 220 220 40 18",	//
+		"text 220 240 40 19",	//
+		"text 220 260 40 20",	//
+
+		"text 60 300 1310 21",
+		"text 60 320 0 22",		//
+		"text 60 340 0 23",		//
+		"text 60 360 0 24",		//	Stats
+		"text 220 320 40 25",	//
+		"text 220 340 40 26",	//
+		"text 220 360 40 27",	//
+		"text 260 320 0 28",	//
+		"text 260 340 0 29",	//
+		"text 260 360 0 30",	//
+
+		"text 60 400 1310 31",	//
+		"text 60 420 0 32",		//	death counter
+		"text 160 420 0 33",	//
+		"text 60 440 0 34",		//	virtue
+		"text 160 440 0 35"		//
+
+	};
+
+	var gump_data := array {
+		"Skills:",
+		"Wrestling",
+		"Archery",
+		"Swordsmanship",
+		"Mace Fighting",
+		"Fencing",
+		"Tactics",
+		"Parry",
+		"Anatomy",
+		"Healing",
+		"Magic Resistance",
+		GetSkillLevelName (henchman, "Wrestling"),
+		GetSkillLevelName (henchman, "Archery"),
+		GetSkillLevelName (henchman, "Swordsmanship"),
+		GetSkillLevelName (henchman, "Macefighting"),
+		GetSkillLevelName (henchman, "Fencing"),
+		GetSkillLevelName (henchman, "Tactics"),
+		GetSkillLevelName (henchman, "Parry"),
+		GetSkillLevelName (henchman, "Anatomy"),
+		GetSkillLevelName (henchman, "Healing"),
+		GetSkillLevelName (henchman, "MagicResistance"),
+		"Stats:",
+		"Strength",
+		"Intelligence",
+		"Dexterity",
+		GetAttribute (henchman, "Strength"),
+		GetAttribute (henchman, "Intelligence"),
+		GetAttribute (henchman, "Dexterity"),
+		"(" + CSTR (GetAttributeBaseValue(henchman, "Strength")/10) + ")",
+		"(" + CSTR (GetAttributeBaseValue(henchman, "Intelligence")/10) + ")",
+		"(" + CSTR (GetAttributeBaseValue(henchman, "Dexterity")/10) + ")",
+		
+		"Other:",
+		"Deaths",
+		"",//filled in below
+		"Virtue",
+		""//filled in below
+	};
+
+	var rescount := GetObjProperty (henchman, "rescount");
+	if (!rescount)
+		rescount := 0;
+	endif
+
+	gump_data[34] := rescount;
+	gump_data[36] := GetVirtueLevelDescription (henchman);
+	
+	SendDialogGump (master, gump_layout, gump_data);
+	EraseObjProperty (henchman, "status_window_open");
+endprogram
+
+
+
+
+///////////////////
+//  Gets a description of the skilllevel in the given skill
+///////////////////
+
+function GetSkillLevelName (henchman, attribute)
+	var skilllevel := GetAttribute (henchman, attribute);
+	if ( skilllevel  > 95 )
+		return "Master";
+	elseif ( skilllevel > 85 )
+		return "Adept";
+	elseif ( skilllevel > 75 )
+		return "Expert";
+	elseif ( skilllevel > 65 )
+		return "Journeyman";
+	elseif ( skilllevel > 55 )
+		return "Novice";
+	else
+		return "Neophyte";
+	endif
+	return "-";
+endfunction
+
+
+function GetVirtueLevelDescription (henchman)
+	var percentage_virtue := CINT ( 10000 * GetVirtueRequiredForNextLevel (henchman) /GetFullVirtueRequiredForNextLevel (henchman));
+
+	if (percentage_virtue == 0)
+		return "-";
+	elseif (percentage_virtue <= 500)
+		return "Almost";
+	elseif (percentage_virtue <= 1000)
+		return "Close";
+	elseif (percentage_virtue <= 2000)
+		return "Pretty close";
+	elseif (percentage_virtue <= 3000)
+		return "Mostly there";
+	elseif (percentage_virtue <= 4000)
+		return "More than halfway";
+	elseif (percentage_virtue <= 5000)
+		return "Halfway";
+	elseif (percentage_virtue <= 6000)
+		return "Almost halfway";
+	elseif (percentage_virtue <= 7000)
+		return "One-third there";
+	elseif (percentage_virtue <= 8000)
+		return "Pretty far to go";
+	elseif (percentage_virtue <= 9000)
+		return "Long way to go";
+	else
+		return "Just getting started";
+	endif
+endfunction
+
+

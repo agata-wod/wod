@@ -1,0 +1,206 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/eventid";
+include "include/utility";
+include "include/itemtypes";
+include "../pkg/items/housing/house";
+
+program Place_Deed (character, deed)
+//	SendSysMessage (character, "But its not Christmas anymore!");
+//	if (!character.cmdlevel)
+//		return;
+//	endif
+
+	if (!ReserveItem (deed))
+		SendSysMessage (character, "You can't use this right now.");
+		return;
+	endif
+
+	var sign := FindHouseSign (character);
+	if (!sign)
+		if (!character.cmdlevel)
+			SendSysMessage (character, "You must be in your house to use this!");
+			return;
+		endif
+	else
+		var maxlockdowns := GetMaxLockdowns (sign);
+		var lockdowns := GetLockdowns (sign);
+		if (lockdowns + 4 >= maxlockdowns)
+			SendSysMessage (character, "You don't have any more lockdowns left.");
+			return;
+		endif
+
+		foreach item in ListItemsNearLocation (character.x, character.y, character.z, 1, character.realm)
+ 			If (item.isa (POLCLASS_DOOR))
+    				SendSysMessage (character, "You are too close to a door!");
+    				return;
+  			endif
+		endforeach
+	endif
+
+	//The player can't move while using the deed
+	var playerx := character.x;
+	var playery := character.y;
+
+	var treetype, balltype, tinseltype, toppertype;
+
+	//pick the tree
+	var select_menu := CreateMenu ("Select tree type:");
+	AddMenuItem (select_menu, 0, "Green tree");
+	AddMenuItem (select_menu, 0, "Snow tree");
+	AddMenuItem (select_menu, 0, "Random tree and decorations");
+	AddMenuItem (select_menu, 0, "Menorah");
+
+	var selected_item := SelectMenuItem2 (character, select_menu);
+	if (!selected_item.index)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (playerx != character.x or playery != character.y)
+		SendSysMessage (character, "Don't move.");
+		return;
+	endif
+
+	treetype := selected_item.index;
+	if (treetype == 3)
+		treetype := RandomInt (2) + 1;
+		balltype := RandomInt (9) + 1;
+		tinseltype := RandomInt (6) + 1;
+		toppertype := RandomInt (4) + 1;
+	elseif (treetype == 4)	//Menorah
+		var item := CreateItemInContainer (character.backpack, 0xb011, 1);
+		if (!item)
+			PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+			return;
+		endif
+		item.graphic := 40984;
+		item.name := "a menorah";
+		item.script := ":lighting:torch";
+		item.movable := 1;
+		SetObjProperty (item, "otheritems", array{item.serial});
+		SetObjProperty (item, "deedobjtype", 0xB010);
+		DestroyItem (deed);
+		SendSysMessage (character, "Happy Hannukah!");
+		return;
+	else
+		//pick the balls
+		select_menu := CreateMenu ("Select decoration type:");
+		AddMenuItem (select_menu, 0, "Multicolored balls");
+		AddMenuItem (select_menu, 0, "Red balls");
+		AddMenuItem (select_menu, 0, "Green balls");
+		AddMenuItem (select_menu, 0, "Silver balls");
+		AddMenuItem (select_menu, 0, "Gold balls");
+		AddMenuItem (select_menu, 0, "Purple balls");
+		AddMenuItem (select_menu, 0, "Blue balls");
+		AddMenuItem (select_menu, 0, "Red and Green balls");
+		AddMenuItem (select_menu, 0, "Silver and Gold balls");
+	
+		selected_item := SelectMenuItem2 (character, select_menu);
+		if (!selected_item.index)
+			SendSysMessage (character, "Canceled.");
+			return;
+		endif
+
+		if (playerx != character.x or playery != character.y)
+			SendSysMessage (character, "Don't move.");
+			return;
+		endif
+
+		balltype := selected_item.index;
+	
+		//pick the Tinsel
+		select_menu := CreateMenu ("Select decoration type:");
+		AddMenuItem (select_menu, 0, "Silver tinsel");
+		AddMenuItem (select_menu, 0, "Gold tinsel");
+		AddMenuItem (select_menu, 0, "Red tinsel");
+		AddMenuItem (select_menu, 0, "Green tinsel");
+		AddMenuItem (select_menu, 0, "Blue tinsel");
+		AddMenuItem (select_menu, 0, "Purple tinsel");
+	
+		selected_item := SelectMenuItem2 (character, select_menu);
+		if (!selected_item.index)
+			SendSysMessage (character, "Canceled.");
+			return;
+		endif
+
+		if (playerx != character.x or playery != character.y)
+			SendSysMessage (character, "Don't move.");
+			return;
+		endif
+
+		tinseltype := selected_item.index;
+	
+		//pick the topper
+		select_menu := CreateMenu ("Select topper type:");
+		AddMenuItem (select_menu, 0, "Gold star");
+		AddMenuItem (select_menu, 0, "Christmas Angel");
+		AddMenuItem (select_menu, 0, "Large red bow");
+		AddMenuItem (select_menu, 0, "Red topper");
+	
+		selected_item := SelectMenuItem2 (character, select_menu);
+		if (!selected_item.index)
+			SendSysMessage (character, "Canceled.");
+			return;
+		endif
+		toppertype := selected_item.index;
+	endif
+
+	if (playerx != character.x or playery != character.y)
+		SendSysMessage (character, "Don't move.");
+		return;
+	endif
+		
+	if (!treetype or !balltype or !tinseltype or !toppertype)
+		SendSysMessage (character, "Error, quitting");
+		return;
+	endif
+
+	var itemserials := array{};
+	set_critical (1);
+
+	var item := CreateItemAtLocation (character.x, character.y, character.z, 0xb011, 1, character.realm);
+	item.graphic := 0x9fff + treetype;
+	item.name := "a Christmas Tree";
+	itemserials.append (item.serial);
+	item.movable := 0;
+	item.facing := 29;
+
+	item := CreateItemAtLocation (character.x, character.y, character.z, 0xb011, 1, character.realm);
+	item.graphic := 0xa001 + balltype;
+	item.name := "Christmas decorations";
+	itemserials.append (item.serial);
+	item.movable := 0;
+
+	item := CreateItemAtLocation (character.x, character.y, character.z, 0xb011, 1, character.realm);
+	item.graphic := 0xa00a + tinseltype;
+	item.name := "tinsel";
+	itemserials.append (item.serial);
+	item.movable := 0;
+
+	item := CreateItemAtLocation (character.x, character.y, character.z, 0xb011, 1, character.realm);
+	item.graphic := 0xa010+ toppertype;
+	item.name := "a Christmas Tree";
+	itemserials.append (item.serial);
+	item.movable := 0;
+
+	if (sign)
+		foreach serial in itemserials
+			item := SystemFindObjectBySerial (serial);
+			SetObjProperty (item, "lockeddown", sign.serial);
+			SetObjProperty (item, "otheritems", itemserials);
+			SetObjProperty (item, "deedobjtype", 0xB010);
+		endforeach
+	endif
+
+	DestroyItem (deed);
+
+	SendSysMessage (character, "Merry Christmas!");
+	SendSysMessage (character, "Watch out for Santa!");
+	set_critical (0);
+endprogram
+
+
+

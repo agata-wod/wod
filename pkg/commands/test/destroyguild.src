@@ -1,0 +1,18 @@
+use uo;
+use os;
+use guilds;
+
+program destroyaguild( who, text )
+	if (cint(text))
+		var guild := FindGuild(cint(text));
+		if (guild)
+			var guildname := guild.getprop("name");
+			DestroyGuild(guild);
+			SendSysMessage(who, "Guild " + guildname + "  with id " + text + " destroyed.");
+		else
+			SendSysMessage(who, "Guild with id " + text + " does not exist.");
+		endif
+	else
+		SendSysMessage(who, "Invalid Guild id. Must be a valid number.");
+	endif
+endprogram

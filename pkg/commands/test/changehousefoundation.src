@@ -1,0 +1,136 @@
+use uo;
+use os;
+
+program textcmd_paintboat( who, text )
+//	var params := SplitWords( text );
+//	if (!(cint(params[1]) and cint(params[2]) and cint(params[3]) and cint(params[4])))
+//		return;
+//	endif
+	if (!cint(text))
+		return;
+	endif
+	
+	var params := GetFoundationParts(cint(text));
+	if (len(params) < 4)
+		return;
+	endif
+	var zoffset := 0;
+	if (params[5])
+		zoffset := params[5];
+	endif
+	
+	var ptop := params[1];
+	var pbottom := params[1];
+	var pleft := params[2];
+	var pright := params[2];
+	var pbottomright := params[3];
+	var ptopleft := params[4];
+	var ptopright := params[1];
+	var pbottomleft := params[2];
+	if (params.size() > 5)
+		pbottom := params[6];
+		pright := params[7];
+		ptopright := params[8];
+		pbottomleft := params[9];
+	endif
+	
+	var house := TargetCoordinates(who);
+	if(!house)
+		return;
+	endif
+	
+	if (!house.isa(POLCLASS_HOUSE))
+		if(!house.multi)
+			return;
+		endif
+
+		if(house.multi.isa(POLCLASS_HOUSE))
+			house := house.multi;
+		else
+			return;
+		endif
+	endif
+	
+	if(!(house.multiid >= 0x13ec && house.multiid <= 0x147b))
+		return;
+	endif
+	
+	var foundation := array;
+	var footprint := house.footprint;
+	var xmin := footprint.xmin - house.x;
+	var xmax := footprint.xmax - house.x;
+	var ymin := footprint.ymin - house.y;
+	var ymax := footprint.ymax - house.y;
+	foreach part in (house.house_parts)
+		if (part.z <= 3)
+			foundation.append(part);
+		endif
+	endforeach
+//	set_critical(1);
+	foreach part in foundation
+			if (part.xoffset > xmin and part.xoffset < xmax and part.yoffset == ymin)
+				house.erasehousepart(part.graphic, part.xoffset, part.yoffset, part.z);
+				house.addhousepart(ptop, part.xoffset, part.yoffset, zoffset);
+			elseif (part.xoffset > xmin and part.xoffset < xmax and part.yoffset == ymax)
+				house.erasehousepart(part.graphic, part.xoffset, part.yoffset, part.z);
+				house.addhousepart(pbottom, part.xoffset, part.yoffset, zoffset);
+			elseif (part.yoffset > ymin and part.yoffset < ymax and part.xoffset == xmin)
+				house.erasehousepart(part.graphic, part.xoffset, part.yoffset, part.z);
+				house.addhousepart(pleft, part.xoffset, part.yoffset, zoffset);
+			elseif (part.yoffset > ymin and part.yoffset < ymax and part.xoffset == xmax)
+				house.erasehousepart(part.graphic, part.xoffset, part.yoffset, part.z);
+				house.addhousepart(pright, part.xoffset, part.yoffset, zoffset);
+			elseif (part.xoffset == xmin and part.yoffset == ymin)
+				house.erasehousepart(part.graphic, part.xoffset, part.yoffset, part.z);
+				house.addhousepart(ptopleft, part.xoffset, part.yoffset, zoffset);
+			elseif (part.xoffset == xmax and part.yoffset == ymax)
+				house.erasehousepart(part.graphic, part.xoffset, part.yoffset, part.z);
+				house.addhousepart(pbottomright, part.xoffset, part.yoffset, zoffset);
+			elseif (part.xoffset == xmax and part.yoffset == ymin)
+				house.erasehousepart(part.graphic, part.xoffset, part.yoffset, part.z);
+				house.addhousepart(ptopright, part.xoffset, part.yoffset, zoffset);
+			elseif (part.xoffset == xmin and part.yoffset == ymax)
+				house.erasehousepart(part.graphic, part.xoffset, part.yoffset, part.z);
+				house.addhousepart(pbottomleft, part.xoffset, part.yoffset, zoffset);
+			endif
+	endforeach
+//	set_critical(0);
+	SendSysMessage(who, "House serial: " + house.serial + ", Foundation components: " + foundation.size() + ", Footprint: " + xmin + ", "+ xmax + ", "+ ymin + ", "+ ymax);
+
+endprogram
+
+function GetFoundationParts(type)
+	var params := array;
+	case (type)
+		1: params := array{22, 21, 20, 23, 2};
+		2: params := array{66, 67, 65, 68, 1};
+		3: params := array{99, 100, 101, 102};
+		4: params := array{191, 190, 189, 192, 2};
+		5: params := array{766, 767, 765, 768, 1};
+		6: params := array{0x3ba, 0x3b9, 0x3b8, 0x3bc, 2};
+		7: params := array{10558, 10555, 10552, 10561, 2};
+		8: params := array{10573, 10567, 10564, 10570, 2};
+		9: params := array{10579, 10576, 10582, 10585, 2};
+		10: params := array{10648, 10645, 10651, 10642, 2};
+		11: params := array{11194, 11193, 11181, 11184, 1};
+		12: params := array{11504, 11503, 11207, 11208, 1};
+		13: params := array{11581, 11580, 11544, 11547, 2};
+		14: params := array{11728, 11727, 11715, 11718, 1};
+		15: params := array{11770, 11769, 11767, 11768, 1};
+		16: params := array{11774, 11773, 11771, 11772, 1};
+		17: params := array{13936, 13937, 13938, 13939, 1};
+		18: params := array{13940, 13941, 13942, 13943};
+		19: params := array{0x4167, 0x4166, 0x415c, 0x415f, 1};
+		20: params := array{0x41a7, 0x41a8, 0x41a6, 0x419e, 2};
+		21: params := array{0x4b3b, 0x4b39, 0x4b08, 0x4b3a, 1, 0x4afa, 0x4b00, 0x4b3c, 0x4b38};
+//		6: params := array{9345, 9344, 9343, 9352, 2};
+//		7: params := array{9359, 9358, 9357, 9360, 1};
+//		8: params := array{10013, 10010, 10003, 10074, 1};
+//		9: params := array{10080, 10077, 10067, 10074, 2};
+//		10: params := array{10385, 10382, 10376, 10379, 2};
+//		11: params := array{10393, 10396, 10390, 10401, 2};
+//		27: params := array{0x77e8, 0x77eb, 0x77ee, 0x77f8, 2};
+		
+	endcase
+	return params;
+endfunction

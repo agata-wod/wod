@@ -1,0 +1,10 @@
+use http;
+use uo;
+use os;
+use cfgfile;
+
+unload_scripts( "" );
+WriteHTML ("<html><head><title>Server restart center</title></head>");
+WriteHTML ("<body bgcolor=\"#dcdeed\">");
+WriteHTML ("All scripts unloaded!");
+WriteHTML ("</body></html>");

@@ -1,0 +1,61 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 7;
+
+program summon_cloak (parms, spellid)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!spellid)
+		spellid := 89;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+
+	//allow them to cast another spell now
+	SetScriptController (caster);
+	EraseObjProperty (caster, "#castingdruidspell");
+	detach ();
+	
+	var caster_animallore := GetAttribute (caster, ATTRIBUTEID_ANIMALLORE);
+	if (caster_animallore < 60)
+		SendSysMessage (caster, "The elements do not heed your call.");
+		return 0;
+	endif
+
+	var protection_amount := 1;
+	if (caster_animallore > 99)
+		protection_amount := 5;
+	elseif (caster_animallore > 90)
+		protection_amount := 4;
+	elseif (caster_animallore > 80)
+		protection_amount := 3;
+	elseif (caster_animallore > 68)
+		protection_amount := 2;
+	endif
+
+	var duration := 5 * (caster_animallore + RandomInt (caster_animallore)) + 120;
+	var prot_poison_charges := CINT(caster_animallore/10) + 1;
+
+	//create the cloak
+	var cloak := CreateItemInBackpack (caster, 0x1708d, 1);
+	if (!cloak)
+		SendSysMessage (caster, "Your backpack is full.");
+		return;
+	endif
+
+	//set it so that it's a protection from poison item
+	SetObjProperty (cloak, "damage_soak_fire", protection_amount);
+	SetObjProperty (cloak, "damage_soak_cold", protection_amount);
+	SetObjProperty (cloak, "protpoison", prot_poison_charges);
+
+	SetObjProperty (cloak, "duration", duration);
+	cloak.name := "a cloak of protection";
+	return 1;
+endprogram

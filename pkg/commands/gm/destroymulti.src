@@ -1,0 +1,9 @@
+use uo;
+
+program destroy_multi( who )
+	var res := DestroyMulti( who.multi );
+	if (!res)
+		var thing := target( who, TGTOPT_NOCHECK_LOS);
+		DestroyMulti( thing.multi );
+	endif
+endprogram

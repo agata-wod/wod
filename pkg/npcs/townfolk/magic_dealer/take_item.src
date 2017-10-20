@@ -1,0 +1,112 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/magicitems";
+include "include/clock";
+include "include/accounts";
+
+program display_forsale_items (parms)
+	var magic_dealer := parms[1];
+	var player := parms[2];
+	var item := parms[3];
+	if (!magic_dealer or !player or !item)
+		return;
+	endif
+	
+	if (GetObjProperty (player, "#magic_dealerwindow"))
+		if (GetProcess (GetObjProperty (player, "#magic_dealerwindow")))
+			if (!MoveItemToContainer (item, player.backpack))
+	MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+			endif
+			return;
+		endif
+	endif
+	SetObjProperty (player, "#magic_dealerwindow", GetPid());
+
+	if (GetObjProperty (item, "flavortext") or GetObjProperty (item, "etherial"))
+		PrintTextAbovePrivate (magic_dealer, "That looks too important to mess up", player);
+		if (!MoveItemToContainer (item, player.backpack))
+	MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		return;
+	endif
+	if (GetObjProperty (item, "tname") or GetObjProperty (item, "prefix") or GetObjProperty (item, "suffix"))
+		PrintTextAbovePrivate (magic_dealer, "That hasn't been identified!", player);
+		if (!MoveItemToContainer (item, player.backpack))
+	MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		return;
+	endif
+	
+	if (GetObjProperty (item, "ownerserial"))
+		PrintTextAbovePrivate (magic_dealer, "That has an owner's mark so I can't sell it.", player);
+		if (!MoveItemToContainer (item, player.backpack))
+	MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		return;
+	endif
+
+
+
+	PrintTextAbovePrivate (magic_dealer, "What's this? " + item.desc + "?", player);
+	if (!IsMagicalItem (item))
+		PrintTextAbovePrivate (magic_dealer, "What do you expect me to do with this!?", player);
+		if (!MoveItemToContainer (item, player.backpack))
+	MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		return;
+	endif
+
+	var magic_quality := GetObjProperty (item, "magic_quality");
+	if (!magic_quality)
+		PrintTextAbovePrivate (magic_dealer, "That's nice and all, but I can't do anything with it.", player);
+		if (!MoveItemToContainer (item, player.backpack))
+	MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		return;
+	endif
+	
+	var point_value := CINT (magic_quality/2);
+	point_value := point_value + RandomInt (point_value) + 1;
+	if (magic_quality%2)
+		point_value := point_value + 1;
+	endif
+	
+	if (point_value < 1)
+		point_value := 1;
+	elseif (point_value > 10)
+		point_value := 10;
+	endif
+
+	var total_points := GetAccountProperty (player.acctname, "magic_dealer_points");
+	if (!total_points)
+		total_points := 0;
+	endif
+
+	total_points := total_points + point_value;
+	SetAccountProperty (player.acctname, "magic_dealer_points", total_points);
+
+	//monthly counter
+	var year := Systime_GetYear ();
+	var month := lower (Systime_GetMonth ());
+	var monthly_string := "magic_dealer_points" + year + "_" + month;
+
+	var monthly_points := GetAccountProperty (player.acctname, monthly_string);
+	if (!monthly_points)
+		monthly_points := 0;
+	endif
+
+	monthly_points := monthly_points + point_value;
+	SetAccountProperty (player.acctname, monthly_string, monthly_points);
+
+	PrintTextAbovePrivate (magic_dealer, "Fine, I'll give you " + point_value + " points for this", player);
+	PrintTextAbovePrivate (magic_dealer, "Right now you have " + total_points + " points, total.", player);
+	DestroyItem (item);
+
+	EraseObjProperty (player, "#magic_dealerwindow");
+endprogram
+
+
+

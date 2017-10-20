@@ -1,0 +1,23 @@
+use uo;
+program CharProfile(character, of_who, mode, uctext)
+	if (mode == 0)
+		var profile := of_who.getprop("Profile");
+		if (!profile)
+			profile := array;
+		endif
+		var fullname := of_who.name;
+		if (len(of_who.title_prefix))
+			fullname :=  of_who.title_prefix + " " + fullname;
+		endif
+		if (len(of_who.title_suffix))
+			if (of_who.title_suffix[1,1] != ",")
+				fullname := fullname + ", ";
+			endif
+			fullname := fullname + of_who.title_suffix;
+		endif
+
+		SendCharProfile(character, of_who, fullname , CAscZ(of_who.title_race), profile);
+	else
+		of_who.setprop("Profile",uctext);
+	endif
+endprogram

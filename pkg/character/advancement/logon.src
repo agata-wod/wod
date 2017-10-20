@@ -1,0 +1,13 @@
+use os;
+use uo;
+
+include "../pkg/character/advancement/skillcap";
+
+program logon (who)
+	start_script (":advancement:gainskill", who);
+	start_script (":advancement:gainstat", who);
+
+	if (!who.cmdlevel)
+		DoSkillCap (who);
+	endif
+endprogram

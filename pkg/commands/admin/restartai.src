@@ -1,0 +1,30 @@
+use uo;
+use os;
+
+program restart_AI (character, ai_script)
+
+	if (!ai_script)
+		SendSysMessage (character, "You must provide an NPC script to restart.");
+		return;
+	endif
+
+	var number := 0;
+	var x, y;
+
+	for (x := 7168 ; x > 64 ; x := x  - 128)
+		SendSysMessage (character, "Restarting NPCs, X=" + x );
+		for( y := 64; y < 4096; y := y + 128 )
+			foreach item in ListObjectsInBox (x-64, y-64, -128, x+64, y+64, +127, REALM_BRITANNIA)
+				if (item.npctemplate)
+					if (item.script[ai_script])
+						RestartScript (item);
+						number := number + 1;
+					endif
+				endif
+			endforeach
+		endfor
+		sleep (1);
+	endfor
+    SendSysMessage (character, "Total NPCs restarted: " + number);
+
+endprogram

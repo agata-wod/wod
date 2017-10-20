@@ -1,0 +1,16 @@
+use uo;
+use os;
+use util;
+
+program found_present (character, present)
+	if (present)
+	endif
+	case (RandomInt (5))
+		0:	SendSysMessage (character, "I don't think Santa would like that");
+		1:	SendSysMessage (character, "That's not yours!");
+		2:	SendSysMessage (character, "Do not open until December 25th");
+		3:	SendSysMessage (character, "Do you want coal for Christmas or what?");
+		4:	SendSysMessage (character, "Nope.");
+	endcase
+
+endprogram

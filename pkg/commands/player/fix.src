@@ -1,0 +1,22 @@
+use uo;
+include "../pkg/items/housing/house";
+
+program fixme (character)
+	var sign := FindHouseSignAtLocation (character.x, character.y, character.realm);
+	if (sign)
+		if (!IsAFriend (sign, character))
+			SendSysMessage (character, "You cannot use .fix near other player's houses.");
+			return;
+		endif
+	endif
+
+
+	var sh := GetStandingHeight (character.x, character.y, character.z, character.realm);
+	if (sh.multi)
+		return;
+	endif
+
+	var z := GetMapInfo (character.x, character.y, character.realm).z;
+	MoveObjectToLocation( character, character.x, character.y, z, character.realm, MOVEOBJECT_NORMAL );
+
+endprogram

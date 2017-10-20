@@ -1,0 +1,46 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 4;
+
+program cast_sacrifice (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	var master_id:=GetObjProperty (cast_on, "master");
+	if (!master_id or master_id != caster.serial)
+		SendSysMessage (caster, "That isn't your creature to sacrifice!");
+		return 0;
+	endif
+
+	var amount := CINT (GetVital (cast_on, "Life")/1000);
+	var CasterSkill := CINT (GetAttribute (caster, ATTRIBUTEID_MAGERY) + GetAttribute (caster, ATTRIBUTEID_NECROMANCY)/2);
+	var range := CINT (CasterSkill / 20);
+	var diestring := "4d" + Cstr(amount);
+
+	foreach mobile in ListMobilesNearLocation (cast_on.x, cast_on.y, cast_on.z, range, cast_on.realm)
+		if ((mobile != caster) and (CheckLoSAt (cast_on, mobile.x, mobile.y, mobile.z)))
+			PlaySoundEffect (mobile, SFX_208);
+			PlayObjectCenteredEffect (mobile, 0x036b0, 7, 0x10);
+			var dmg := RandomDiceRoll (diestring);
+			DoDamageByType (caster, mobile, dmg, DAMAGETYPE_MAGIC);
+		endif
+	endforeach
+
+	var it := cast_on.name;
+	PlayLightningBoltEffect (cast_on);
+	DoDamageByType (caster, cast_on, CINT (GetVital (cast_on, "Life")/100)+3, DAMAGETYPE_MAGIC);
+	SendSysMessage (caster, it + ": Master, how could you!  Aaarrgghhh....");
+	return 1;
+endprogram

@@ -1,0 +1,325 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/magicitems";
+include "include/accounts";
+include "include/string";
+include "include/magic";
+
+program display_forsale_items (parms)
+	var magic_dealer := parms[1];
+	var player := parms[2];
+	var item := parms[3];
+	if (!magic_dealer or !player or !item)
+		return;
+	endif
+
+	if (!MoveItemToContainer (item, magic_dealer.backpack))
+		PrintTextAbovePrivate (magic_dealer, "Ack, I'm having problems!", player);
+		if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		return;
+	endif
+	
+	if (GetObjProperty (item, "ownerserial"))
+		PrintTextAbovePrivate (magic_dealer, "I'm sorry, but that has an owner's mark on it.", player);
+		if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		return;
+	endif
+	
+	if (!ReserveItem (item))
+		PrintTextAbovePrivate (magic_dealer, "Sorry, I can't do anything with that.", player);
+		if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		return;
+	endif
+
+	if (GetObjProperty (player, "#magic_dealerwindow"))
+		if (GetProcess (GetObjProperty (player, "#magic_dealerwindow")))
+			if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+			endif
+			return;
+		endif
+	endif
+	SetObjProperty (player, "#magic_dealerwindow", GetPid());
+
+	if (GetObjProperty (item, "flavortext") or GetObjProperty (item, "etherial"))
+		PrintTextAbovePrivate (magic_dealer, "That looks too important to mess up", player);
+		if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		EraseObjProperty (player, "#magic_dealerwindow");
+		return;
+	endif
+	if (GetObjProperty (item, "tname") or GetObjProperty (item, "prefix") or GetObjProperty (item, "suffix"))
+		PrintTextAbovePrivate (magic_dealer, "That hasn't been identified!", player);
+		if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		EraseObjProperty (player, "#magic_dealerwindow");
+		return;
+	endif
+
+	PrintTextAbovePrivate (magic_dealer, "What's this? " + item.desc + "?", player);
+	
+	//gameboards
+	if (item.objtype == 0xfa6)
+		var select_menu := CreateMenu ("Pick the replacement item:");
+		AddMenuItem (select_menu, 0x70b0, "checkerboard");
+		AddMenuItem (select_menu, 0x70b1, "chessrboard");
+		var selected_item := SelectMenuItem2 (player, select_menu);
+		if (!selected_item)
+			SendSysMessage (player, "Canceled.");
+			if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+			endif
+			EraseObjProperty (player, "#magic_dealerwindow");
+			return;
+		endif
+
+		var gift := CreateItemInBackpack (player, selected_item.objtype);
+		if (!gift)
+			SendSysMessage (player, "Your backpack is full!");
+			if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+			endif
+			EraseObjProperty (player, "#magic_dealerwindow");
+			return;
+		endif
+		PrintTextAbovePrivate (magic_dealer, "There you go.  Have fun!", player);
+		return;
+	elseif (item.objtype == 0xe1c)
+		var gift := CreateItemInBackpack (player, 0x70b2);
+		if (!gift)
+			SendSysMessage (player, "Your backpack is full!");
+			if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+			endif
+			EraseObjProperty (player, "#magic_dealerwindow");
+			return;
+		endif
+		PrintTextAbovePrivate (magic_dealer, "There you go.  Have fun!", player);
+		return;
+	endif
+	
+	
+	
+	
+	
+	
+	
+	if (!IsMagicalItem (item))
+		PrintTextAbovePrivate (magic_dealer, "What do you expect me to do with this!?", player);
+		if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		EraseObjProperty (player, "#magic_dealerwindow");
+		return;
+	endif
+
+	if (!GetObjProperty (item, "skilladv"))
+		if (GetObjProperty (item, "skilladv") != 0)
+			PrintTextAbovePrivate (magic_dealer, "Sorry, I can't do anything with that.", player);
+			if (!MoveItemToContainer (item, player.backpack))
+				MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+			endif
+			EraseObjProperty (player, "#magic_dealerwindow");
+			return;
+		endif
+	endif
+
+	var possible_items := array{};
+	var item_descs := array{};
+	case (item.graphic)
+		0x1c00:	//leather shorts
+		0x1c01:
+		0x1c08:	//leather skirt
+		0x1c09:
+			possible_items := array{0x1516, 0x1537};
+			item_descs := array{"skirt", "kilt"};
+		0x13cb:	//leather pants
+		0x13d2:
+		0x13da:	//studded pants
+		0x13e1:
+		0x13f0:	//ringmail
+		0x13f1:
+		0x13be:	//chainmail legs
+		0x13c3:
+		0x1411:	//plate legs
+		0x141a:
+		0x1452:	//bone legs
+		0x1457:
+			possible_items := array{0x153a, 0x152e};
+			item_descs := array{"long pants", "short pants"};
+		0x1c02:	//studded female
+		0x1c03:
+		0x1c04:	//plate female
+		0x1c05:
+		0x1c06:	//leather female
+		0x1c07:
+		0x1c0a:	//leather bustier
+		0x1c0b:
+		0x1c0c:	//studded bustier
+		0x1c0d:
+		0x144f:	//Bone armor
+		0x1454:
+		0x13ec:	//ringmail
+		0x13ed:
+		0x13bf:	//chainmail
+		0x13c4:
+			possible_items := array{0x1517, 0x1efd, 0x1ffd, 0x1f7b, 0x1fa1, 0x153d, 0x153b};
+			item_descs := array{"shirt", "fancy shirt", "surcoat", "doublet", "tunic", "full apron", "half apron"};
+		default:
+			PrintTextAbovePrivate (magic_dealer, "Sorry, I can't do anything with that.", player);
+			if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+			endif
+			EraseObjProperty (player, "#magic_dealerwindow");
+			return;
+	endcase
+
+	var skilladv := GetObjProperty (item, "skilladv");
+	var skillamount := GetObjProperty (item, ("skill"+skilladv));
+	var prefix := "";
+	case (skillamount)
+		2:
+			prefix := "a fine ";
+		4:
+			prefix := "a durable ";
+		6:
+			prefix := "a rugged ";
+		8:
+			prefix := "a tempered ";
+		10:
+			prefix := "an indestructable ";
+		default:
+			PrintTextAbovePrivate (magic_dealer, "Sorry, I can't do anything with that.", player);
+			if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+			endif
+			EraseObjProperty (player, "#magic_dealerwindow");
+			return;
+	endcase;
+
+	var skilldesc := "";
+	case (skilladv)
+		SKILLID_ALCHEMY:		skilldesc := "alchemy";
+		SKILLID_ANATOMY:		skilldesc := "anatomy";
+		SKILLID_ANIMALLORE:		skilldesc := "animal lore";
+		SKILLID_PARRY:			skilldesc := "parrying";
+		SKILLID_BLACKSMITHY:	skilldesc := "blacksmithy";
+		SKILLID_PEACEMAKING:	skilldesc := "peacemaking";
+		SKILLID_CAMPING:		skilldesc := "camping";
+		SKILLID_CARPENTRY:		skilldesc := "carpentry";
+		SKILLID_CARTOGRAPHY:	skilldesc := "cartography";
+		SKILLID_COOKING:		skilldesc := "cooking";
+		SKILLID_DETECTINGHIDDEN:	skilldesc := "detect hidden";
+		SKILLID_TAUNT:			skilldesc := "leadership";
+		SKILLID_INVOCATION:		skilldesc := "invocation";
+		SKILLID_HEALING:		skilldesc := "healing";
+		SKILLID_FISHING:		skilldesc := "fishing";
+		SKILLID_HIDING:		skilldesc := "hiding";
+		SKILLID_PROVOCATION:	skilldesc := "provocation";
+		SKILLID_INSCRIPTION:	skilldesc := "inscription";
+		SKILLID_LOCKPICKING:	skilldesc := "lockpicking";
+		SKILLID_MAGERY:		skilldesc := "magery";
+		SKILLID_MAGICRESISTANCE:	skilldesc := "magic resistance";
+		SKILLID_TACTICS:		skilldesc := "tactics";
+		SKILLID_POISONING:		skilldesc := "poisoning";
+		SKILLID_ARCHERY:		skilldesc := "archery";
+		SKILLID_SPIRITSPEAK:	skilldesc := "necromancy";
+		SKILLID_STEALING:		skilldesc := "stealing";
+		SKILLID_TAILORING:		skilldesc := "tailoring";
+		SKILLID_TAMING:		skilldesc := "taming";
+		SKILLID_TINKERING:		skilldesc := "tinkering";
+		SKILLID_TRACKING:		skilldesc := "tracking";
+		SKILLID_SWORDSMANSHIP:	skilldesc := "swordsmanship";
+		SKILLID_MACEFIGHTING:	skilldesc := "macefighting";
+		SKILLID_FENCING:		skilldesc := "fencing";
+		SKILLID_WRESTLING:		skilldesc := "wrestling";
+		SKILLID_LUMBERJACKING:	skilldesc := "lumberjacking";
+		SKILLID_MINING:		skilldesc := "mining";
+		SKILLID_MEDITATION:		skilldesc := "meditation";
+		SKILLID_STEALTH:		skilldesc := "stealth";
+		default:
+			PrintTextAbovePrivate (magic_dealer, "Sorry, I can't do anything with that.", player);
+			if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+			endif
+			EraseObjProperty (player, "#magic_dealerwindow");
+			return;
+	endcase;
+	
+	var select_menu := CreateMenu ("Pick the replacement item:");
+	for i := 1 to len (possible_items)
+		AddMenuItem (select_menu, possible_items[i], item_descs[i]);
+	endfor
+
+	var selected_item := SelectMenuItem2 (player, select_menu);
+	if (!selected_item)
+		SendSysMessage (player, "Canceled.");
+		if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		EraseObjProperty (player, "#magic_dealerwindow");
+		return;
+	endif
+
+	var bobby_bugfixer_counter := GetAccountProperty (player.acctname, "bobby_bugfixer_counter");
+	if (!bobby_bugfixer_counter)
+		bobby_bugfixer_counter := 0;
+	endif
+	
+	bobby_bugfixer_counter := bobby_bugfixer_counter + 1;
+	if (bobby_bugfixer_counter > 10)
+		PrintTextAbovePrivate (magic_dealer, "I'll have to charge you 10,000 gold for this on.", player);
+		if (!player.spendgold (10000))
+			PrintTextAbovePrivate (magic_dealer, "But I'm afraid you don't have that much.", player);
+			if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+			endif
+			EraseObjProperty (player, "#magic_dealerwindow");
+			return;
+		endif
+	else
+		PrintTextAbovePrivate (magic_dealer, "This one is on the house!", player);
+	endif
+
+	SetAccountProperty (player.acctname, "bobby_bugfixer_counter", bobby_bugfixer_counter);
+
+	var gift := CreateItemInBackpack (player, selected_item.objtype);
+	if (!gift)
+		SendSysMessage (player, "Your backpack is full!");
+		if (!MoveItemToContainer (item, player.backpack))
+		MoveObjectToLocation( item, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION );
+		endif
+		EraseObjProperty (player, "#magic_dealerwindow");
+		return;
+	endif
+	
+	var tempstring := gift.desc;
+	tempstring := TruncateArticle (tempstring);
+	tempstring := prefix + tempstring + " of " + skilldesc;
+	
+	if (tempstring["  "])
+		repeat
+			tempstring["  "] := " ";
+		until (!tempstring["  "]);
+	endif
+	
+	gift.name := tempstring;
+	SetObjProperty (gift, "skilladv", skilladv);
+	SetObjProperty (gift, ("skill"+skilladv), skillamount);
+
+	EraseObjProperty (player, "#magic_dealerwindow");
+endprogram
+
+
+

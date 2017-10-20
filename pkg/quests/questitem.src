@@ -1,0 +1,12 @@
+use uo;
+use os;
+
+program use_questitem (player, questitem)
+	SendSysMessage (player, "This doesn't do anything.");
+	if (questitem)
+	endif
+	return;
+endprogram
+
+
+

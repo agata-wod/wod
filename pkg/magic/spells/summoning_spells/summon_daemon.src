@@ -1,0 +1,46 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 8;
+
+program summon_daemon( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_loc := GetSpellCastOn (caster, parms);
+	if (!cast_loc)
+		return 0;
+	endif
+
+	if (caster.acctname)
+		//players can only have 1 pet of a type
+		var summoned_serial := GetObjProperty (caster, "#summoned_daemon");
+		if (summoned_serial)
+			var summoned := SystemFindObjectBySerial (summoned_serial);
+			if (summoned)
+				SendSysMessage (caster, "You couldn't possibly control 2 daemons.");
+				return 0;
+			endif
+		endif
+
+		var duration := 20 + caster_magery + (2 * caster_evalint);
+		if (caster_evalint > 95)
+			SummonCreature (caster, "summoned_daemon_3", cast_loc, duration, 1, 0, 0, "#summoned_daemon");
+		elseif (caster_evalint > 75)
+			SummonCreature (caster, "summoned_daemon_2", cast_loc, duration, 1, 0, 0, "#summoned_daemon");
+		else
+			SummonCreature (caster, "summoned_daemon_1", cast_loc, duration, 1, 0, 0, "#summoned_daemon");
+		endif
+		AddVirtue (caster, (RandomInt(5) * -1));
+	else
+		var duration := 20 + caster_magery + caster_evalint;
+		SummonCreature (caster, "daemon", cast_loc, duration);
+	endif
+	return 1;
+endprogram

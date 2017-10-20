@@ -1,0 +1,262 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/attributes";
+include "../pkg/npcs/npcinfo";
+
+program use_animallore (character)
+	if (GetObjProperty (character, "#useskill"))
+		if (GetProcess (GetObjProperty (character, "#useskill")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#useskill", GetPid());
+
+	SendSysMessage (character, "What?");
+	var targetted  := Target (character);
+	if (!targetted)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+
+	//if its an animal
+	if (targetted.npctemplate)
+		EvaluateAnimal (character, targetted);
+
+	//if its ent or reaper wood
+	elseif (targetted.objtype == 0x1706e or targetted.objtype == 0x1706f)
+		MakeDruidRune (character, targetted);
+
+	//corruption stuff
+	elseif (targetted.objtype == 0x1706d and GetAttribute (character, ATTRIBUTEID_ANIMALLORE) > 80)
+		SendSysMessage (character, "You sense something wrong with the land...");
+	elseif (targetted.objtype == 0x122d and targetted.graphic != 0x122d and GetAttribute (character, ATTRIBUTEID_ANIMALLORE) > 80)
+		SendSysMessage (character, "You sense something wrong with the land...");
+
+	//druidhenge
+	elseif (targetted.usescript == ":druid:druidhenge" and GetAttribute (character, ATTRIBUTEID_ANIMALLORE) > 80)
+		SendSysMessage (character, "You sense great power here.");
+
+	//default
+	else
+		SendSysMessage (character, "You know nothing about that.");
+	endif
+
+endprogram
+
+
+
+
+///////////////////
+//  Called if the user targetted an animal
+///////////////////
+
+function EvaluateAnimal (character, animal)
+	var elem := GetNpcTemplateElem (animal.npctemplate);
+	if (!elem)
+		SendSysmessage (character, "You know nothing about this creature");
+		return;
+	endif
+
+	var difficulty := CINT (GetConfigInt (elem, "tameskill"));
+	if (!difficulty)
+		SendSysmessage (character, "You know nothing about this creature");
+		return;
+	endif
+
+	if (animal.script["tamed"])
+		PrintTextAbovePrivate(animal, "Looks like someone's pet.", character);
+	else
+		if (!CheckSkill (character, SKILLID_ANIMALLORE, -1, 0) )
+			PrintTextAbovePrivate(animal, "Hmm... you're not sure...", character);
+		else
+			var descit := "mundane ";
+			if (animal.script["firebreather"])
+				descit := "firebreathing ";
+			elseif (animal.script["spell"] or animal.script["healer"])
+				descit := "spellcasting ";
+			endif
+	
+			var itstr := " weak ";
+			if (GetAttribute (animal, "Strength") > 150)
+				itstr := " very strong ";
+			elseif (GetAttribute (animal, "Strength") > 100)
+				itstr := " fairly strong ";
+			elseif (GetAttribute (animal, "Strength") > 75)
+				itstr := " fairly weak ";
+			endif	
+
+			PrintTextAbovePrivate (animal, "Looks like a" +itstr+descit+"creature.", character);
+		endif	
+
+    endif
+
+	if ( getobjproperty(animal, "freetime") )
+		var freetime := getobjproperty (animal, "freetime");
+		if ((ReadGameClock() + 1800) > freetime)
+			PrintTextAbovePrivate (animal, "It looks very hungry!", character);
+		elseif ((ReadGameClock() + 3600) > freetime)
+			PrintTextAbovePrivate (animal, "It looks pretty hungry.", character);
+		else
+			PrintTextAbovePrivate (animal, "It looks well fed.", character);
+		endif
+	endif
+
+	//disease
+	if (GetObjProperty (animal, "diseased") )
+		PrintTextAbovePrivate (animal, "It appears to be diseased.", character);
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  Called if the user targetted wood
+///////////////////
+
+function MakeDruidRune (character, wood)
+
+	//try to reserve the wood
+	if (!ReserveItem (wood) )
+		SendSysMessage (character, "You cannot use that right now.");
+		return;
+	endif
+
+	//read the config file
+	var rune_config_file := ReadConfigFile ("druidrunes");
+	var number_of_runes := GetConfigMaxIntKey (rune_config_file);
+
+	//create a menu and some other variables
+	var selectmenu := CreateMenu ("Select a rune:");
+	var array_of_valid_runes := array {};
+	var current_rune;
+	var i;
+
+	//go through all the runes
+	for (i := 1; i <= number_of_runes; i := i + 1)
+		current_rune := rune_config_file [i];
+
+		//if the rune is available, add it to the menu
+		if (current_rune.available and current_rune.wood_objtype == wood.objtype)
+			AddMenuItem (selectmenu, current_rune.objtype, current_rune.name);
+			array_of_valid_runes.append (current_rune);
+		endif
+	endfor
+
+	//if there's no runes available, exit
+	if (!len (array_of_valid_runes) )
+		SendSysMessage (character, "You cannot make anything right now.");
+		return;
+	endif
+
+	//Otherwise, display the menu and allow the user to choose
+	var selection := SelectMenuItem2 (character, selectmenu);
+
+	//Make sure they selected a valid item
+	if (!selection)
+		SendSysMessage(character,"Canceled");
+		return 0;
+	endif
+
+	current_rune := array_of_valid_runes[selection.index];
+
+	SendSysMessage (character, "Making: " + current_rune.name);
+	SendSysMessage (character, "Requires: " + current_rune.skill);
+	SendSysMessage (character, current_rune.desc);
+
+	//Now make sure they have the other reagents needed
+	if (!CheckForOtherReagents (character, current_rune) and !character.cmdlevel )
+		SendSysMessage (character, "You don't have all the items needed to make this!");
+		return;
+	endif
+
+	DestroyReagents (character, current_rune, wood);
+
+	if (checkskill (character, SKILLID_ANIMALLORE, current_rune.skill, 0) )
+		PlaySoundEffect (character, 0x1fb);
+		CreateItemInContainer (character.backpack, current_rune.objtype, 1);
+	else
+		PlaySoundEffect (character, 0x1ff);
+		SendSysMessage (character, "You fail, destroying the reagents.");
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  Checks to make sure the character has the other reagents needed to make the rune
+///////////////////
+
+function CheckForOtherReagents (character, current_rune)
+
+	//load the reagents array from current_rune
+	var reagents := GetConfigStringArray (current_rune, "reagent");
+	var reagent_type, reagent_amount, tempstring, found_reagent;
+
+	foreach reagent in reagents
+		tempstring := splitwords(reagent);
+		reagent_type := cint(tempstring[1]);
+		reagent_amount := cint(tempstring[2]);
+
+		//try to find the reagent
+		found_reagent := FindObjtypeInContainer (character.backpack, reagent_type);
+
+		//if there's no reagent, return failure
+		if (!found_reagent)
+			return 0;
+		endif
+
+		//if there's no enough of this reagent, return failure
+		if (found_reagent.amount < reagent_amount)
+			return 0;
+		endif
+
+		//make sure we can reserve the item
+		if (!ReserveItem (found_reagent) )
+			return 0;
+		endif		
+	endforeach
+
+	//if we've gotten through all the reagents, return success
+	return 1;
+
+endfunction
+
+
+
+
+///////////////////
+//  Destroys all the items needed to make the rune
+///////////////////
+
+function DestroyReagents (character, current_rune, wood)
+
+	//first destroy the wood
+	SubtractAmount (wood, 1);
+
+	//load the reagents array from current_rune
+	var reagents := GetConfigStringArray (current_rune, "reagent");
+	var reagent_type, reagent_amount, tempstring, found_reagent;
+
+	foreach reagent in reagents
+		tempstring := splitwords(reagent);
+		reagent_type := cint(tempstring[1]);
+		reagent_amount := cint(tempstring[2]);
+
+		//try to find the reagent
+		found_reagent := FindObjtypeInContainer (character.backpack, reagent_type);
+
+		SubtractAmount (found_reagent, reagent_amount);
+
+	endforeach
+
+endfunction
+
+

@@ -1,0 +1,75 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/eventid";
+
+program bard_provoke (speaker, text)
+
+	if (text == "me")
+		if (GetObjProperty (speaker, "attackable") )
+			EraseObjProperty (speaker, "attackable");
+			SendSysMessage (speaker, "NPCs will no longer attack you.");
+		else
+			SetObjProperty (speaker, "attackable", 1);
+			SendSysMessage (speaker, "NPCs will now treat you as a player.");
+		endif
+		return;
+	endif
+
+	if (text == "all")
+		SendSysMessage (speaker, "What do you want them to attack?");
+		var targetted := Target (speaker);
+		if (!targetted)
+			SendSysMessage (speaker, "Canceled.");
+			return;
+		endif
+
+		var ev := struct;
+		ev.+type := EVID_ALL_ATTACK_CMD;
+		ev.+source := speaker;
+		ev.+target := targetted;
+
+		foreach mobile in ListMobilesNearLocation (speaker.x, speaker.y, speaker.z, 20, speaker.realm)
+			if (mobile.script == "tamed")
+				var master := GetObjProperty (mobile, "master");
+				if (master and master == speaker.serial)
+					SendEvent (mobile, ev);
+				endif
+			endif
+		endforeach
+		return;
+	endif
+
+	SendSysMessage (speaker, "Select a creature you wish to provoke");
+	var thetarg := Target (speaker);
+	if (!thetarg)
+		SendSysMessage (Speaker, "Canceled.");
+		return;
+	endif
+
+	SendSysmessage (speaker, "Select the target");
+	var newtarg := Target (speaker);
+	if (!newtarg)
+		SendSysMessage (Speaker, "Canceled.");
+		return;
+	endif
+
+	var ev := struct;
+	ev.+type;
+	ev.+source;
+
+	ev.source := newtarg;
+	if (newtarg.warmode)
+		ev.type := EVID_PEACEMADE;
+		sendevent (thetarg, ev);
+		sleep (1);
+	endif
+	ev.type := EVID_DAMAGED;
+	sendevent (thetarg, ev);
+	ev.source := thetarg;
+	sendevent (newtarg, ev);
+
+endprogram 

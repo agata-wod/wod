@@ -1,0 +1,299 @@
+use uo;
+use os;
+
+include "include/gumps";
+include "include/utility";
+include "include/itemtypes";
+
+var gump_layout := array {
+	"page 0",    
+	"nodispose", 
+	"resizepic 40 40 5054 300 400",
+	"button 60 50 5603 5607 1 0 98",
+	"text 100 50 62 0",
+	"button 300 50 5601 5605 1 0 99",
+	"htmlgump 52 79 276 248 1 1 1",
+
+	"button 72 345 2103 2104 1 0 1",
+	"text 90 340 0 2",
+	"button 72 365 2103 2104 1 0 2",
+	"text 90 360 0 3",
+	"button 72 385 2103 2104 1 0 3",
+	"text 90 380 0 4",
+	"button 72 405 2103 2104 1 0 4",
+	"text 90 400 0 5"
+};
+
+var gump_data := array {
+	"Keywords",
+	"keyword_replies",
+	"Add New Keyword",
+	"Edit This Keyword",
+	"Add Item to this Keyword",
+	"Delete This Keyword"
+};
+
+var keyword_dict;
+var current_keyword;
+var dict_keys;
+
+program use_questitem (player, text)
+	SendSysMessage (player, "Select the NPC to change script:");
+	var selected_npc := Target (player);
+	if (!selected_npc)
+		if (text)
+		endif
+		SendSysMessage (player, "Canceled.");
+		return;
+	endif
+	
+	if (!selected_npc.npctemplate)
+		SendSysMessage (player, "That's not an NPC!");
+		return;
+	endif
+	
+	case (selected_npc.script)
+		"merchant":
+		":merchant:merchant":
+		"townguard":
+		":guards:townguard":
+			SendSysMessage (player, "Ok");
+		default:
+			SendSysMessage (player, "Warning: That NPC script may not be able to handle the script");
+			if (!YesNo (player, "Continue?"))
+				SendSysMessage (player, "Canceled.");
+				return;
+			endif
+	endcase;
+
+	var done := 0;
+	var current_page := 1;
+
+	repeat
+		keyword_dict := GetObjProperty (selected_npc, "keywords");
+		if (!keyword_dict)
+			keyword_dict := dictionary;
+		endif
+		
+		dict_keys := keyword_dict.keys ();
+		if (!len (dict_keys))
+			current_page := 0;
+			current_keyword := "";
+			gump_data[1] := "Keywords, Page 0/0";
+		elseif (current_page > len (dict_keys))
+			current_page := len (dict_keys);
+			current_keyword := dict_keys[current_page];
+			gump_data[1] := "Keywords, Page " + current_page + "/" + len (dict_keys);
+		elseif (current_page == 0)
+			current_page := 1;
+			current_keyword := dict_keys[current_page];
+			gump_data[1] := "Keywords, Page 1/" + len (dict_keys);
+		else
+			current_keyword := dict_keys[current_page];
+			gump_data[1] := "Keywords, Page " + current_page + "/" + len (dict_keys);
+		endif
+
+		if (current_keyword)
+			var tempstring := "<b>" + current_keyword + "</b>";
+			var speech_lines := keyword_dict[current_keyword];
+			foreach line in speech_lines
+				tempstring := tempstring + "<br>" + line;
+			endforeach
+			
+			foreach item in ListRootItemsInContainer (selected_npc.backpack)
+				var returnfor := GetObjProperty (item, "returnfor");
+				if (returnfor and returnfor == current_keyword)
+					tempstring := tempstring + "<br><b>Returns: " + item.desc + "</b>";
+					var finished_reply := GetObjProperty (item, "finished_reply");
+					if (finished_reply)
+						tempstring := tempstring + "<br>Speech after given:";
+						foreach line in finished_reply
+							tempstring := tempstring + "<br>" + line;
+						endforeach
+					else
+						tempstring := tempstring + "After given, nuke keyword";
+					endif
+				endif
+			endforeach
+			
+			gump_data[2] := tempstring;
+		else
+			gump_data[2] := "";
+		endif
+
+		//Lets us override normal NPC replies to 'quest'
+		if ("quest" in dict_keys)
+			SetObjProperty (selected_npc, "override_quest", 1);
+		else
+			EraseObjProperty (selected_npc, "override_quest");
+		endif
+
+		var gump_return := SendDialogGump (player, gump_layout, gump_data);
+		if (!gump_return[0])
+			done := 1;
+		endif
+		
+		case (gump_return[0])
+			0:
+				done := 1;
+			1:
+				AddNewKeyword (player, selected_npc);
+			2:
+				EditNewKeyword (player, selected_npc);
+			3:
+				AddItemToKeyword (player, selected_npc);
+			4:
+				keyword_dict.erase (current_keyword);
+				SetObjProperty (selected_npc, "keywords", keyword_dict);
+			
+			98:
+				current_page := current_page - 1;
+				if (current_page <= 0)
+					current_page := len (dict_keys);
+				endif
+			
+			99:
+				current_page := current_page + 1;
+				if (current_page > len (dict_keys))
+					current_page := 1;
+				endif
+			default:
+				SendSysMessage (player, "Uh-oh.  This isn't supposed to happen!");
+				return;
+		endcase;
+
+
+	until (done or !player);
+	return;
+endprogram
+
+
+
+
+///////////////////
+//  Add a new keyword to the script
+///////////////////
+
+function AddNewKeyword (player, selected_npc)
+	var newkeyword := SendTextEntryGump (player, "Enter the new keyword", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 20, "");
+	if (!newkeyword)
+		SendSysMessage (player, "Canceled.");
+		return;
+	endif
+	
+	newkeyword := Lower (newkeyword);
+	
+	if (newkeyword in dict_keys)
+		SendSysMessage (player, "That keyword is already in use.");
+		return;
+	endif
+
+	var done := 0;
+	var speech_lines := array {};
+	repeat
+		var thisline := SendTextEntryGump (player, "Enter the new reply", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 80, "(Line " + (len (speech_lines) + 1) +")");
+		if (!thisline)
+			done := 1;
+		else
+			speech_lines.append (thisline);
+		endif
+	until (done or !player);
+
+	if (!len (speech_lines))
+		SendSysMessage (player, "No speech. Finished.");
+		return;
+	endif
+	keyword_dict[newkeyword] := speech_lines;
+	SetObjProperty (selected_npc, "keywords", keyword_dict);
+endfunction
+
+
+
+
+///////////////////
+//  Add a new keyword to the script
+///////////////////
+
+function EditNewKeyword (player, selected_npc)
+	var done := 0;
+	var speech_lines := array {};
+	repeat
+		var thisline := SendTextEntryGump (player, "Enter the new reply", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 80, "(Line " + (len (speech_lines) + 1) +")");
+		if (!thisline)
+			done := 1;
+		else
+			speech_lines.append (thisline);
+		endif
+	until (done or !player);
+
+	if (!len (speech_lines))
+		SendSysMessage (player, "No speech: edit canceled.");
+		return;
+	endif
+	keyword_dict[current_keyword] := speech_lines;
+	SetObjProperty (selected_npc, "keywords", keyword_dict);
+endfunction
+
+
+
+
+///////////////////
+//  Add a new keyword to the script
+///////////////////
+
+function AddItemToKeyword (player, selected_npc)
+	SendSysMessage (player, "Select the item to set for keyword " + current_keyword);
+	var targetted := Target (player);
+	if (!targetted)
+		SendSysMessage (player, "Canceled.");
+		return;
+	endif
+
+	if (IsStackableItem (targetted))
+		SendSysMessage (player, "You can't mark stackable items.  Put them in a bag or something.");
+		return;
+	endif
+
+	if (!MoveItemToContainer (targetted, selected_npc.backpack))
+		SendSysMessage (player, "NPC's backpack is full - canceled.");
+		return;
+	endif
+	
+	SetObjProperty (targetted, "returnfor", current_keyword);
+	if (targetted.isa (POLCLASS_CONTAINER))
+		SendSysMessage (player, "Do you want to give the entire container, or just one item out of it each time?");
+		if (YesNo (player, "Give Pack?"))
+			SetObjProperty (targetted, "givecontainer", 1);
+		endif
+	endif
+
+	var done := 0;
+	var speech_lines := array {};
+		SendSysMessage (player, "What should their reply to the keyword be after they give the item?");
+	repeat
+		var thisline := SendTextEntryGump (player, "Enter the new reply (blank deletes keyword)", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 80, "(Line " + (len (speech_lines) + 1) +")");
+		if (!thisline)
+			done := 1;
+		else
+			speech_lines.append (thisline);
+		endif
+	until (done or !player);
+
+	if (len (speech_lines))
+		SetObjProperty (targetted, "finished_reply", speech_lines);
+	else
+		EraseObjProperty (targetted, "finished_reply");
+	endif
+
+	SendSysMessage (player, "Done!");
+endfunction
+
+
+
+
+
+
+
+
+
+

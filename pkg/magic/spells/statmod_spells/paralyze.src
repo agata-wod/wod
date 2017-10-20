@@ -1,0 +1,36 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 5;
+
+program cast_paralyze( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	cast_on := CheckMagicReflection (caster, cast_on);
+	if (!cast_on)
+		return 1;
+	endif
+
+	var duration := 10 + CINT (caster_magery/7);
+	duration := Resisted (caster, cast_on, duration);
+	if (duration > 30)
+		duration := 30;
+	endif
+
+	PlayStationaryEffect (cast_on.x, cast_on.y, cast_on.z, FX_CURSE_EFFECT, 10, 0xa, 0, cast_on.realm);
+	PlaySoundEffect (cast_on, SFX_SPELL_PARALYZE);
+	DoMagicStatMod (cast_on, STATMOD_PARALYZE, 1, duration, "Paralysis Spell");
+	return 1;
+endprogram

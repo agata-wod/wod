@@ -1,0 +1,176 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 7;
+
+program summon_player (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+
+	var caston := SelectPlayer (caster);
+	
+	if (IsNoSummonZone (caston.x, caston.y))
+		SendSysMessage (caston, "That player is in an area that you cannot summon them from!");
+		return;
+	endif
+
+	//allow them to cast another spell now
+	SetScriptController( caster );
+	EraseObjProperty (caster, "#castingdruidspell");
+	detach ();
+
+	OpenDruidGate( caster, caston );
+
+endprogram
+
+function SelectPlayer( who )
+
+	var menuname := "Summon whom?";
+
+	var dict := getonlineplayerslist();
+	var roster := array{};
+	foreach memberserial in ( dict.keys() )
+		roster.append( dict[ memberserial ] );
+	endforeach
+
+	var citnum := 1;
+	var selection := array{ };
+	repeat
+		var stonemenu := createmenu(menuname);
+		var i;
+		for ( i := citnum; i <= citnum+10; i := i + 1 )
+			if ( i <= roster.size() )
+				var citizen := roster[ i ];
+				AddMenuItem (stonemenu, 0, citizen);
+			endif
+		endfor
+		if ( roster.size() > (citnum+10) )
+			AddMenuItem (stonemenu, 0, "NEXT PAGE");
+		endif
+		selection := SelectMenuItem2(who, stonemenu);
+		if ( selection.index == 12 )
+			citnum := citnum + 10;
+		else
+			if ( selection.index )
+				var vote := (selection.index + (citnum-1) );
+				return roster[vote];
+			else
+				SendSysMessage( who, "Canceled");
+				return;
+			endif
+		endif
+	until (selection.index != 12);
+
+endfunction
+
+function GetOnlinePlayersList()
+	var dict := dictionary;
+	foreach plr in EnumerateOnlineCharacters()
+		if (!plr.cmdlevel)
+			if (!getobjproperty( plr, "private"))
+				if (!IsNoSummonZone (plr.x, plr.y))
+					dict[ plr.serial ] := plr.name;
+				endif
+			endif
+		endif
+	endforeach
+	return dict;
+endfunction
+
+
+
+function FindCastOn( cast_on )
+	foreach plr in enumerateonlinecharacters()
+		if (plr.name == cast_on )
+			return plr;
+		endif
+	endforeach
+	return 0;
+endfunction
+
+function OpenDruidGate (caster, caston)
+	caston := FindCastOn (caston);
+	if (!caston)
+		SendSysMessage( caster, "Your gate fails to open..." );
+		return;
+	endif
+
+	var pregate := CreateItemAtLocation (caston.x, caston.y, caston.z, 0x1af3, 1, caston.realm);
+	var pregate2 := CreateItemAtLocation (caster.x, caster.y, caster.z, 0x1af3, 1, caster.realm);
+	pregate.facing := 1;
+	pregate.movable := 0;
+	pregate.color := 1435;
+
+	pregate2.facing := 1;
+	pregate2.movable := 0;
+	pregate2.color := 1435;
+
+	pregate.name := "a druid gate";
+	pregate2.name := "a druid gate";
+
+	PlaySoundEffect (caston, SFX_SPELL_GATE_TRAVEL);
+	PlaySoundEffect (caster, SFX_SPELL_GATE_TRAVEL);
+	sleepms(1500);
+	var castonx := pregate.x;
+	var castony := pregate.y;
+	var castonz := pregate.z;
+	var castonr := pregate.realm;
+	DestroyItem (pregate);
+
+	var gate := CreateItemAtLocation (castonx, castony, castonz, UOBJ_BLUE_MOONGATE, 1, castonr);
+	if (!gate) return; endif
+	gate.facing := 1;
+	gate.movable := 0;
+	gate.color := 1435;
+	gate.name := "a druid gate";
+
+	SetObjProperty (gate, "GateDestX", caster.x);
+	SetObjProperty (gate, "GateDestY", caster.y);
+	SetObjProperty (gate, "GateDestZ", caster.z);
+	SetObjProperty (gate, "GateDestR", caster.realm);
+	gate.SetDestination (caster.x, caster.y, caster.z, caster.realm);
+
+	SetObjProperty (gate, "summoned_field", 1);
+	SetObjProperty (pregate2, "summoned_field", 1);
+
+	Detach();
+	set_critical( 0 );
+
+	var timer_counter := 0;
+	repeat
+		sleep (1);
+		if (!gate or !pregate2)
+			DestroyItem (gate);
+			DestroyItem (pregate2);
+			return;
+		endif
+		timer_counter := timer_counter + 1;
+	until (timer_counter > 30);
+	DestroyItem (gate);
+	DestroyItem (pregate2);
+endfunction
+
+
+
+
+///////////////////
+//  Some areas can't be summoned from
+///////////////////
+
+function IsNoSummonZone (x, y)
+	//jail
+	if (x > 5270 and x < 5320 and y > 1150 and y < 1200)
+		return 1;
+	endif
+
+	return 0;
+endfunction
+

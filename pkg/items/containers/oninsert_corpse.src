@@ -1,0 +1,18 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/itemtypes";
+include "include/utility";
+include "../pkg/items/housing/house";
+
+program oninsert_chest (character, container, movetype, null_value, item, existing_stack, amt_to_add)
+	if (amt_to_add and existing_stack and null_value and item and character and movetype)
+	endif
+	container.name := container.desc;
+	return 1;
+	
+endprogram

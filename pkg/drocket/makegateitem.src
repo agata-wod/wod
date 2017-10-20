@@ -1,0 +1,141 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/magic";
+include "include/utility";
+
+program use_gate_item (character, item)
+	if (GetObjProperty (item, "#inuse"))
+		if (GetProcess (GetObjProperty (item, "#inuse")))
+			SendSysMessage (character, "That item is in use!");
+			return;
+		endif
+	endif
+	SetObjProperty (item, "#inuse", GetPID ());
+
+	var gateorigin := GetObjProperty (item, "gateorigin");
+	if (!gateorigin)
+		if (character.cmdlevel)
+			SetUpGateItem (character, item);
+		else
+			SendSysMessage (character, "This item seems to be broken");
+		endif
+		return;
+	endif
+	
+	var gatedestination := GetObjProperty (item, "gatedestination");
+	if (!gatedestination)
+		if (character.cmdlevel)
+			SetUpGateItem (character, item);
+		else
+			SendSysMessage (character, "This item seems to be broken");
+		endif
+		return;
+	endif
+	
+	if (character.realm != gateorigin[4] or coordist (character.x, character.y, gateorigin[1], gateorigin[2]) > 8)
+		SendSysMessage (character, "You are too far away from this item's homepoint");
+		return;
+	endif
+
+	detach();
+
+	set_critical (1);
+	var pregate := CreateItemAtLocation (gateorigin[1], gateorigin[2], gateorigin[3], 0x1af3, 1, gateorigin[4]);
+	pregate.movable := 0;
+	pregate.facing := 1;
+	PlaySoundEffect (character, SFX_SPELL_GATE_TRAVEL);
+	sleepms (1500);
+	DestroyItem (pregate);
+
+	var gate1 := CreateItemAtLocation (gateorigin[1], gateorigin[2], gateorigin[3], UOBJ_BLUE_MOONGATE, 1, gateorigin[4]);
+	gate1.movable := 0;
+	gate1.facing := 1;
+	var gate2 := CreateItemAtLocation (gatedestination[1], gatedestination[2], gatedestination[3], UOBJ_BLUE_MOONGATE, 1, gatedestination[4]);
+	gate2.movable := 0;
+	gate2.facing := 1;
+	if (!gate1 or !gate2)
+        	return;
+	endif
+
+	SetObjProperty (gate1, "GateDestX", gate2.x);
+	SetObjProperty (gate1, "GateDestY", gate2.y);
+	SetObjProperty (gate1, "GateDestZ", gate2.z);
+	SetObjProperty (gate1, "GateDestR", gate2.realm);
+	SetObjProperty (gate2, "GateDestX", gate1.x);
+	SetObjProperty (gate2, "GateDestY", gate1.y);
+	SetObjProperty (gate2, "GateDestZ", gate1.z);
+	SetObjProperty (gate2, "GateDestR", gate1.realm);
+
+	SetObjProperty (gate1, "summoned_field", 1);
+	SetObjProperty (gate2, "summoned_field", 1);
+
+	Detach();
+	set_critical( 0 );
+
+	sleep(30);
+    
+	set_critical(1);
+	DestroyItem (gate1);
+	DestroyItem (gate2);
+	set_critical(0);
+	
+
+
+endprogram
+
+
+function SetUpGateItem (character, item)
+	if (!character.cmdlevel)
+		return;
+	endif
+	
+	SendSysMessage (character, "select the first marked rune for the gate's source");
+	var sourcerune := Target (character);
+	if (!sourcerune)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	if (!GetObjProperty (sourcerune, "x"))
+		SendSysMessage (character, "That rune has not been marked!");
+		return 0;
+	endif
+
+	SendSysMessage (character, "select the first marked rune for the gate's destination");
+	var destinationrune := Target (character);
+	if (!destinationrune)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	if (!GetObjProperty (destinationrune, "x"))
+		SendSysMessage (character, "That rune has not been marked!");
+		return 0;
+	endif
+
+	var sourcearray := array{};
+	sourcearray[1] := Cint(GetObjProperty ( sourcerune, "x" ));
+	sourcearray[2] := Cint(GetObjProperty ( sourcerune, "y" ));
+	sourcearray[3] := Cint(GetObjProperty ( sourcerune, "z" ));
+	sourcearray[4] := GetObjProperty ( sourcerune, "realm" );
+	if (!sourcearray[4])
+		sourcearray[4] := REALM_BRITANNIA;
+	endif
+	SetObjProperty (item, "gateorigin", sourcearray);
+
+	var destinationarray := array{};
+	destinationarray[1] := Cint(GetObjProperty ( destinationrune, "x" ));
+	destinationarray[2] := Cint(GetObjProperty ( destinationrune, "y" ));
+	destinationarray[3] := Cint(GetObjProperty ( destinationrune, "z" ));
+	destinationarray[4] := GetObjProperty ( destinationrune, "realm" );
+	if (!destinationarray[4])
+		destinationarray[4] := REALM_BRITANNIA;
+	endif
+	SetObjProperty (item, "gatedestination", destinationarray);
+
+	return;
+endfunction
+
+
+
+

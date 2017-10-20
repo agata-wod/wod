@@ -1,0 +1,154 @@
+use os;
+use uo;
+
+include "include/client";
+include "include/objtype";
+
+program make_a_teleporter (seer, text)
+	var gate1, gate2;
+	if (!text or text != "options")
+		SendSysmessage (seer, "Select a rune to gate from.");
+		var rune := Target (seer, TGTOPT_NOCHECK_LOS);
+		if (!rune)
+			SendSysmessage (seer, "Canceled.");
+			return;
+		endif
+
+		if (rune.objtype != UOBJ_RECALL_RUNE)
+			SendSysmessage (seer, "You can only use this on a rune!");
+			return;
+		endif
+		
+		var destination := rune.GetDestination();
+
+		var tox := CINT(destination.x);
+		var toy := CINT(destination.y);
+		var toz := CINT(destination.z);
+		var tor := destination.realm;
+
+		gate1 := CreateItemAtLocation( seer.x, seer.y, seer.z, 0x16203, 1, seer.realm );
+		gate1.facing := 29;
+		gate1.invisible := 1;
+		gate2 := CreateItemAtLocation ( tox, toy, toz, 0x16203, 1, tor);
+		gate2.facing := 29;
+		gate2.invisible := 1;
+		if (!gate1 or !gate2)
+			SendSysMessage (seer, "Error creating gates!");
+			DestroyItem(gate1);
+			DestroyItem(gate2);
+			return;
+		endif
+
+		SetObjProperty (gate1, "DestX", gate2.x);
+		SetObjProperty (gate1, "DestY", gate2.y);
+		SetObjProperty (gate1, "DestZ", gate2.z);
+		SetObjProperty (gate1, "DestR", gate2.realm);
+		SetObjProperty (gate2, "DestX", gate1.x);
+		SetObjProperty (gate2, "DestY", gate1.y);
+		SetObjProperty (gate2, "DestZ", gate1.z);
+		SetObjProperty (gate2, "DestR", gate1.realm);
+		return;
+	endif
+
+	var gump_layout := array {
+		"nodispose",
+		"page 0",
+		"resizepic 20 20 2600 600 400",
+		"text 100 40 0 0",
+		"text 50 80 0 1",
+		"text 50 110 0 2",
+		"textentry 120 80 350 20 0 10 3",
+		"textentry 120 110 350 20 0 11 4",
+		"checkbox 50 140 210 211 0 12",
+		"checkbox 50 170 210 211 0 13",
+		"text 70 140 0 5",
+		"text 70 170 0 6",
+		"button 250 350 243 241 1 0 0",
+		"button 350 350 249 247 1 0 1"
+	};
+
+	var gump_data := array {
+		"Teleporter options",
+		"Message:",
+		"Sound:",
+		"",
+		"",
+		"Dark gate",
+		"One way gate"
+	};
+
+	var gump_return := SendDialogGump (seer, gump_layout, gump_data);
+	if (!gump_return or !gump_return [1])
+		SendSysMessage (seer, "Canceled.");
+		return;
+	endif
+
+	SendSysmessage (seer, "Select a rune to gate from.");
+	var rune := Target (seer, TGTOPT_NOCHECK_LOS);
+	if (!rune)
+		SendSysmessage (seer, "Canceled.");
+		return;
+	endif
+
+	if (rune.objtype != UOBJ_RECALL_RUNE)
+		SendSysmessage (seer, "You can only use this on a rune!");
+		return;
+	endif
+
+	var tox := CINT(GetObjProperty (rune, "x"));
+	var toy := CINT(GetObjProperty (rune, "y"));
+	var toz := CINT(GetObjProperty (rune, "z"));
+	var tor := GetObjProperty (rune, "realm");
+	if (!tox or !toy)
+		SendSysMessage (seer, "That rune has not been marked!");
+		return;
+	endif
+	
+	if (!tor)
+		tor := _DEFAULT_REALM;
+	endif
+
+	gate1 := CreateItemAtLocation( seer.x, seer.y, seer.z, 0x16203, 1, seer.realm );
+	gate1.facing := 29;
+	gate1.invisible := 1;
+	if (!gate1)
+		SendSysMessage (seer, "Error creating gates!");
+		DestroyItem(gate1);
+		return;
+	endif
+	SetObjProperty (gate1, "DestX", tox);
+	SetObjProperty (gate1, "DestY", toy);
+	SetObjProperty (gate1, "DestZ", toz);
+	SetObjProperty (gate1, "DestR", tor);
+
+	if (!gump_return[13])
+		gate2 := CreateItemAtLocation ( tox, toy, toz, 0x16203, 1, tor );
+		gate2.facing := 29;
+		gate2.invisible := 1;
+		if (!gate2)
+			SendSysMessage (seer, "Error creating gates!");
+			DestroyItem (gate1);
+			DestroyItem (gate2);
+			return;
+		endif
+		SetObjProperty (gate2, "DestX", gate1.x);
+		SetObjProperty (gate2, "DestY", gate1.y);
+		SetObjProperty (gate2, "DestZ", gate1.z);
+		SetObjProperty (gate2, "DestR", gate1.realm);
+	endif
+
+	if (gump_return[10] - "10:")
+		SetObjProperty (gate1, "walkonmessage", gump_return[10] - "10: ");
+	endif
+	if (CINT (gump_return[11] - "11: "))
+		SetObjProperty (gate1, "walkonsound", CINT (gump_return[11] - "11: "));
+	endif
+	if (gump_return[12])
+		SetObjProperty (gate1, "dark", 1);
+	endif
+	return;
+endprogram
+
+
+
+

@@ -1,0 +1,383 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/itemtypes";
+include "include/gumps";
+include "include/string";
+include "include/magicitems";
+include "include/crafting";
+include "../pkg/skills/craftingskills/blacksmithy/blacksmithy";
+include "../pkg/skills/craftingskills/blacksmithy/blacksmithy_menu";
+
+program use_hammer (character, hammer)
+	if (!ReserveItem (hammer))
+		SendSysMessage (character, "You cannot use that right now.");
+		return;
+	endif
+
+	SendSysmessage (character, "What would you like to use that on?" );
+	var use_on := Target (character);
+	if (!use_on)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+
+	if (!Accessible (character, use_on) )
+		SendSysmessage( character, "You can't reach that!" );
+		return;
+	endif
+
+	if (!ReserveItem(use_on))
+		SendSysmessage (character, "You cannot use that right now.");
+		return;
+	endif
+
+	if (!SearchForAnvilInArea (character) )
+		SendSysmessage (character, "You must be near an anvil to do anything.");
+		return;
+	endif
+
+
+	if (IsIngot (use_on.objtype) )
+		MakeBlacksmithyItems (character, hammer, use_on);
+		return;
+	elseif (IsMetalArmor (use_on) or IsMetalWeapon (use_on) or IsMetalShield (use_on) )
+		RepairBlacksmithyItem (character, hammer, use_on, SKILLID_BLACKSMITHY);
+		return;
+	elseif (use_on.graphic >= 0xa054 and use_on.graphic <= 0xa058)
+		DoColorCoating (character, use_on, SKILLID_BLACKSMITHY);
+		return;
+	else
+		SendSysMessage (character, "You don't know how to use those together.");
+		return;
+	endif
+endprogram
+
+
+
+
+///////////////////
+//  Called when the item targetted was an ingot, allowing the player to make an item
+///////////////////
+
+function MakeBlacksmithyItems (byref character, byref hammer, byref material)
+	if (!CheckSkillForDifferentMetals (character, material.objtype) )
+		SendSysmessage (character, "You have no chance to successfully work with that metal.");
+		if (hammer)
+		endif
+		return;
+	endif
+
+	//Calls the function in the blacksmithy_menu.inc file that displays the fancy new menu
+	var smith_cfg_file := ReadConfigFile ("blacksmithy");
+	var blacksmithy_menu_return := BuildBlacksmithyCraftingMenu (character, ":blacksmithy:menu", ":blacksmithy:blacksmithy", "mainmenu", "Blacksmithy");
+	if (!blacksmithy_menu_return)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+	
+	var chosen_item := blacksmithy_menu_return[1];
+	var autoupgrade_level := blacksmithy_menu_return[2];
+	var upgrade_material_selectmethod := blacksmithy_menu_return[3];
+	var number_to_make := blacksmithy_menu_return[4];
+	if (!number_to_make or number_to_make < 1)
+		number_to_make := 1;
+	elseif (number_to_make > 5)
+		number_to_make := 5;
+	endif
+
+	//find the item in blacksmithy.cfg file
+	var selection := FindConfigElem (smith_cfg_file, chosen_item);
+	if (!selection)
+		SendSysMessage (character, "That was an invalid selection");
+		return;
+	endif
+
+	//make sure they have enough material
+	var material_needed := CINT (selection.material);
+	if (material.amount < material_needed)
+		SendSysMessage (character, "You don't have enough material to make that!");
+		return;
+	endif
+
+	//make sure they can make how many they set
+	var max_number_to_make := CINT (material.amount/material_needed);
+	if (!max_number_to_make)
+		SendSysMessage (character, "You don't have enough material to make that! (error?)");
+		return;
+	elseif (number_to_make > max_number_to_make)
+		SendSysMessage (character, "You don't have enough material for that many!");
+		SendSysMessage (character, "(Now making " + max_number_to_make + ")");
+		number_to_make := max_number_to_make;
+	endif
+
+	//load some random variables from the cfg file
+	var item_skill := CINT (selection.skill);
+	var time_delay := CINT (selection.time);
+	var item_name := selection.name;
+
+	//save the character's position
+	var craftingbag := FindCraftingBag (character);
+	var characterx := character.x;
+	var charactery := character.y;
+
+	var upgrade_material := 0;
+	if (!selection.hasquality)
+		autoupgrade_level := 0;
+	elseif (autoupgrade_level)
+		if (upgrade_material_selectmethod == 0)
+			upgrade_material := material;
+		elseif (upgrade_material_selectmethod == 1)
+			upgrade_material := FindObjtypeInContainer (character.backpack, UOBJ_IRON_INGOT);
+			if (upgrade_material)
+				if (!ReserveItem (upgrade_material) )
+					SendSysMessage (character, "You cannot use that right now.");
+					return;
+				endif
+				if (upgrade_material.amount < material_needed)
+					SendSysMessage (character, "You need " + material_needed + " ingots.  That's only " + upgrade_material.amount + "!");
+					return;
+				endif
+			else
+				SendSysMessage (character, "Can't find any iron ingots.  Select another?");
+				upgrade_material := Target (character);
+				if (!upgrade_material)
+					SendSysMessage (character, "Canceled.");
+					return;
+				elseif (!IsIngot (upgrade_material.objtype) )
+					SendSysMessage (character, "That's not an ingot!");
+					return;
+				endif
+				if (!ReserveItem (upgrade_material) )
+					SendSysMessage (character, "You cannot use that right now.");
+					return;
+				endif
+				if (!Accessible (character, upgrade_material) )
+					SendSysMessage (character, "You can't reach that.");
+					return;
+				endif
+				if (upgrade_material.amount < material_needed)
+					SendSysMessage (character, "You need " + material_needed + " ingots.  That's only " + upgrade_material.amount + "!");
+					return;
+				endif
+			endif
+		elseif (upgrade_material_selectmethod == 2)
+			SendSysMessage (character, "Select the ingots to use to upgrade:");
+			upgrade_material := Target (character);
+			if (!upgrade_material)
+				SendSysMessage (character, "Canceled.");
+				return;
+			elseif (!IsIngot (upgrade_material.objtype) )
+				SendSysMessage (character, "That's not an ingot!");
+				return;
+			endif
+			if (!ReserveItem (upgrade_material) )
+				SendSysMessage (character, "You cannot use that right now.");
+				return;
+			endif
+			if (!Accessible (character, upgrade_material) )
+				SendSysMessage (character, "You can't reach that.");
+				return;
+			endif
+			if (upgrade_material.amount < material_needed)
+				SendSysMessage (character, "You need " + material_needed + " ingots.  That's only " + upgrade_material.amount + "!");
+				return;
+			endif
+		else
+			SendSysMessage (character, "Error: autoupgrade material selection return invalid");
+			return;		
+		endif
+	endif
+
+	var created_item;
+	repeat
+		created_item := 0;
+		for i := 1 to time_delay
+			PlaySoundEffect (character, SFX_ANVIL);
+			sleep (2);
+		endfor
+		PlaySoundEffect (character, SFX_ANVIL);
+
+		if (!CheckSkill (character, SKILLID_BLACKSMITHY, item_skill, 0))
+			var lossamount := RandomInt (CINT (material_needed/3) )+1;
+			SubtractAmount (material, lossamount);
+			SendSysmessage (character, "You fail, destroying some ingots.");
+		else
+			created_item := CreateItemInContainer (craftingbag, chosen_item, 1);
+			if (!created_item)
+				PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+				return;
+			endif
+
+			SendSysMessage (character, "You place the item in your backpack.");
+
+			//set the color
+			if (material.color)
+				created_item.color := material.color;
+			endif
+			SetObjProperty (created_item, "material_objtype", material.objtype);
+			if (!SubtractAmount (material, material_needed))
+				SendSysMessage (character, "Those ingots seem to already be in use.");
+				DestroyItem (created_item);
+				return;
+			endif
+			created_item.buyprice := 0;
+			created_item.hp := created_item.maxhp;
+			
+			if (autoupgrade_level)
+				var upgrade_material_needed := CINT (material_needed/2);
+				if (upgrade_material.amount < upgrade_material_needed)
+					SendSysMessage (character, "You don't have enough material to upgrade that item!");
+					return;
+				endif
+
+				var upgrade_skill := item_skill + 15;
+				if (upgrade_skill > 110)
+					upgrade_skill := 110;
+				endif
+				if (upgrade_skill >= GetAttribute (character, ATTRIBUTEID_BLACKSMITHY) + 20)
+					SendSysMessage (character, "Your skill is too low to upgrade that item.");
+					return;
+				endif
+
+				if (!ReserveItem (created_item))
+					SendSysMessage (character, "Someone else seems to be using that item.");
+					return;
+				endif
+
+				var upgrade_timedelay := time_delay - 1;
+				if (upgrade_timedelay < 1)
+					upgrade_timedelay := 1;
+				endif
+
+				if (characterx != character.x or charactery != character.y)
+					SendSysMessage (character, "You stop smithing.");
+					return;
+				endif
+
+				var upgrade_to_quality := 0;
+				if (autoupgrade_level == 1)
+					upgrade_to_quality := 1;
+				endif
+				PerformBlacksmithyItemUpgrade (character, created_item, upgrade_material, upgrade_material_needed,
+						SKILLID_BLACKSMITHY, upgrade_skill, upgrade_timedelay, item_name, upgrade_to_quality);
+			endif
+		endif
+		
+		if (characterx != character.x or charactery != character.y)
+			SendSysMessage (character, "You stop smithing.");
+			return;
+		endif
+		
+		if (created_item)
+			number_to_make := number_to_make - 1;
+		endif
+		sleep (2);
+	until (!number_to_make);
+	SendSysMessage (character, "You stop smithing.");
+endfunction
+
+
+
+
+///////////////////
+//  Determines the minimum skill for working with a particular metal
+///////////////////
+
+function CheckSkillForDifferentMetals (byref character, byref ingot)
+
+	var character_skill := GetAttribute (character, ATTRIBUTEID_BLACKSMITHY);
+
+	case ( ingot )
+		UOBJ_IRON_INGOT:
+			return 1;   //anyone can work with iron
+		UOBJ_BRONZE_INGOT:
+			if (character_skill > 60)
+				return 1;
+			endif
+		UOBJ_DULLCOPPER_INGOT:
+			if (character_skill > 70)
+				return 1;
+			endif
+		UOBJ_COPPER_INGOT:
+			if (character_skill > 80)
+				return 1;
+			endif
+		UOBJ_ONYX_INGOT:
+			if (character_skill > 85)
+				return 1;
+			endif
+ 		UOBJ_PYRITE_INGOT:
+			if (character_skill > 90)
+				return 1;
+			endif
+		UOBJ_MALACHITE_INGOT:
+			if (character_skill > 95)
+				return 1;
+			endif
+ 		UOBJ_AZURITE_INGOT:
+			if (character_skill > 98)
+				return 1;
+			endif
+		UOBJ_BLUESTEEL_INGOT:
+			if (character_skill > 98)
+				return 1;
+			endif
+		UOBJ_RUBYSTEEL_INGOT:
+			if (character_skill > 98)
+				return 1;
+			endif
+	endcase
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Searches the area around the character for an anvil
+///////////////////
+
+function SearchForAnvilInArea (byref character)
+	foreach item in ListItemsNearLocation (character.x, character.y, character.z, 2, character.realm)
+		//if ((item.objtype == UOBJ_ANVIL1) or (item.objtype == UOBJ_ANVIL2))
+		//	return 1;
+		//endif
+		case (item.objtype)
+			UOBJ_ANVIL1:
+			UOBJ_ANVIL2:
+			UOBJ_ELVEN_ANVIL1:
+			UOBJ_ELVEN_ANVIL2:
+			UOBJ_SOULFORGE_ANVIL1:
+			UOBJ_SOULFORGE_ANVIL2:
+			UOBJ_SOULFORGE_ANVIL3:
+			UOBJ_SOULFORGE_ANVIL4:
+			UOBJ_SOULFORGE_ANVIL5:
+			UOBJ_SOULFORGE_ANVIL6:
+			UOBJ_SOULFORGE_ANVIL7:
+			UOBJ_SOULFORGE_ANVIL8:
+			UOBJ_SOULFORGE_ANVIL9:
+			UOBJ_SOULFORGE_ANVIL10:
+			UOBJ_SOULFORGE_ANVIL11:
+			UOBJ_SOULFORGE_ANVIL12:
+				return 1;
+		endcase
+	endforeach
+	foreach item in ListStaticsNearLocation (character.x, character.y, character.z, 2, ITEMS_IGNORE_MULTIS, character.realm)
+//		if ((item.objtype == UOBJ_ANVIL1) or (item.objtype == UOBJ_ANVIL2))
+//			return 1;
+//		endif
+		case (item.objtype)
+			UOBJ_ANVIL1:
+			UOBJ_ANVIL2:
+			UOBJ_ELVEN_ANVIL1:
+			UOBJ_ELVEN_ANVIL2:
+				return 1;
+		endcase
+	endforeach
+	return 0;
+endfunction

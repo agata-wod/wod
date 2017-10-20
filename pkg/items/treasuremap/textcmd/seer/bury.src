@@ -1,0 +1,242 @@
+use uo;
+use os;
+
+include "include/gumps";
+include "include/wodinc";
+include "../pkg/npcs/npcinfo";
+include "../pkg/npcs/npc_util";
+include "../pkg/npcs/shrunknpcs/shrunknpcs";
+
+var maplevel := 0;
+
+program bury_treasure (character, text)
+	text := Lower (text);
+	if (text)
+		if (text == "help")
+			var themessage := "BURY:";
+			themessage := themessage + "<p>Bury buries a chest and creates a map that can be used to dig up the ";
+			themessage := themessage + "chest later.  Your location when you use this command is the place where the ";
+			themessage := themessage + "chest will be dug up.  You can select NPCs (10 maximum) to be used at guardians who will ";
+			themessage := themessage + "spawn when the chest is opened.";
+			
+			themessage := themessage + "<p><p>If you use .bury on an existing seer-made map, it will open the ";
+			themessage := themessage + "storage area containing the chest you buried, as well as a backpack that ";
+			themessage := themessage + "contains any NPCs you selected to guard it.  The guardians are normal shrinks, ";
+			themessage := themessage + "and you can add, remove or edit them with the normal totem tools.";
+			
+			themessage := themessage + "<p><p><b>Other options</b>";
+			themessage := themessage + "<p>'bury #' - Sets the cartography difficulty level of the map (1-10)";
+			themessage := themessage + "<p>'bury move' - move the location that a chest is buried";
+			themessage := themessage + "<p>'bury level' - Changes the map's cartography difficulty level (1-10)";
+
+			SendStringAsHtmlWindow (character, themessage, "Help");
+		elseif (text == "move")
+			EditMapLocation (character);
+			return;
+		elseif (text == "level")
+			EditMapLevel (character);
+			return;
+		elseif (CINT (text))
+			maplevel := CINT (text);
+			if (maplevel > 10)
+				maplevel := 10;
+				SendSysMessage (character, "Map level must be 1-10, set to 10");
+			elseif (maplevel < 0)
+				maplevel := 0;
+				SendSysMessage (character, "Map level must be 1-10, set to 0");
+			endif
+		else
+			SendSysMessage (character, "Error: Unknown option.  Type '.bury help' for information about this command.");
+			return;
+		endif
+	endif
+
+	sendsysmessage (character, "Target the chest to bury");
+	var chest := Target (character, TGTOPT_NOCHECK_LOS);
+	if (!chest)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+	
+	//if they targetted another seer map, edit it
+	if (chest.objtype == UOBJ_SEER_MAP)
+		EditChestStorage (character, chest);
+		return;
+	endif
+
+	var map := createitemincontainer (character.backpack, UOBJ_SEER_MAP, 1);
+	if (!map)
+		SendSysMessage (character, "Unable to create map.  Is your backpack full?");
+		return;
+	endif
+	
+	var storage_area := find_or_create_storage ("seer_chest_storage");
+	if (!storage_area)
+		SendSysMessage (character,"Error creating storage area!");
+		return;
+	endif
+	
+	var storagebox := find_or_create_item (storage_area, CSTR ("map_" + map.serial), 0xE7C);
+	if (!storagebox)
+		SendSysMessage (character,"Error creating storage box");
+		return;
+	endif
+	
+	if (!MoveItemToContainer (chest, storagebox))
+		SendSysMessage (character, "Error moving chest to storage area!");
+		return;
+	endif
+	
+	//set some props so we can get the chest back
+	SetObjProperty (map, "chestx", character.x);
+	SetObjProperty (map, "chesty", character.y);
+	SetObjProperty (map, "chestz", character.z);
+	SetObjProperty (map, "chestr", character.realm);
+	SetObjProperty (map, "chestserial", chest.serial);
+	
+	if (maplevel)
+		SetObjProperty (map, "level", maplevel);
+	endif
+
+	var guardian_container := CreateItemInContainer (storagebox, UOBJ_BACKPACK, 1);
+	if (!guardian_container)
+		SendSysMessage (character, "Error creating guarding container.");
+		SendSysMessage (character, "(You can get the chest back by using .bury on the map, or leave the chest with no defenders)");
+		return;
+	endif
+
+	guardian_container.name := "Guardian Bag";
+	SetObjProperty (chest, "guardian_pack", guardian_container.serial);
+	SetObjProperty (storagebox, "guardian_pack", guardian_container.serial);
+	SendSysMessage (character, "Target the guardians.  Hit escape when finished.");
+	repeat
+		var guardian := Target (character);
+		if (!guardian)
+			break;
+		elseif (!guardian.npctemplate)
+			SendSysMessage (character, "That's not an NPC!");
+		else
+			var totem := ShrinkNPC (guardian, guardian_container);
+			if (totem == error)
+				SendSysMessage (character, "Error: " + totem.errortext);
+				SendSysMessage (character, "Guardian selection ended.");
+				break;
+			endif
+			KillNPC (guardian);
+		endif
+	until (!character);
+	SendSysMessage (character, "Done!");
+endprogram
+
+
+
+
+///////////////////
+//  Opens up the map's storage box, allowing the seer to edit it
+///////////////////
+
+function EditChestStorage (character, map)
+	var storage_area := FindStorageArea ("seer_chest_storage");
+	if (!storage_area)
+		SendSysMessage (character, "Unable to find seer chest storage area.");
+		return;
+	endif
+	
+	var storagebox := FindRootItemInStorageArea (storage_area, CSTR ("map_" + map.serial));
+	if (!storagebox)
+		SendSysMessage (character, "Unable to find the storage box for that map.");
+		return;
+	endif
+	
+	SendSysMessage (character, "Make sure you put everything back when you're done!");
+	SendOpenSpecialContainer (character, storagebox);
+endfunction
+
+
+
+
+///////////////////
+//  Lets the seer move a  previously buried chest
+///////////////////
+
+function EditMapLocation (character)
+	SendSysMessage (character, "Target the map to move:");
+	SendSysMessage (character, "(The chest will be dug up at your current location)");
+	var map := Target (character);
+	if (!map)
+		SendSysMessage (character, "Canceled");
+		return;
+	elseif (map.objtype != UOBJ_SEER_MAP)
+		SendSysMessage (character, "That's not a seer map!");
+		return;
+	endif
+
+	SetObjProperty (map, "chestx", character.x);
+	SetObjProperty (map, "chesty", character.y);
+
+	//If the map has been decoded, edit the properties
+	if (character.x < 265)
+		map.xwest := 0;
+	else
+		map.xwest := character.x-265;
+	endif
+
+	if (character.y < 260)
+		map.ynorth := 0;
+	else
+		map.ynorth := character.y-260;
+	endif
+
+	map.xeast := character.x+265;
+	map.ysouth := character.y+260;
+	map.gumpwidth := 250;
+	map.gumpheight := 250;	
+endfunction
+
+
+
+
+///////////////////
+//  Change the map level (cartography skill needed to decode)
+///////////////////
+
+function EditMapLevel (character)
+	SendSysMessage (character, "Target the map who's level you want to edit");
+	SendSysMessage (character, "(This is the cartography difficulty, should be 1 to 10)");
+	var map := Target (character);
+	if (!map)
+		SendSysMessage (character, "Canceled");
+		return;
+	elseif (map.objtype != UOBJ_SEER_MAP)
+		SendSysMessage (character, "That's not a seer map!");
+		return;
+	endif
+
+	maplevel := SendTextEntryGump (character, "Enter new value", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 2, "1-10");
+	maplevel := CINT (maplevel);
+	if (!maplevel)
+		SendSysMessage (character, "Map level set to 0");
+	elseif (maplevel > 10)
+		SendSysMessage (character, "Map level must be 1-10, set to 10");
+		maplevel := 10;
+	elseif (maplevel < 0)
+		maplevel := 0;
+		SendSysMessage (character, "Map level must be 1-10, set to 0");
+	endif
+		
+	if (maplevel)
+		SetObjProperty (map, "level", maplevel);
+	else
+		EraseObjProperty (map, "level");
+	endif
+	
+	
+	
+endfunction
+
+
+
+
+
+
+

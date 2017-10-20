@@ -1,0 +1,16 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+include "include/magic";
+include "include/client";
+include "include/poison";
+include "include/objtype";
+include "include/effects";
+include "include/attributes";
+include "../pkg/skills/craftingskills/alchemy/alchemy";
+
+program testanim (character)
+	PlayObjectCenteredEffect (character, 0x2851, 10, 10);
+endprogram

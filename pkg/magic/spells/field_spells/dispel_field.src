@@ -1,0 +1,38 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 5;
+
+program dispel_field( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_loc := GetSpellCastOn (caster, parms);
+	if (!cast_loc)
+		return 0;
+	endif
+
+	var range := CINT (GetAttribute (caster, ATTRIBUTEID_MAGERY)/15);
+	if (!caster)
+		range := 8;
+	elseif (!range or range < 2)
+		range := 2;
+	endif
+	PlaySoundEffect (caster, SFX_SPELL_DISPEL);
+    	foreach item in ListItemsNearLocation (cast_loc.x, cast_loc.y, cast_loc.z, range, cast_loc.realm)
+		if (GetObjProperty(item, "summoned_field"))
+			PlayStationaryEffect (item.x, item.y, item.z, FX_SMOKE, 0xA, 0xA, 0, item.realm);
+			DestroyItem (item);
+		endif
+	endforeach   
+	return 1;
+endprogram
+
+
+

@@ -1,0 +1,130 @@
+/////////////////////////////////////////////////////////////////////////////
+//
+//  merchant_dbsaver - Saves merchant database periodically
+//
+//          complains, via syslog and broadcast, if it can't.
+//          If this script dies, mdbsaverchk should notice and complain.
+//
+/////////////////////////////////////////////////////////////////////////////
+
+use os;
+use uo;
+use file;
+
+include "include/skills";
+include "include/utility";
+include "include/client";
+
+function savemdb();
+	var output_text := array{};
+	var playermerchantlist := GetGlobalProperty ("#playermerchantlist");
+	if (!playermerchantlist)
+		output_text[1] := "Unable to find any merchants.";
+	else
+		var storage := FindStorageArea( "Merchant Storage" );
+		if (!storage)
+			output_text[1] := "Error opening merchant storage!";
+		else
+			var scriptcounter :=0;
+			var counter := 1;
+			foreach merchantserial in playermerchantlist
+				scriptcounter := scriptcounter+1;
+				if (!(scriptcounter%200))
+					sleepms(1);
+				endif
+				var merchant := SystemFindObjectBySerial (merchantserial);
+				if (merchant)
+					var inv_fs := FindRootItemInStorageArea (storage, merchantserial + " FS");
+					if (inv_fs)
+						foreach item in ListRootItemsInContainer (inv_fs)
+							if ( item.amount > 1 )
+								output_text[counter] := merchant.name + " at " + merchant.x + ", " + merchant.y + ", " + item.desc + " at " + item.sellprice + " each";
+							else
+								output_text[counter] := merchant.name + " at " + merchant.x + ", " + merchant.y + ", " + expandItemName(item) + " at " + item.sellprice;
+							endif
+							counter := counter+1;
+							scriptcounter := scriptcounter+1;
+							if (!(scriptcounter%200))
+								sleepms(1);
+							endif
+						endforeach
+					endif
+				endif
+			endforeach
+		endif
+	endif
+	var res := WriteFile("vendors1.txt", output_text);
+	return res;
+endfunction
+
+function expandItemName (item)
+	var myvar;
+	var myvar2;
+	var numabilities := 0;
+	var expandedName := item.desc;
+	if (item.ar_mod > 0)
+		expandedName := expandedName + " (AR +" + item.ar_mod;
+		numabilities := numabilities+1;
+	endif
+	if (item.dmg_mod > 0)
+		if (numabilities > 0)
+			expandedName := expandedName + ", ";
+		else
+			expandedName := expandedName + " (";
+		endif
+		expandedName := expandedName + "Damage +" + item.dmg_mod;
+		numabilities := numabilities+1;
+	endif
+	myvar := GetObjProperty(item, "skilladv");
+	myvar2 := GetObjProperty (item, "skill"+myvar);
+	if (myvar2)
+		myvar := GetSkillName(myvar);
+		if (numabilities > 0)
+			expandedName := expandedName + ", ";
+		else
+			expandedName := expandedName + " (";
+		endif
+		expandedName := expandedName + myvar + " +" + myvar2;
+		numabilities := numabilities+1;
+	endif
+	myvar := GetObjProperty(item, "skillbonus");
+	if (myvar)
+		if (numabilities > 0)
+			expandedName := expandedName + ", ";
+		else
+			expandedName := expandedName + " (";
+		endif
+		expandedName := expandedName + "Barding Skills +" + myvar;
+		numabilities := numabilities+1;
+	endif
+	if (numabilities > 0)
+		expandedName := expandedName + ")";
+	endif
+	return expandedName;
+endfunction
+
+
+const MINUTES_BETWEEN_SAVES := 15;
+
+print ("Saving merchant database every " + MINUTES_BETWEEN_SAVES + " minutes");
+
+while (1)
+	sleep (MINUTES_BETWEEN_SAVES * 60);
+	
+	syslog ("Saving Merchant Database");
+	var duration := ReadGameClock() - 1;
+
+	var res := savemdb();
+
+	duration := ReadGameClock() - duration;
+
+
+	if (res)
+		SetGlobalProperty( "#:merchants_database:lastsave", ReadGameClock() );
+		syslog( "Merchant Database saved (" + duration + " seconds)" );
+	else
+		syslog( "Error saving merchant database: " + res );
+	endif
+
+endwhile
+

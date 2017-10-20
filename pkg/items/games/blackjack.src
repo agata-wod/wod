@@ -1,0 +1,533 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/magicitems";
+include "include/clock";
+include "include/accounts";
+include "include/objtype";
+include "include/gumps";
+
+CONST GUMP_CARD_BASE := 0x1c01;
+var players_cards := array{};
+var players_split_cards := array{};
+var dealers_cards := array{};
+var drawn_cards := array{};
+
+var gump_layout, gump_data;
+var win_results;
+var player_bet := 1;
+var winning_string := "";
+var doubled_down := 0;
+
+var players_score, dealers_score, players_split_score;
+
+program play_blackjack (character)
+	SetObjProperty (character, "#playing_games", GetPID());
+
+	//get their bet
+	player_bet := GetPlayersBet (character);
+	if (!player_bet)
+		EraseObjProperty (character, "#playing_games");
+		return;
+	endif
+
+	//data for monthly counter
+	var year := Systime_GetYear ();
+	var month := lower (Systime_GetMonth ());
+
+	var still_playing := 1;
+	repeat
+		//Take their money
+		if (!character.spendgold (player_bet))
+			SendSysMessage (character, "You don't have enough money!");
+			EraseObjProperty (character, "#playing_games");
+			return;
+		endif
+
+		//random stats
+		set_critical (1);
+			var game_counter := GetGlobalProperty ("blackjack_games_total");
+			if (!game_counter)
+				game_counter := 0;
+			endif
+			game_counter := game_counter + 1;
+			SetGlobalProperty ("blackjack_games_total", game_counter);
+			
+			game_counter := GetGlobalProperty (CSTR ("blackjack_games_" + year + "_" + month));
+			if (!game_counter)
+				game_counter := 0;
+			endif
+			game_counter := game_counter + 1;
+			SetGlobalProperty (CSTR ("blackjack_games_" + year + "_" + month), game_counter);
+			
+			var bet_counter := GetGlobalProperty ("blackjack_bets_total");
+			if (!bet_counter)
+				bet_counter := 0;
+			endif
+			bet_counter := bet_counter + player_bet;
+			SetGlobalProperty ("blackjack_bets_total", bet_counter);
+			
+			bet_counter := GetGlobalProperty (CSTR ("blackjack_bets_" + year + "_" + month));
+			if (!bet_counter)
+				bet_counter := 0;
+			endif
+			bet_counter := bet_counter + player_bet;
+			SetGlobalProperty (CSTR ("blackjack_bets_" + year + "_" + month), bet_counter);
+		set_critical (0);
+
+		//reset all the data
+		players_cards := array{};
+		players_split_cards := array{};
+		dealers_cards := array{};
+		drawn_cards := array{};
+		winning_string := "";
+		players_score := 0;
+		players_split_score := 0;
+		dealers_score := 0;
+		doubled_down := 0;
+
+		//player and dealer both draw 2 cards
+		players_cards[1] := DrawCard ();
+		players_cards[2] := DrawCard ();
+		dealers_cards[1] := DrawCard ();
+		dealers_cards[2] := DrawCard ();
+
+		//var busted := 0;
+		var done := 0;
+		repeat
+			players_score := GetScoreOfHand (character, players_cards);
+			if (players_score < 21 and players_cards.size() <= 6 and !doubled_down)		
+				BuildHitStayGump ();
+				var gump_return := SendDialogGump (character, gump_layout, gump_data);
+				if (gump_return == error)
+					SendSysMessage (character, "Please close other gumps first.");
+					EraseObjProperty (character, "#playing_games");
+					return;
+				elseif (!gump_return[0])
+					SendSysMessage (character, "Don't do that.");
+				else
+					case (gump_return[0])
+						101:	//hit me
+							players_cards.append (DrawCard());
+						102:	//stay
+							done := 1;
+						103:	//Double Down
+							//make sure its legal
+							if (players_cards.size() == 2)
+								if (!doubled_down)
+									if (character.spendgold (player_bet))
+										players_cards.append (DrawCard());
+										doubled_down := 1;
+									else
+										SendSysMessage (character, "You can't afford that.");
+									endif
+								endif
+							endif
+						104:	//Double Down
+							SendSysMessage (character, "Sorry, this function isn't available yet");
+						999:	//help
+							var game_help := "Blackjack:";
+							game_help := game_help + "<p>The goal of Blackjack is to get as close as possible to 21 without going over.  ";
+							game_help := game_help + "Both you and the dealer are dealt 2 cards.  You can then decide if you want to draw ";
+							game_help := game_help + "additional cards (hit) or not (stay).  If you go above 21, you automatically lose - ";
+							game_help := game_help + "this is known as busting.  ";
+							game_help := game_help + "<p>After you chose to stay (assuming you don't bust), the dealer then reveals his cards ";
+							game_help := game_help + "and also decides to hit or stay.  The dealer always hits if he has 16 or less, and stays ";
+							game_help := game_help + "on 17 or above. ";
+							game_help := game_help + "<p>Card Scoring:";
+							game_help := game_help + "<br>Number cards are worth the number printed on them.  Face cards are worth 10 points. ";
+							game_help := game_help + "Aces count as either 1 or 11.";
+							game_help := game_help + "<p>Doubling Down:";
+							game_help := game_help + "<br>Instead of hitting or standing, on your first card, you are allowed you ";
+							game_help := game_help + "double down.  Doing so doubles increases your bet (for this hand only) and ";
+							game_help := game_help + "automatically draws a single card (you cannot draw any more cards.)";
+							game_help := game_help + "";
+							game_help := game_help + "";
+	
+							SendStringAsHtmlWindow (character, game_help, "Blackjack help");
+						default:
+							SendSysMessage (character, "Error!  Bad gump return");
+							EraseObjProperty (character, "#playing_games");
+							return;
+					endcase
+				endif
+			else
+				done := 1;
+			endif
+		until (done or !character);
+		
+		dealers_score := GetScoreOfHand (character, dealers_cards);
+		//dealer only draws if the player didn't go bust
+		if (players_score <= 21)
+			if (!(players_score == 21 and players_cards.size() == 2))
+				//dealer draws on 16, stands on 17
+				if (dealers_score < 17)
+					repeat
+						dealers_cards.append (DrawCard());
+						dealers_score := GetScoreOfHand (character, dealers_cards);
+					until (dealers_score >= 17 or dealers_cards.size() >= 6);
+				endif
+			endif
+		endif
+	
+	  	//check to see if they won.  If so, give them their money
+		win_results := DetermineWinOrLoss ();
+		if (win_results[2])
+			var winnings := CINT (win_results[2] * player_bet);
+			if (doubled_down)
+				winnings := winnings * 2;
+			endif
+
+			//pick the winnings string, but don't include the original bet
+			if (win_results[2] > 1)
+				winning_string := "You win " + (winnings - player_bet - player_bet*doubled_down) + " gold";
+			endif
+
+			//random stats
+			var winnings_counter := GetGlobalProperty ("blackjack_winnings_total");
+			if (!winnings_counter)
+				winnings_counter := 0;
+			endif
+			winnings_counter := winnings_counter + winnings;
+			SetGlobalProperty ("blackjack_winnings_total", winnings_counter);
+			
+			winnings_counter := GetGlobalProperty (CSTR ("blackjack_winnings_" + year + "_" + month));
+			if (!winnings_counter)
+				winnings_counter := 0;
+			endif
+			winnings_counter := winnings_counter + winnings;
+			SetGlobalProperty (CSTR ("blackjack_winnings_" + year + "_" + month), winnings_counter);
+
+			//stackable gold fix
+			if (winnings > 60000)
+				repeat
+					CreateItemInContainer (character.backpack, UOBJ_GOLD_COIN, 60000);
+					winnings := winnings - 60000;
+				until (winnings < 60000);
+			endif
+			CreateItemInContainer (character.backpack, UOBJ_GOLD_COIN, winnings);
+		endif
+		
+		//show the outcome
+		done := 0;
+		repeat
+			BuildResultsGump ();
+			var gump_return := SendDialogGump (character, gump_layout, gump_data);
+			if (gump_return == error)
+				SendSysMessage (character, "Please close other gumps first.");
+				EraseObjProperty (character, "#playing_games");
+				return;
+			elseif (!gump_return[0])
+				SendSysMessage (character, "Finished");
+				EraseObjProperty (character, "#playing_games");
+				return;
+			else
+				case (gump_return[0])
+					10:
+						done := 1;
+					998:
+						player_bet := GetPlayersBet (character);
+						if (!player_bet)
+							EraseObjProperty (character, "#playing_games");
+							return;
+						endif
+						done := 1;
+					999:	//help
+						var game_help := "Blackjack:";
+						game_help := game_help + "<p>The goal of Blackjack is to get as close as possible to 21 without going over.  ";
+						game_help := game_help + "Both you and the dealer are dealt 2 cards.  You can then decide if you want to draw ";
+						game_help := game_help + "additional cards (hit) or not (stay).  If you go above 21, you automatically lose - ";
+						game_help := game_help + "this is known as busting.  ";
+						game_help := game_help + "<p>After you chose to stay (assuming you don't bust), the dealer then reveals his cards ";
+						game_help := game_help + "and also decides to hit or stay.  The dealer always hits if he has 16 or less, and stays ";
+						game_help := game_help + "on 17 or above. ";
+						game_help := game_help + "<p>Card Scoring:";
+						game_help := game_help + "<br>Number cards are worth the number printed on them.  Face cards are worth 10 points. ";
+						game_help := game_help + "Aces count as either 1 or 11.";
+						game_help := game_help + "<p>Doubling Down:";
+						game_help := game_help + "<br>Instead of hitting or standing, on your first card, you are allowed you ";
+						game_help := game_help + "double down.  Doing so doubles increases your bet (for this hand only) and ";
+						game_help := game_help + "automatically draws a single card (you cannot draw any more cards.)";
+						game_help := game_help + "";
+						game_help := game_help + "";
+						game_help := game_help + "";
+
+						SendStringAsHtmlWindow (character, game_help, "Blackjack help");
+					default:
+						SendSysMessage (character, "Error:  Bad gump return.");
+				endcase;
+			endif
+		until (done or !character);	
+	until (!still_playing or !character);
+	EraseObjProperty (character, "#playing_games");
+endprogram
+
+
+
+
+///////////////////
+//  Picks a card, first making sure that it isn't one already used
+///////////////////
+
+function DrawCard ()
+	var chosencard := -1;
+	repeat
+		chosencard := RandomInt (52);
+		if (chosencard in drawn_cards)
+			chosencard := -1;
+		endif
+	until (chosencard >= 0);
+	drawn_cards.append (chosencard);
+	return chosencard;
+endfunction
+
+
+
+
+///////////////////
+//  This is the gump that lets the player click cards to hold them
+///////////////////
+
+function BuildHitStayGump ()
+	gump_layout := array {
+		"page 0",
+		"nodispose",
+		"nomove",
+		"resizepic 50 50 2600 510 490",
+		"page 1",
+		"text 100 80 0 1",
+		"text 100 230 0 2",
+
+		"button 440 455 2118 2117 1 1 101",
+		"text 460 450 1321 3",
+		"button 440 475 2118 2117 1 1 102",
+		"text 460 470 1321 4",
+		"text 120 450 1321 5",
+		"button 440 495 2033 2032 1 1 999"		//help button
+	};
+	
+	gump_data := array {
+		"HELD",         //0
+		"Dealer's Hand",
+		"Player's Hand - " + players_score,
+		"Hit",
+		"Stay",
+		"Your bet: " + player_bet + " gold",
+		"Double Down",
+		"Split"
+	};
+
+	//display the dealer's cards, first one hidden
+	gump_layout.append ("gumppic 110 100 7233");
+	var heldcard := dealers_cards [2];
+	var cardgraphic := GUMP_CARD_BASE + GetSuitOfCard(heldcard)*16 + GetRankOfCard(heldcard);
+	gump_layout.append ("gumppic 190 100 " + cardgraphic);
+	
+	//display the player's cards
+	for i := 1 to len (players_cards)
+		heldcard := players_cards [i];
+		var cardgraphic := GUMP_CARD_BASE + GetSuitOfCard(heldcard)*16 + GetRankOfCard(heldcard);
+		gump_layout.append ("gumppic " + (30+i*80) + " 250 " + cardgraphic);
+	endfor
+	
+	//Check to see if doubling down or splitting is available
+	if (players_cards.size() == 2)
+		gump_layout.append ("button 320 475 2118 2117 1 1 103");
+		gump_layout.append ("text 340 470 1321 6");
+
+		if (GetRankOfCard(players_cards[1]) == GetRankOfCard(players_cards[2]))
+			gump_layout.append ("button 320 455 2118 2117 1 1 104");
+			gump_layout.append ("text 340 450 1321 7");
+		endif
+		
+		
+	endif
+	
+
+endfunction
+
+
+
+
+///////////////////
+//  This is the gump that lets the player click cards to hold them
+///////////////////
+
+function BuildResultsGump ()
+	gump_layout := array {
+		"page 0",
+		"nodispose",
+		"nomove",
+		"resizepic 50 50 2600 510 490",
+		"page 1",
+		"text 100 80 0 1",	//'Dealers Hand'
+		"text 100 230 0 2",	//'player's Hand'
+
+		"text 120 450 1321 3",	//Win results
+		"text 120 470 1321 4",	//Win results 2
+		"button 440 455 2118 2117 1 1 10",	//Play again
+		"text 460 450 1321 5",
+		"button 440 475 2118 2117 1 1 998",	//Change Bet
+		"text 460 470 1321 6",
+
+		"button 440 495 2033 2032 1 1 999"		//help button
+	};
+	
+	gump_data := array {
+		"BLANK",         //0
+		"Dealer's Hand - " + dealers_score,
+		"Player's Hand - " + players_score,
+		win_results[1],
+		winning_string,
+		"Play again",
+		"Change Bet"
+	};
+
+	//replace score with "BUST" if it happened
+	if (dealers_score > 21)
+		gump_data[2] := "Dealer's Hand - BUST";
+	endif
+	if (players_score > 21)
+		gump_data[3] := "Player's Hand - BUST";
+	endif
+
+	//display the dealer's cards, first one hidden
+	for i := 1 to len (dealers_cards)
+		var heldcard := dealers_cards [i];
+		var cardgraphic := GUMP_CARD_BASE + GetSuitOfCard(heldcard)*16 + GetRankOfCard(heldcard);
+		gump_layout.append ("gumppic " + (30+i*80) + " 100 " + cardgraphic);
+	endfor
+	
+	//display the player's cards
+	for i := 1 to len (players_cards)
+		var heldcard := players_cards [i];
+		var cardgraphic := GUMP_CARD_BASE + GetSuitOfCard(heldcard)*16 + GetRankOfCard(heldcard);
+		gump_layout.append ("gumppic " + (30+i*80) + " 250 " + cardgraphic);
+	endfor
+
+endfunction
+
+
+
+
+///////////////////
+//  Figures out the score of the hand
+///////////////////
+
+function GetScoreOfHand (character, thehand)
+	if (!len (thehand))
+		SendSysMessage (character, "Error: No hand!");
+		return 0;
+	endif
+	
+	var card_scorer := array{11, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10};
+
+	var score_counter := 0;
+	var ace_counter := 0;
+	var thiscardrank;
+	for i := 1 to len (thehand)
+		thiscardrank := GetRankOfCard (thehand[i]);
+		score_counter := score_counter + card_scorer [thiscardrank + 1];
+		if (thiscardrank == 0)
+			ace_counter := ace_counter + 1;
+		endif
+	endfor
+	
+	//If they went bust, try again scoring aces as 1
+	if (score_counter > 21)
+		if (ace_counter > 0)
+			repeat
+				score_counter := score_counter - 10;
+				ace_counter := ace_counter - 1;
+			until (ace_counter < 1 or score_counter < 21);
+		endif
+	endif
+	
+	return score_counter;
+endfunction
+
+
+
+
+///////////////////
+//  Figures out if we've won or lost.  There has to be an easier way to do this...
+//  Returns an array.  [1] is a string description, [2] is the winning multiplier (0 for loss)
+///////////////////
+
+function DetermineWinOrLoss ()
+	//busts first
+	if (players_score > 21)
+		return array{"You went bust!", 0};
+	elseif (dealers_score > 21)
+		return array{"Dealer busted!", 2};
+	endif
+	
+	//Then Blackjacks
+	if (players_score == 21)
+		if (players_cards.size() == 2)
+			return array{"Blackjack!", 2.5};
+		elseif (dealers_score == 21)
+			if (dealers_cards.size() == 2)
+				return array{"Dealer has Blackjack", 0};
+			endif
+		endif
+	endif
+	
+	if (dealers_score == 21)
+		if (dealers_cards.size() == 2)
+			return array{"Dealer has Blackjack", 0};
+		endif
+	endif
+
+	if (players_score > dealers_score)
+		return array{"You have the higher hand!", 2};
+	elseif (players_score < dealers_score)
+		return array{"Sorry, try again.", 0};
+	endif
+	return array{"Tie (bet returned)", 1};
+endfunction
+
+
+
+
+///////////////////
+//  returns the value of the card
+///////////////////
+
+function GetRankOfCard (cardvalue)
+	return (cardvalue%13);
+endfunction
+
+
+
+
+///////////////////
+//  returns the suit of the card
+///////////////////
+
+function GetSuitOfCard (cardvalue)
+	return CINT (cardvalue/13);
+endfunction
+
+
+
+///////////////////
+//  Gets the players bet
+///////////////////
+
+function GetPlayersBet (character)
+	var thebet := SendTextEntryGump (character, "Please enter your bet", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 4, "(1 to 1000 gold)");
+	thebet := CINT (thebet);
+	if (!thebet)
+		SendSysMessage (character, "Invalid bet");
+		return 0;
+	elseif (thebet > 1000)
+		SendSysMessage (character, "Maximum bet is 1000 gold.");
+		return 1000;
+	endif
+	return thebet;
+endfunction
+
+

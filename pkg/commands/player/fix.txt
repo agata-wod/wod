@@ -1,0 +1,1 @@
+Use .fix to move your character to the "world height" at your location.  Sometimes this helps to get you unstuck.

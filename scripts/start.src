@@ -1,0 +1,15 @@
+Use uo;
+Use os;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+
+program starttheworld()
+	OpenWorldBank();
+	find_or_create_storage( "Merchant Storage" );
+	SetGlobalProperty ("#serverstartup", ReadGameClock());
+	
+	start_script (":drocket:world_startup", array {});
+	
+endprogram

@@ -1,0 +1,8 @@
+use uo;
+
+program openbook(chr,book)
+	var res := SendOpenBook( chr, book );
+	if (!res) 
+		print( "SendOpenBook: " + res );
+	endif
+endprogram

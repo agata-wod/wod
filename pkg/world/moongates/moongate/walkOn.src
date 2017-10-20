@@ -1,0 +1,46 @@
+/*
+        Original is a mix between POL Distro 099 and WoD scripts
+
+        Maintained by Agata 2011-11-21
+*/
+use uo;
+use polsys;
+include "include/client";
+
+
+program walkOnScript( mobile, tile )
+	if ( (mobile.npctemplate) and ((mobile.graphic == 400 or mobile.graphic == 401)) )
+		return 0;
+	endif
+
+	if( JustTeleported( mobile ))
+		return 0;
+	endif
+	if (GetObjProperty (tile, "#forbidden_gaters"))
+		var forbidden_gaters := GetObjProperty (tile, "#forbidden_gaters");
+		if (mobile.serial in forbidden_gaters)
+			return 0;
+		endif
+	endif
+
+	SetObjProperty( mobile, "#Teleported", ReadMillisecondClock() );
+	var result := tile.SendToDestination( mobile );
+	if( result.errortext )
+		SendSysMessage( mobile, "Error teleporting:"+result.errortext );
+		return 0;
+	endif
+	PlaySoundEffect( mobile, SFX_SPELL_RECALL );
+	return 1;
+endprogram
+
+function JustTeleported( mobile )
+
+	var tele_time := CInt( GetObjProperty( mobile, "#Teleported" ));
+	if( tele_time > ReadMillisecondClock()-800 )
+		// Mobile just teleported. Too soon to teleport again.
+		return 1;
+	else
+		// Safe to teleport the mobile
+		return 0;
+	endif
+endfunction

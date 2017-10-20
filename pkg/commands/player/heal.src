@@ -1,0 +1,270 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+Const DRINK_SOUND := 0x32;
+Const SOUND_EFFECT_HEAL	:= 0x1f3; 
+Const SOUND_EFFECT_CURE	:= 0x1e1;
+Const EFFECT_SPARKLE  := 0x374a;
+
+include "include/client";
+include "include/magic";
+include "include/utility";
+include "include/dotempmods";
+include "include/newperformaction";
+
+program heal (me, text)
+	if (me.dead)
+		SendSysMessage (me, "Too late!");
+		return 0;
+	endif
+
+	me.hidden := 0;
+	if (GetObjProperty (me, "#dotheal"))
+		if (GetProcess (GetObjProperty (me, "#dotheal")))
+			SendSysMessage (me, "Too soon!");
+			return;
+		endif
+	endif
+	SetObjProperty (me, "#dotheal", GetPid());
+
+	var type := CINT (text);
+	case (type)
+		2: 
+			me.frozen := 1;
+			CastSpell (me, 29, ":misc_spells:gheal", 0x1F49);
+			me.frozen := 0;
+		3:
+			UseBandage (me);
+		default:
+			DrinkHeal (me);
+		endcase
+	EraseObjProperty (me, "#dotheal");
+endprogram
+
+function DrinkHeal (character)
+	if (GetObjProperty (character, "#potion") and GetObjProperty (character, "#potion") > ReadGameClock())
+		SendSysMessage (character, "You can't drink another potion yet!");
+        	return 0;
+	endif
+	
+	var healpotion := 0;
+	var lighthealpotion := 0;
+	
+	foreach item in EnumerateItemsInContainer (character.backpack)
+		if (item.objtype == UOBJ_GREATER_HEAL_POTION)
+			character.hidden := 0;
+			PlaySoundEffect (character, DRINK_SOUND);
+			NewPerformAction(character, NPA_ANIM_EAT);
+			CreateItemInContainer (item.container, UOBJ_EMPTY_BOTTLE, 1);
+			SubtractAmount (item, 1);
+			var heal_amount := RandomDiceRoll("5d12+3");
+			HealDamage(character, heal_amount);
+			PlaySoundEffect( character,  SOUND_EFFECT_HEAL );
+			SetObjProperty (character, "#potion", (ReadGameClock() + 20));
+			return 1;
+		elseif (item.objtype == UOBJ_HEAL_POTION)
+			healpotion := item;
+		elseif (item.objtype == UOBJ_LIGHT_HEAL_POTION)
+			lighthealpotion := item;
+		endif
+	endforeach
+	
+	if (healpotion)
+		character.hidden := 0;
+		PlaySoundEffect (character, DRINK_SOUND);
+		NewPerformAction(character, NPA_ANIM_EAT);
+		CreateItemInContainer (healpotion.container, UOBJ_EMPTY_BOTTLE, 1);
+		SubtractAmount (healpotion, 1);
+		var heal_amount := RandomDiceRoll("3d12+3");
+		HealDamage(character, heal_amount);
+		PlaySoundEffect( character,  SOUND_EFFECT_HEAL );
+		SetObjProperty (character, "#potion", (ReadGameClock() + 20));
+		return 1;
+	endif
+	
+	if (lighthealpotion)
+		character.hidden := 0;
+		PlaySoundEffect (character, DRINK_SOUND);
+		NewPerformAction(character, NPA_ANIM_EAT);
+		CreateItemInContainer (lighthealpotion.container, UOBJ_EMPTY_BOTTLE, 1);
+		SubtractAmount (lighthealpotion, 1);
+		var heal_amount := RandomDiceRoll("2d12+3");
+		HealDamage(character, heal_amount);
+		PlaySoundEffect( character,  SOUND_EFFECT_HEAL );
+		SetObjProperty (character, "#potion", (ReadGameClock() + 20));
+		return 1;
+	endif
+
+	SendSysMessage (character, "You don't have any healing potions!");
+	return 0;
+endfunction
+
+function CastSpell (character, spellid, spell, scrollid)
+	if (GetManaCostBySpellID (spellid) > CINT (GetVital (character, "Mana")/100))
+		return 0;
+	endif
+
+	//search for a scroll in the main backpack first.  If we have it, use that to cast the spell
+	var scroll := FindObjtypeInContainer (character.backpack, scrollid);
+	if (scroll)
+		if ( GetAttribute (character, ATTRIBUTEID_MAGERY) < (GetSpellDifficulty (spellid) - 40) )
+			return 0;
+		endif
+		character.hidden := 0;
+		var weaponone := GetEquipmentByLayer (character, LAYER_HAND1);
+		if (weaponone)
+			var weaponcfg := ReadConfigFile (":weapons:itemdesc");
+			var blockvalue := weaponcfg[weaponone.objtype].blockcircle;
+			if ( blockvalue and blockvalue < 9)
+				MoveItemToContainer (weaponone, character.backpack);
+			endif
+		endif
+		var weapontwo := GetEquipmentByLayer (character, LAYER_HAND2);
+		if (weapontwo)
+			var weaponcfg := ReadConfigFile (":weapons:itemdesc");
+			var blockvalue := weaponcfg[weapontwo.objtype].blockcircle;
+			if ( blockvalue and blockvalue < 9)
+				MoveItemToContainer (weapontwo, character.backpack);
+			endif
+		endif
+
+		NewPerformAction (character, NPA_ANIM_SPELL, NPA_SPELL_DIRSPELL, NPA_DIRSPELL_SUB);
+		SpeakPowerWords (character, spellid);
+		if (!CheckSkill (character, SKILLID_MAGERY, (GetSpellDifficulty (spellid)-20), 0))
+			Fizzle (character);
+			if (!character.dead)
+				if (weaponone)
+					EquipItem (character, weaponone);
+				endif
+				if (weapontwo)
+					EquipItem (character, weapontwo);
+				endif
+			endif
+			sleep (1);
+			return 0;
+		else
+			ConsumeSpellManaCostByID (character, spellid);
+			var parms := array;
+			parms[1] := "#MOB";
+			parms[2] := character;
+			parms[3] := character;
+			sleep(2);
+			start_script (spell, parms);
+			sleep(1);
+			if (!character.dead)
+				if (weaponone)
+					EquipItem (character,weaponone);
+				endif
+				if (weapontwo)
+					EquipItem (character,weapontwo);
+				endif
+			endif
+			SubtractAmount (scroll, 1);
+			return 1;
+		endif
+	endif
+
+	if ( GetAttribute(character,ATTRIBUTEID_MAGERY) < (GetSpellDifficulty( spellid ) - 20) )
+		return 0;
+	endif
+
+	var spellbook := FindObjtypeInContainer (character.backpack, UOBJ_SPELLBOOK);
+	if (!spellbook)
+		return 0;
+	endif
+
+//	var hasspell;
+//	foreach item in EnumerateItemsInContainerOfObjtype (spellbook, scrollid)
+//		hasspell := item;
+//		break;
+//	endforeach
+	if (!spellbook.HasSpell(spellid))
+		return 0;
+	endif			
+
+	if (ConsumeReagents (character, spellid))
+		character.hidden := 0;
+		var weaponone := GetEquipmentByLayer (character, LAYER_HAND1);
+		if (weaponone)
+			var weaponcfg := ReadConfigFile (":weapons:itemdesc");
+			var blockvalue := CINT (weaponcfg[weaponone.objtype].blockcircle);
+			if ( blockvalue and blockvalue < 9)
+				MoveItemToContainer (weaponone, character.backpack);
+			endif
+		endif
+		var weapontwo := GetEquipmentByLayer (character, LAYER_HAND2);
+		if (weapontwo)
+			var weaponcfg := ReadConfigFile (":weapons:itemdesc");
+			var blockvalue := CINT (weaponcfg[weapontwo.objtype].blockcircle);
+			if ( blockvalue and blockvalue < 9)
+				MoveItemToContainer (weapontwo, character.backpack);
+			endif
+		endif
+
+		NewPerformAction (character, NPA_ANIM_SPELL, NPA_SPELL_DIRSPELL, NPA_DIRSPELL_SUB);
+		SpeakPowerWords (character, spellid);
+		if (!CheckSkill (character, SKILLID_MAGERY, GetSpellDifficulty (spellid), 0))
+			PlaySoundEffect (character, 0x005d);
+			PlayObjectCenteredEffect (character, 0x3735, 0x0a, 0x1e);
+			sleep (2);
+			if (!character.dead)
+				if (weaponone)
+					EquipItem(character,weaponone);
+				endif
+				if (weapontwo)
+					EquipItem(character,weapontwo);
+				endif
+			endif
+			sleep(1);
+			return 0;
+		else
+			ConsumeSpellManaCostByID (character, spellid);
+			var parms := array;
+			parms[1] := "#MOB";
+			parms[2] := character;
+			parms[3] := character;
+			sleep(2);
+			start_script( spell, parms );
+			sleep(1);
+			if (!character.dead)
+				if (weaponone)
+					EquipItem(character,weaponone);
+				endif
+				if (weapontwo)
+					EquipItem(character,weapontwo);
+				endif
+			endif
+			return 1;
+		endif
+	else
+		return 0;
+	endif
+
+endfunction
+
+function UseBandage (character)
+	if (cint(GetObjProperty(character, "#heal")) > readgameclock())
+		SendSysMessage (character,"You must wait to use your healing arts again!");
+        	return 0;
+	endif
+
+	var parms := array{ };
+	parms[1] := character;
+	parms[2] := character;
+
+	foreach item in EnumerateItemsInContainer (character.backpack)
+		if ( item.objtype == UOBJ_BANDAGE)
+			character.hidden := 0;
+			parms[3] := item;
+			start_script (":healing:dohealing",parms);
+			return 1;
+		endif
+	endforeach
+
+	SendSysMessage (character, "You don't have any bandages!");
+	return 0;
+
+endfunction
+

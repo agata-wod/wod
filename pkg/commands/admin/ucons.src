@@ -1,0 +1,10 @@
+use os;
+use uo;
+
+program ucons (character, text)
+
+   if (text)
+     sendsysmessage(character, "usage: .ucons (press enter key)");
+   endif
+   character.concealed := 0;
+endprogram

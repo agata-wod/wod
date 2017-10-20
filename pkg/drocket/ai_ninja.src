@@ -1,0 +1,156 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/mainloop_killpcs_normal";
+include "../pkg/npcs/main_ai/main/sleepmode_normal";
+include "../pkg/npcs/main_ai/combat/fightmode_normal_default";
+include "../pkg/npcs/main_ai/combat/closedistance_archer";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/main_ai/combat/gethelp_default";
+
+const HALT_THRESHOLD := 8; // how close before he attacks?
+drop_anchor();
+
+program KillPlayers ()
+	if (!me.backpack)
+		DoOnCreationSetup ();
+		sleep (1);
+		foreach item in ListEquippedItems (me)
+			if (item.objtype != UOBJ_MOUNT)
+				if (item.isa (POLCLASS_WEAPON))
+					item.dmg_mod := 3;
+				endif
+				item.newbie := 1;
+			endif
+		endforeach
+	endif
+	DoStartupSetup ();
+
+	if (GetObjProperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	post_combat ();
+	main_AI_loop ();
+endprogram
+
+
+function process_combat_event (byref ev)
+	if (ev.type == EVID_DAMAGED)
+		if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")*0.75))
+			ApplyHealing ();
+		endif
+	endif
+	DoNinjaEmotes ();
+	CheckCutOffHead ();
+endfunction
+
+
+function in_combat_event_loop (byref opponent)
+	if (opponent)
+	endif
+endfunction
+
+function post_combat ()
+	ClearEventQueue ();
+	DisableCombatEvents ();
+	EnableMainEvents ();
+
+	SetWarMode (0);
+	sleep (1);
+	look_around ();
+endfunction
+
+function prepare_for_fight (byref opponent)
+	if (opponent)
+	endif
+	ClearEventQueue ();
+	DisableMainEvents();
+	EnableCombatEvents();
+endfunction
+
+
+
+
+///////////////////
+//  Cut off heads of anyone below 50% health
+///////////////////
+
+function CheckCutOffHead ()
+	if (GetObjProperty (me, "#totallycutoffheads"))
+		var totallycutoffheads := GetObjProperty (me, "#totallycutoffheads");
+		if (totallycutoffheads > ReadGameClock())
+			return 0;
+		endif
+	endif
+
+
+	foreach mobile in ListMobilesNearLocation (me.x, me.y, me.z, 2, me.realm)
+		if (IsGood (mobile))
+			if (GetVital (mobile, "Life") * 2 < GetVitalMaximumValue (mobile, "Life"))
+				PrintTextAbove (me, "*cuts off " + mobile.name + "'s head!*");
+				DoDamageByType (me, mobile, 1000, DAMAGETYPE_PHYSICAL);
+				SetObjProperty (me, "#totallycutoffheads", ReadGameClock() + 30);
+			endif
+		endif
+	endforeach
+
+	SetObjProperty (me, "#totallycutoffheads", ReadGameClock() + 2);
+endfunction
+
+
+
+function DoNinjaEmotes ()
+	if (GetObjProperty (me, "#ninjasayings"))
+		var ninjasayings := GetObjProperty (me, "#ninjasayings");
+		if (ninjasayings > ReadGameClock())
+			return 0;
+		endif
+	endif
+
+	case (RandomInt (10))
+		0:	PrintTextAbove (me, "*totally flips out*");
+		1:	PrintTextAbove (me, "*doesn't give a crap*");
+		2:	PrintTextAbove (me, "*doesn't give a crap*");
+		3:	PrintTextAbove (me, "*is being very careful and precise*");
+		4:	PrintTextAbove (me, "*is a mammal*");
+		5:	PrintTextAbove (me, "*has real ultimate power*");
+		6:	PrintTextAbove (me, "*is SOOOOO sweet*");
+		7:	PrintTextAbove (me, "*is the ultimate paradox*");
+		8:	PrintTextAbove (me, "*doesn't think twice*");
+		9:	PrintTextAbove (me, "*gets really super pissed*");
+	endcase
+	SetObjProperty (me, "#ninjasayings", ReadGameClock() + 4);
+
+endfunction
+
+
+
+function ThrowNinjaStar (opponent)
+	if (!CheckLoSAt (me, opponent.x, opponent.y, opponent.z))
+		return;
+	endif
+	
+	if (GetObjProperty (me, "#throw_ninja_star"))
+		var throw_ninja_star := GetObjProperty (me, "#throw_ninja_star");
+		if (throw_ninja_star > ReadGameClock())
+			return 0;
+		endif
+	endif
+	
+	sleep (1);
+	PrintTextAbove (me, "*throws ninja stars*");
+	PlayMovingEffect (me, opponent, 0x1053, 0xa, 0x1e);
+	sleep (1);
+	DoDamageByType (me, opponent, RandomDiceRoll ("4d6+6"), DAMAGETYPE_PHYSICAL);
+
+	SetObjProperty (me, "#throw_ninja_star", ReadGameClock() + 3);
+
+endfunction
+
+
+

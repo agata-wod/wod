@@ -1,0 +1,67 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 7;
+
+const KILL_SOUND := 0x202;
+const KILL_EFFECT := 0x375a;
+const SFX_SPELL_FAIL := 0x005b;
+
+program cast_kill (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	var casterskill := CINT ( (GetAttribute (caster, ATTRIBUTEID_NECROMANCY) + GetAttribute(caster, ATTRIBUTEID_MAGERY))/2);
+
+	cast_on := CheckMagicReflection (caster, cast_on);
+	if (!cast_on)
+		return;
+	endif
+
+	var alternative := RandomDiceRoll ("5d10");
+
+	PlaySoundEffect (cast_on, KILL_SOUND);
+	PlayObjectCenteredEffect (cast_on, KILL_EFFECT, 1, 0x10);
+
+	if ( (CINT (GetVital (cast_on, "Life")/100) < 50) or (GetObjProperty (cast_on, "summoned")) )
+		DoDamageByType (caster, cast_on, CINT (GetVital (cast_on, "Life")/100)+3, DAMAGETYPE_MAGIC);
+		return;
+	elseif ( CINT (GetVital (cast_on, "Life")/100) < 100)
+		var victimskill := GetAttribute (cast_on, ATTRIBUTEID_MAGICRESISTANCE);
+		var resistchance := (casterskill * 2) - (victimskill/2);
+		resistchance := Cint(resistchance/2);
+		var resistcheck := RandomInt(100);
+		if (resistcheck < resistchance)
+			DoDamageByType (caster, cast_on, CINT (GetVital (cast_on, "Life")/100)+3, DAMAGETYPE_MAGIC);
+			return;
+		else
+			DoDamageByType (caster, cast_on, alternative, DAMAGETYPE_MAGIC);
+			return;
+		endif
+	else
+		var victimskill := GetAttribute (cast_on, ATTRIBUTEID_MAGICRESISTANCE);
+		var resistchance := casterskill + casterskill - victimskill;
+		resistchance := Cint(resistchance/2);
+		var resistcheck := RandomDiceRoll("1d100");
+		if (resistcheck < resistchance)
+			DoDamageByType (caster, cast_on, alternative, DAMAGETYPE_MAGIC);
+			return;
+		else
+			alternative := CINT (alternative/2);
+			DoDamageByType (caster, cast_on, alternative, DAMAGETYPE_MAGIC);
+			return;
+		endif
+	endif
+	return 1;
+endprogram

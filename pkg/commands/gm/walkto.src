@@ -1,0 +1,34 @@
+use uo;
+use util;
+
+include "include/client";
+include "include/eventid";
+
+program walkto(gm)
+
+	sendsysmessage(gm, "Select a creature you wish to walk");
+	var thetarg := target(gm, TGTOPT_NOCHECK_LOS);
+	if (!thetarg)
+        	sendsysmessage(gm, "Targetting cancelled.");
+        	return;
+	endif
+	
+	if (!thetarg.npctemplate)
+        	sendsysmessage (gm, "This command only works on NPCs");
+        	return;
+	endif
+
+	SendSysmessage(gm, "Select the location");
+	var newtarg := targetcoordinates(gm);
+	if (!newtarg)
+        	sendsysmessage (gm, "Targetting cancelled.");
+        	return;
+	endif
+
+	var ev := struct;
+	ev.+type := EVID_ALL_FOLLOW_CMD;
+	ev.+source := gm;
+	ev.+x := newtarg.x;
+	ev.+y := newtarg.y;
+	sendevent(thetarg, ev);
+endprogram 

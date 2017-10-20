@@ -1,0 +1,19 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+
+program bankcheck (character)
+	var bankbox := FindBankBox (character.acctname);
+	var items := EnumerateItemsInContainer (bankbox);
+	if (len (items) > 500)
+		SendSysMessage (character, "Warning:  You have " + len (items) + " items in your bankbox.", FONT_NORMAL, MESSAGE_COLOR_BAD);
+		SendSysMessage (character, "There is a limit of 500 items on bankboxed.  Please dispose of", FONT_NORMAL, MESSAGE_COLOR_BAD);
+		SendSysMessage (character, "some of these items.", FONT_NORMAL, MESSAGE_COLOR_BAD);
+		
+	endif
+
+endprogram
+

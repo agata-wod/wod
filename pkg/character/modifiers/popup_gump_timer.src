@@ -1,0 +1,28 @@
+use uo;
+use os;
+
+program display_timed_gump (parms)
+	var player := parms [1];
+	var gumppid := parms [2];
+	var endtime := parms [3];
+
+	repeat
+		sleep (1);
+		if (ReadGameClock() > endtime)
+			var hexid := Hex(gumppid) - "0x";
+			var fixedid;
+			if (len(hexid) > 8)
+				fixedid := CStr( hexid[len(hexid) - 7, len(hexid)] );
+			elseif (len(hexid) == 8)
+				fixedid := CStr(hexid);
+			else
+				var zeros := "00000000";
+				fixedid := zeros[1,8-len(hexid)] + hexid;
+			endif
+			var packet := "BF" + "000B" + "0004" + fixedid + "0000";
+			SendPacket (player, packet);
+			return;
+		endif
+	until (!player);
+	return;
+endprogram

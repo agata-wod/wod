@@ -1,0 +1,44 @@
+use uo;
+use os;
+use util;
+
+program makecandy (character)
+	var basket := CreateItemInContainer (character.backpack, 0x990, 1);
+	if (!basket)
+		SendSysMessage (character, "Unable to make basket!");
+		return;
+	endif
+	
+	var candy;
+	for i := 1 to 50
+		candy := CreateItemInContainer (basket, 0x1ea7, 1);
+		if (!candy)
+			SendSysMessage (character, "Error creating candy!");
+			return;
+		endif
+		candy.usescript := ":cooking:eat";
+		case (RandomInt (3))
+			0:	candy.color := 1154;
+			1:	candy.color := 40;
+			2:	candy.color := 38;
+		endcase
+		case (RandomInt (4))
+			0:	candy.name := "I Love You";
+			1:	candy.name := "Be Mine";
+			3:	candy.name := "Friends Forever";
+			default:
+				Case (RandomInt (10))
+					0:	candy.name := "Sweetheart";
+					1:	candy.name := ".msg me";
+					2:	candy.name := "Yours Forever";
+					3:	candy.name := "Eternal Flame";
+					4:	candy.name := "Stick With Me";
+					5:	candy.name := "My Heart is Yours";
+					6:	candy.name := "Nerfs are Fun";
+					7:	candy.name := "Tasty";
+					8:	candy.name := "You + Me = Love";
+					default:	candy.name := "Choose Me";
+				endcase
+		endcase
+	endfor
+endprogram

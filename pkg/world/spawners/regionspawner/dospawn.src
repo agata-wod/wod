@@ -1,0 +1,259 @@
+//  Note, DEATH.SRC must include:
+//
+//	if ( GetObjProperty( corpse, "regspawn" ) )
+//		if ( Cint(GetGlobalProperty("regionalspawnerwipe"))!=1 )
+//			var SpawnName := GetObjProperty( corpse, "regspawn" );
+//			var numspawns := Cint(GetGlobalProperty(SpawnName))-1;
+//			SetGlobalProperty(SpawnName,numspawns);
+//		endif
+//	endif
+//
+//	Global propert "rs9animals", for example, is used to keep track of the current number
+//		of spawns for region 9, group 'animals'.  When the animals die, one is subtracted
+//		from rs9animals.  When one is spawned, one is added to rs9animals.
+//
+//	.regspawnwipe disables the spawner and kills all the regionalspawned animals, and resets
+//	  the counters.
+//	.enableregspawner re-enables the spawner (if for some reason you need to.. you shouldn't)
+//
+//
+
+use uo;
+use os;
+use cfgfile;
+use util;
+
+include "include/wodinc";
+include "../pkg/npcs/npc_util";
+include "../pkg/items/housing/house";
+
+var regspawn;
+var totalnumspawned := 0;
+
+program SpawnThatStuff ()
+	if (GetGlobalProperty ("#regionalspawnerwipe"))
+		SendGMErrorMessage ("Regional spawner is disabled", 1);
+		return;
+	endif
+
+	if (GetGlobalProperty ("#spawnerisrunning"))
+		SendGMErrorMessage ("Regional spawner is still running from last invocation", 1);
+		return;
+	endif
+
+	SetGlobalProperty ("#spawnerisrunning", 1 );
+	SendGMErrorMessage ("Regional spawner is running", 0, 5);
+
+	UnloadConfigFile ("regionspawn");
+	regspawn := ReadConfigFile ("regionspawn");
+
+	foreach regionnumber in GetConfigIntKeys (regspawn)
+        	var spawnregion := regspawn [regionnumber];
+		var spawngroups := GetConfigStringArray( spawnregion, "group" );
+		foreach spawngroup in spawngroups
+			var groupstring := SplitWords (spawngroup);
+			var groupname := groupstring[1];
+			var groupdensity := CINT (groupstring[2]);
+
+			if (GetGlobalProperty ("#regionalspawnerwipe"))
+				SendGMErrorMessage ("Regional spawner is disabled", 1, 5);
+				EraseGlobalProperty ("#spawnerisrunning");
+				return;
+			endif
+			SpawnThisGroup (regionnumber, spawnregion, groupname, groupdensity);
+			sleep(1);
+		endforeach
+    	endforeach
+
+	UnloadConfigFile ("regionspawn");
+	EraseGlobalProperty ("#spawnerisrunning");
+	SendGMErrorMessage ("Total mobs respawned: "+ totalnumspawned, 0, 5);
+endprogram
+
+
+
+
+///////////////////
+//  spawns all the NPCs needed in a given region
+///////////////////
+
+function SpawnThisGroup (regionnum, byref spawnregion, groupname, groupdensity)
+	var SpawnName := "r"+regionnum+"g"+groupname;
+	if (groupdensity == 0)
+		SendGMErrorMessage ("Erasing: "+SpawnName, 0, 5);
+		EraseGlobalProperty(SpawnName);
+		return;
+	endif
+	
+	var coords := splitwords(spawnregion.rect);
+	var x1 := CINT (coords[1]);
+	var y1 := CINT (coords[2]);
+	var x2 := CINT (coords[3]);
+	var y2 := CINT (coords[4]);
+	var rlm := spawnregion.realm;
+	if (!rlm)
+		rlm := _DEFAULT_REALM;
+	endif
+
+	var spawngroup := FindConfigElem (regspawn, groupname);
+	if (!spawngroup)
+		SendGMErrorMessage ("Regionspawner:  Could not find: "+groupname, 1);
+		return;
+	endif
+
+	var critterlist := GetConfigStringArray (spawngroup, "npc");
+	if (!critterlist or (!len (critterlist)))
+		SendGMErrorMessage ("Regionspawner:  No NPCs in " + groupname, 1);
+		return;
+	endif
+
+	var sizeofregion := (x2 - x1) * (y2 - y1);
+	var numtospawn := CINT ((sizeofregion * groupdensity)/10000);
+	if (!numtospawn)
+		numtospawn := 1;
+	endif
+
+	if (RandomInt(1000) == 1)
+		NukeThisGroup (regionnum, spawnregion, groupname);
+	endif
+
+	set_critical(1);
+		var currentspawn := 0;
+		if (GetGlobalProperty(SpawnName))
+			currentspawn := CINT (GetGlobalProperty (SpawnName));
+		else
+			SetGlobalProperty (SpawnName, 0);
+		endif
+
+		if ( (currentspawn < 1) or (!currentspawn) )
+			currentspawn := 0;
+			SetGlobalProperty (SpawnName, 0);
+		endif
+	set_critical(0);
+	
+	if (currentspawn <= numtospawn)
+		numtospawn := numtospawn - currentspawn;
+	else
+		NukeThisGroup (regionnum, spawnregion, groupname);
+		currentspawn := 0;
+	endif		
+
+	if (numtospawn < 1)
+		return;
+	endif
+
+	var critnum, thecritter, tries;
+	var x, y, z;
+	for i := 1 to numtospawn
+		critnum := RandomInt(len(critterlist))+1;
+		thecritter := 0;
+		tries := 0;
+		repeat
+			x := RandomInt (x2-x1)+x1;
+			y := RandomInt (y2-y1)+y1;
+			z := GetMapInfo(x,y, rlm).z;
+			tries := tries + 1;
+
+			if (CheckAreaIfSpawnable (x, y, z, rlm) )
+				thecritter := CreateNpcFromTemplate (critterlist[critnum], x, y, z, 0, rlm);
+				if (thecritter)
+				if(!MoveObjectToLocation( thecritter, thecritter.x, thecritter.y, z, rlm, MOVEOBJECT_NORMAL ))
+						KillIt (thecritter);
+					else
+						set_critical (1);
+						SetObjProperty (thecritter, "regspawn", SpawnName);
+						currentspawn := CINT (GetGlobalProperty(SpawnName)) + 1;
+						SetGlobalProperty (SpawnName, currentspawn);
+						totalnumspawned := totalnumspawned + 1;
+						set_critical (0);
+					endif
+				endif
+			endif
+		until (thecritter or tries > 50);
+		if (tries > 50)
+			SendGMErrorMessage ("Regionspawner: could not spawn "+ critterlist[critnum] + " in " + SpawnName, 1);
+		endif
+		sleep (1);
+	endfor
+endfunction
+
+
+
+///////////////////
+//  kill the given NPC
+///////////////////
+
+function KillIt (npc)
+	var hostiles := ListHostiles (npc, 9 );
+	if (hostiles.size() or npc.warmode)
+		EraseObjProperty ( npc, "regspawn" );
+		return;
+	endif
+	
+	KillNPC (npc);
+endfunction
+
+
+function NukeThisGroup(regionnum, spawnregion, groupname)
+
+	var coords := splitwords(spawnregion.rect);
+	var x1 := cint(coords[1]);
+	var y1 := cint(coords[2]);
+	var x2 := cint(coords[3]);
+	var y2 := cint(coords[4]);
+	var rlm := spawnregion.realm;
+	if(!rlm)
+		rlm := _DEFAULT_REALM;
+	endif
+	var kills := 0;
+
+	var SpawnName := "r"+regionnum+"g"+groupname;
+	SendGMErrorMessage ("Regionspawner:  Resetting : "+SpawnName, 0, 5);
+
+	set_critical(0);
+	var x, y;//, z;
+	for( x := x2 ; x > x1 ; x := x  - 16)
+    	  for( y := y1; y < y2; y := y + 16 )
+//	    for( z := -60; z <= 60; z := z + 16 )
+		foreach npc in ListMobilesNearLocationEx( x, y, LIST_IGNORE_Z, 16,0x02+0x01, rlm)
+			if ( GetObjProperty( npc, "regspawn" ) == SpawnName )
+				set_critical(1);
+				EraseObjProperty(npc,"regspawn");
+				KillIt(npc);
+				kills := kills + 1;
+				set_critical(0);
+			endif
+		endforeach
+//	    endfor
+	    sleepms(250);
+	  endfor
+	endfor
+	set_critical(0);
+	SendGMErrorMessage ("Regionspawnerkills: "+kills, 0, 5);
+	SetGlobalProperty(SpawnName,0);
+
+endfunction
+
+
+
+
+///////////////////
+//  Checks around the area to see if the position is inside of a house or if there's a player around
+///////////////////
+
+function CheckAreaIfSpawnable (x, y, startz, rlm)
+	var sh := GetStandingHeight (x, y, startz, rlm);
+//	if (sh.z == error)
+//		return 0;
+//	endif
+
+	if (sh.multi)
+		return 0;
+	endif
+	
+	if (FindHouseSignAtLocation (x, y, rlm))
+		return 0;
+	endif
+	
+	return 1;
+endfunction

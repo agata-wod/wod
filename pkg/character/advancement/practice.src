@@ -1,0 +1,115 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/skills";
+include "include/attributes";
+
+Const VALUE_SKILLJUMP := 10;
+
+program practice (character);
+	if (!character)
+		return;
+	endif
+
+	set_critical (1);
+	PracticeSpecs (character);
+
+	var prac := GetObjProperty (character, "practicing");
+	if (!prac)
+		return;
+	endif
+
+	var lastpractice := GetObjProperty (character, "lastpractice");
+	if (!lastpractice)
+		lastpractice := ReadGameClock() - 300;
+	endif
+
+	var maxpoints := ReadGameClock() - lastpractice;
+	if (maxpoints <= 0)
+		EraseObjProperty (character, "lastpractice");
+		return;
+	endif
+
+	var newprac := array{};
+	foreach theskill in prac
+		var skillid := theskill[1];
+		var trainingamount := theskill[2];
+		if (trainingamount > maxpoints)
+			trainingamount := maxpoints;
+		endif
+		theskill[2] := theskill[2] - trainingamount;
+		trainingamount := trainingamount * VALUE_SKILLJUMP;
+
+		//This is messy, but necessary, I think.  theskill[3] is leftover training from the previous
+		//practice time.  Otherwise, you'd pay money to train skill to 100.0 and wind up at 99.9 or
+		//something
+		if (theskill[3])
+			trainingamount := trainingamount + theskill[3];
+		endif
+		
+		var currentskill := GetAttributeBaseValue (character, GetAttributeIDBySkillID (skillid));
+		var leftoverpoints := CalculateLeftOverPracticePoints (currentskill, trainingamount);
+
+		trainingamount := trainingamount - leftoverpoints;
+		theskill[3] := leftoverpoints;
+		if (theskill[2] > 0)
+			SendSysMessage (character, "You continue practicing " + GetSkillName (skillid));
+			newprac.append (theskill);
+		else
+			SendSysMessage (character, "You have finished practicing " + GetSkillName (skillid));
+		endif
+		AwardRawSkillPoints (character, skillid, trainingamount);
+	endforeach
+
+	if (len (newprac))
+		SetObjProperty (character, "practicing", newprac);
+		SetObjProperty (character, "lastpractice", ReadGameClock());
+	else
+		SendSysMessage (character,"You are not currently practicing any skills.");
+		EraseObjProperty (character, "practicing");
+		EraseObjProperty (character, "lastpractice");
+	endif
+endprogram
+
+
+
+
+///////////////////
+//  Skills that have been specialized in get free bonus practice, though not a whole lot
+///////////////////
+
+function PracticeSpecs (byref character)
+	var specs := LoadSpecializations (character);
+	for i := 1 to 3
+		var skillid := specs[i];
+		if (skillid or skillid == 0)
+			AwardRawSkillPoints (character, skillid, 100);
+		endif
+	endfor
+	for i := 4 to 8
+		var skillid := specs[i];
+		if (skillid or skillid == 0)
+			AwardRawSkillPoints (character, skillid, 50);
+		endif
+	endfor
+endfunction
+
+
+
+
+///////////////////
+//  Horrible messy cludge needed to preserve skill points that people pay for practice
+///////////////////
+
+function CalculateLeftOverPracticePoints (current, rawpoints)
+	var to_increase := GetNeededRawPointsToIncrease (current);
+	while (rawpoints >= to_increase)
+		rawpoints		:= rawpoints - to_increase;
+		current		:= current + 1;
+		to_increase	:= GetNeededRawPointsToIncrease (current);
+	endwhile
+	return rawpoints;
+endfunction

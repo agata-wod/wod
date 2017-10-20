@@ -1,0 +1,87 @@
+use uo;
+
+include "include/wodinc";
+
+program textcmd_action ( who, newscript )
+	SendSysMessage (who, "Target an NPC to restart");
+	var npc := Target (who, TGTOPT_NOCHECK_LOS);
+	if (!npc)
+		return;
+	endif
+
+	if (newscript)
+		if (newscript == "menu")
+			newscript := SelectScriptFromMenu (who);
+		else
+			newscript := ValidAI (who, newscript);
+		endif
+		if (!newscript)
+			SendSysMessage (who, "Not a valid AI script!");
+		else
+			npc.script := newscript;
+		endif
+	endif
+
+	RestartScript( npc );
+
+endprogram
+
+function ValidAI (character, newscript)
+	if (IsAGM (character) == 5)
+		return newscript;
+	endif
+
+	if (lower(newscript) == "banker")
+		return ":merchants:banker";
+	elseif (lower(newscript) == "captain")
+		return ":merchants:captain";
+	elseif (lower(newscript) == "merchant")
+		return ":merchants:merchant";
+	elseif (lower(newscript) == "playermerchant")
+		return ":merchants:playermerchant";
+	elseif (lower(newscript) == "stamaster")
+		return ":merchants:stamaster";
+	elseif (lower(newscript) == "stablemaster")
+		return ":merchants:stamaster";
+	elseif (lower(newscript) == "humuc")
+		return "::humuc";
+	elseif (lower(newscript) == "spellkillpcs")
+		return ":hostiles:ai_killpcs_normal_spellcaster";
+	elseif (lower(newscript) == "killpcs")
+		return ":hostiles:ai_killpcs_normal_default";
+	endif
+
+	return 0;
+
+endfunction
+
+
+
+
+///////////////////
+//  Allows GMs to select what NPC script they want a monster to use
+///////////////////
+
+function SelectScriptFromMenu (character)
+	var aimenu := CreateMenu ("Select an AI:");
+	AddMenuItem (aimenu, 0, "Normal warrior AI");
+	AddMenuItem (aimenu, 0, "Normal archer AI");
+	AddMenuItem (aimenu, 0, "Normal marksman AI");
+	AddMenuItem (aimenu, 0, "Normal mage AI");
+	AddMenuItem (aimenu, 0, "Normal firebreather AI");
+
+	var selection := SelectMenuItem2 (character, aimenu);
+	if (!selection)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+
+	case (selection.index)
+		1:	return ":hostiles:ai_killpcs_normal_default";
+		2:	return ":hostiles:ai_killpcs_normal_archer";
+		3:	return ":hostiles:ai_killpcs_normal_marksman";
+		4:	return ":hostiles:ai_killpcs_normal_spellcaster";
+		5:	return ":hostiles:ai_killpcs_normal_firebreather";
+	endcase
+	return 0;
+endfunction

@@ -1,0 +1,51 @@
+use uo;
+use os;
+use util;
+
+include "include/attributes";
+
+exported function NewCombatAdvancement (attacker, weapon, defender)
+	if (attacker and weapon and defender)
+	endif
+//	var weaponattributeid := weapon.attribute;
+//	if (!weapon or !weaponattributeid)
+//		weaponattributeid := ATTRIBUTEID_WRESTLING;
+//	endif
+
+//	QuickAwardRawAttributePoints (attacker, weaponattributeid, 30);
+//	QuickAwardRawAttributePoints (attacker, ATTRIBUTEID_TACTICS, 15);
+//	QuickAwardRawAttributePoints (defender, ATTRIBUTEID_TACTICS, 15);
+endfunction
+
+
+
+
+///////////////////
+//  This function is slightly less accurate than the general-purpose AwardRawAttributePoints,
+//  but is quite a bit faster (by about 40%).  Since the combat advancement systemhook
+//  is called so often, this function is used.
+///////////////////
+
+function QuickAwardRawAttributePoints (character, attributeid, rawpoints)
+	var current := GetAttributeBaseValue (character, attributeid);
+	var to_increase := GetNeededRawPointsToIncrease (current);
+	if (RandomInt (to_increase) < rawpoints)
+		var skillcap := GetBaseSkillCap (character, GetSkillIDByAttributeID (attributeid));
+		if (skillcap)
+			if (current = skillcap)
+				return;
+			elseif (current+1 > skillcap)
+				current := skillcap-1;
+			endif
+		endif
+		SetAttributeBaseValue (character, attributeid, current+1);
+	endif
+endfunction
+
+
+program SyshookCombatAdvancement ()
+//	Syslog ("Installing combatadvancement...");
+//	return 1;
+	Syslog ("Skipping the install of combatadvancement...");
+	return 0;
+endprogram

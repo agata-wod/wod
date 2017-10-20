@@ -1,0 +1,534 @@
+///////////////////
+//  This is the script for generic NPC guards.  They attack hostile NPCs and criminal players.
+///////////////////
+
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "include/utility";
+include "include/client";
+include "include/eventid";
+include "include/gumps";
+include "include/locations";
+include ":contextMenus:contextMenus";
+
+include "../pkg/npcs/main_ai/combat/fightmode_normal_default";
+include "../pkg/npcs/main_ai/combat/closedistance_default";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/main_ai/main/sleepmode_townfolk";
+include "../pkg/npcs/main_ai/setup/setup";
+
+include "../pkg/npcs/speech";
+include "../pkg/npcs/npcinfo";
+include "../pkg/npcs/npc_util";
+include "../pkg/character/virtue/virtue";
+
+const UACTION_LOOK_AROUND	:= 0x05;
+const UACTION_SALUTE		:= 0x21;
+const HALT_THRESHOLD		:= 10;	//How large of an area he guards
+
+program guard_ai ()
+	//make sure the guard isn't in the arena
+	if (me.x >= 1385 and me.x <= 1414 and me.y >= 3729 and me.y <= 3758)
+		Killme();
+	elseif (me.x >= 4413 and me.x <= 4428 and me.y >= 1152 and me.y <= 1162)
+		Killme();
+	endif
+
+	DoGuardStartupSetup ();
+	if (!me.backpack)
+		DoOnCreationSetup ();
+		foreach item in ListEquippedItems (me)
+			item.newbie := 1;
+		endforeach
+	endif
+	speech := 49;
+	drop_anchor ();
+	
+	if (GetObjProperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	EnableMainEvents ();
+	SetWarMode (0);
+	WalkHome ();
+
+	var ev;
+	var next_wander := ReadGameClock() + 10;
+	var wanders := 60;
+
+	while (me)
+		if (GetObjProperty (me, "destinationx"))
+			var mydestx := GetObjProperty (me, "destinationx");
+			var mydesty := GetObjProperty (me, "destinationy");
+			var steps := GetObjProperty (me, "destinationsteps");
+			SetObjProperty (me, "destinationsteps", (steps + 1));
+			WalkTowardLocation (mydestx, mydesty);
+			if ( (me.x == mydestx and me.y == mydesty) or ( steps > 10 ) )
+				EraseObjProperty (me, "destinationx");
+				EraseObjProperty (me, "destinationy");
+				EraseObjProperty (me, "destinationsteps");
+				drop_anchor ();
+			endif
+			ev := wait_for_event (0);
+		elseif (wanders > 50)
+			wanders := 0;
+			ev := sleepmode ();
+		elseif (ReadGameClock() >= next_wander)
+			wander ();
+			wanders := wanders + 1;
+			ev := wait_for_event (5);
+		else
+			ev := os::wait_for_event (5);
+		endif
+
+		if (ev)
+			ProcessEvents (ev, wanders, next_wander);
+		endif
+	endwhile
+endprogram
+
+
+
+
+///////////////////
+//  processes events (duh)
+///////////////////
+
+function ProcessEvents (byref ev, byref wanders, byref next_wander)
+	case (ev.type)
+		EVID_CONTEXT_MENU:
+			case (ev.result)
+				eCMR_Quest:
+					var parms := array{ };
+					parms[1] := me;
+					parms[2] := ev.source;
+					start_script (":guards:townguard_quest", parms);
+				eCMR_SummonPet:
+					var parms := array{ };
+					parms[1] := me;
+					parms[2] := ev.source;
+					start_script (":guards:townguard_status", parms);
+				eCMR_Join:
+					JoinGuards (ev.source);
+				eCMR_Resign:
+					QuitGuards (ev.source);
+			endcase
+		EVID_SPEECH:
+			var evtext := lower(ev.text);
+			if (evtext["guards"])
+				wanders := 0;
+				TurnToward (ev.source);
+				next_wander := readgameclock()+60;
+				look_around();
+				return;
+			endif
+			if (distance (me, ev.source) > 1)
+				return;
+			endif
+
+			TurnToward (ev.source);
+			next_wander := readgameclock()+60;
+			wanders := 0;
+			
+			if ( evtext ["join"] )
+				JoinGuards (ev.source);
+			elseif (evtext ["resign"])
+				QuitGuards (ev.source);
+			elseif (evtext ["quest"])
+				if (GetObjProperty (me, "override_quest"))
+					check_speech (ev.text, ev.source);
+				else
+					var parms := array { };
+					parms[1] := me;
+					parms[2] := ev.source;
+					start_script (":guards:townguard_quest", parms);
+				endif
+			elseif (evtext ["status"])
+				var parms := array { };
+				parms[1] := me;
+				parms[2] := ev.source;
+				start_script (":guards:townguard_status", parms);
+				
+			else
+				check_speech (ev.text, ev.source);
+			endif
+
+		EVID_ENGAGED:
+		EVID_DAMAGED:
+			wanders := 0;
+			next_wander := readgameclock()+60;
+			if ( (ev.source) and (!ev.source.dead) )
+				say ("Die " + ev.source.name + "!" );
+				AddToHateList( ev.source );
+				Fight( ev.source );
+			endif
+			WalkHome ();
+
+		EVID_ENTEREDAREA:
+			wanders := 0;
+			PerformAction (me, UACTION_LOOK_AROUND);
+			look_around ();
+
+		EVID_ITEM_GIVEN:
+			wanders := 0;
+			next_wander := ReadGameClock() + 60;
+			var item := ev.item;
+			if (item.objtype == UOBJ_HEAD)
+				if (GetObjProperty (item, "deliverto") and GetObjProperty (item, "deliverto") == me.serial)
+					PayForItemDelivery (ev);
+				else
+					TakeItem (ev.source, item);
+				endif
+			else
+				TakeItem (ev.source, item);
+			endif
+
+		EVID_ALL_FOLLOW_CMD:
+			SetObjProperty (me, "destinationx", ev.x);
+			SetObjProperty (me, "destinationy", ev.y);
+			SetObjProperty (me, "destinationsteps", 0);
+			drop_anchor ();
+			RunTowardLocation (ev.x, ev.y);
+
+	endcase
+endfunction
+
+
+
+
+///////////////////
+//  looks around for evil creatures and criminals
+///////////////////
+
+function look_around()
+	PerformAction (me, UACTION_LOOK_AROUND);
+	foreach mobile in ListMobilesNearLocation (me.x, me.y, me.z, 15, me.realm)
+		var elem := GetNpcTemplateElem (mobile.npctemplate);
+		if (elem and elem.hostile and !elem.guardignore)
+			if (!mobile.script["tamed"])
+				if (mobile.name)
+					Say ("Ah ha! " + mobile.name);
+					Fight (mobile);
+					return;
+				endif
+			endif
+		else
+			CheckForCriminals (mobile);
+		endif
+	endforeach
+endfunction
+
+
+
+
+///////////////////
+//  checks to see if the given mobile is a criminal
+///////////////////
+
+function CheckForCriminals (byref jerk)
+	if (jerk.dead)
+		return;
+	endif
+
+	if (jerk.criminal)
+		say ("Stop Criminal!");
+		AddToHateList (jerk);
+		Fight (jerk);
+	elseif (CheckHateList (jerk))
+		say ("You're not welcome in this town, "+ jerk.name );
+		Fight (jerk);
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  add a new criminal to the guards list
+///////////////////
+
+function AddToHateList (byref crim)
+	if (crim.npctemplate)
+		return;
+	endif
+
+	var crooks := array { };
+	if (!GetObjProperty (me, "crooks") )
+		crooks[1] := crim.serial;
+		SetObjProperty (me, "crooks", crooks);
+		return;
+	else
+		crooks := GetObjProperty (me, "crooks");
+	endif
+	
+	if (crim.serial in crooks)
+		return;	//he's already in the list
+	endif
+
+	if (len(crooks)>3)
+		crooks[ RandomInt(3)+1 ] := crim.serial;
+	else
+		crooks.append (crim.serial);
+	endif
+
+	SetObjProperty (me, "crooks", crooks);
+endfunction
+
+
+
+
+///////////////////
+//  check to see if the person is in the list of criminals
+///////////////////
+
+function CheckHateList (byref you)
+	if (you.npctemplate)
+		return;
+	endif
+	
+	if (!GetObjProperty (me, "crooks"))
+		return 0;
+	endif
+	
+	//Guards remember people who have commited crimes, but sometimes forgive them if they
+	//have a high virtue
+	var crooks := GetObjProperty (me, "crooks");
+	if (you.serial in crooks)
+		var yourvirtue := GetObjProperty (you, "virtue");
+		if (yourvirtue and yourvirtue > 200)
+			//Spam limiter
+			if (GetObjProperty (me, "#nextgreet"))
+				if (GetObjProperty (me, "#nextgreet") > ReadGameClock())
+					return 0;
+				endif
+			endif
+			SetObjProperty (me, "#nextgreet", ReadGameClock() + 30);
+
+			Say ("I'm keeping my eye on you, " + you.name);
+			return 0;
+		endif
+		return 1;
+	endif
+	
+	return 0;
+endfunction
+
+function EnableMainEvents()
+	DisableEvents (SYSEVENT_LEFTAREA + SYSEVENT_DISENGAGED + SYSEVENT_OPPONENT_MOVED );
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_ENTEREDAREA, HALT_THRESHOLD);
+	EnableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN, 3);
+endfunction
+
+function DisableMainEvents()
+	DisableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED + SYSEVENT_ENTEREDAREA);
+	DisableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN);
+endfunction
+
+function JoinGuards(byref who)
+	var mytype := GetObjProperty (me, "guardtype");
+	if (!mytype)
+		say("Just grab a sword and start thrashing criminals, friend.");
+		return;
+	endif
+
+	var myshieldtype := 0x1bc4; //order
+	
+	var otherguards := "Chaos";
+	if (mytype == 2)
+		myshieldtype := 0x1bc3;//chaos
+		otherguards := "Order";
+	endif //chaos
+	if (who.race == RACE_GARGOYLE)
+		if (mytype == 1)
+			myshieldtype := 0x422a;
+		else
+			myshieldtype := 0x4228;
+		endif
+	endif
+
+	TurnToward(who);
+
+	var yourtype := GetObjProperty(who,"guardtype");
+	if (yourtype)
+		say("You're already a Virtue Guard.");
+		sleep(1);
+		if (yourtype == mytype)
+			say ("You didn't lose your shield, did you?");
+			var newshield := CreateItemAtLocation (5288, 1176, 0, myshieldtype, 1, REALM_BRITANNIA);
+			if (!EquipItem (who, newshield))
+				DestroyItem (newshield);
+			endif
+			return;
+		endif
+	endif
+
+	if (GetAttributeBaseValue (who, "Strength") < 900)
+		say("I dunno... you look a bit weak in the arm, to me...");
+		sleep(1);
+		say("Maybe the " + otherguards + " Guards would take you.");
+		return;
+	endif
+
+	var leadership := GetAttributeBaseValue (who, ATTRIBUTEID_LEADERSHIP);
+	if (leadership < 600)
+		say("Ha haha ha haha ha ha ha!");
+		sleep(1);
+		say("Oh... mercy!");
+		return;
+	elseif (leadership < 900)
+		say("In order to be a Virtue Guard you must inspire confidence!");
+		sleep(1);
+		say("Perhaps a bard could teach you to seem more... Commanding.");
+		return;
+	endif
+
+	if ( GetVirtueAmount (who) < 100 )
+		say("A Virtue Guard must have great understanding of the Virtues");
+		sleep(1);
+		say("Perhaps in time you will come to understand them.");
+		return;
+	endif
+
+	say("Are you sure you want to be a Virtue Guard?");
+	if (!YesNo(who,"Yes!")) return; endif
+
+	say("You have to go forth and smite evil, you know?");
+	if (!YesNo(who,"Of course!")) return; endif
+
+	say("Not to mention upholding the Virtues!");
+	if (!YesNo(who,"Naturally!")) return; endif
+
+	say("And protect the weak.  You can't forget to protect the weak!");
+	if (!YesNo(who,"Ok, Already!")) return; endif
+
+	say("Very well, my friend, I suppose we could give it a try.");
+	setobjproperty(who,"guardtype",mytype);
+	who.title_prefix := "Squire ";
+	who.title_suffix := ", Virtue Guard";
+	var newshield := CreateItemAtLocation(who.x , who.y , who.z,
+		myshieldtype,1, who.realm);
+	EquipItem(who,newshield);
+	PlaySoundEffect(who, SFX_SPELL_BLESS);
+	PlayObjectCenteredEffect( who, FX_BLESS_EFFECT, 10,10);
+
+	sleep(1);
+
+	say("Make us proud!");
+
+endfunction
+
+function QuitGuards (byref who)
+	var mytype := GetObjProperty(me,"guardtype");
+	if (!mytype)
+		return;
+	endif
+
+	var myshieldtype := 0x1bc4; //order
+	var otherguards := "Chaos";
+	if (mytype == 2)
+		myshieldtype := 0x1bc3;//chaos
+		otherguards := "Order";
+	endif //chaos
+
+	TurnToward(who);
+
+	var yourtype := GetObjProperty(who,"guardtype");
+	if (!yourtype) return; endif
+
+	if (yourtype == mytype)
+		say("It's a hard life, isn't it?");
+	else
+		say("I don't blame you.");
+	endif
+
+	say("But are you SURE you want to resign?");
+
+	if (YesNo(who,"Quit?"))
+		say("Very well, good luck.");
+		EraseObjProperty(who,"guardtype");
+		who.title_prefix := "";
+		who.title_suffix := "";
+	endif
+
+endfunction
+
+function process_combat_event (byref ev)
+	if (ev.type == EVID_DAMAGED)
+		if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life") * 0.75))
+			ApplyHealing ();
+		endif
+	endif
+	return;
+endfunction
+
+function in_combat_event_loop (byref opponent)
+	OpenDoors (opponent);
+endfunction
+
+function post_combat()
+
+	DisableCombatEvents();
+	EnableMainEvents();
+
+	SetWarMode( 0 );
+	SetOpponent( 0 );
+
+	sleep(1);
+	look_around();
+
+endfunction
+
+function prepare_for_fight (byref opponent)
+	if (opponent)
+	endif
+	DisableMainEvents();
+	EnableCombatEvents();
+
+endfunction
+
+
+
+
+///////////////////
+//  called when someone does a quest for the guard
+///////////////////
+
+function PayForItemDelivery (byref ev)
+	var parms := array { };
+	parms[1] := me;
+	parms[2] := ev.source;
+	parms[3] := ev.item;
+	start_script (":guards:townguard_quest", parms);
+endfunction
+
+
+
+
+
+///////////////////
+//  Called when the guard is restarted
+///////////////////
+
+function DoGuardStartupSetup ()
+	var mytown := FindMyTown (me);
+	if (!mytown)
+		return;
+	endif
+	
+	set_critical (1);
+	var guardarray := GetGlobalProperty ("#guards_of_town_" + mytown);
+	if (!guardarray)
+		guardarray := array {};
+	endif
+	
+	if (!(me.serial in guardarray))
+		guardarray.append (me.serial);
+		SetGlobalProperty ("#guards_of_town_" + mytown, guardarray);
+	endif
+	set_critical (0);
+endfunction

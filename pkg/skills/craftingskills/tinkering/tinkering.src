@@ -1,0 +1,677 @@
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/itemtypes";
+include "include/gumps";
+include "include/utility";
+include "include/string";
+include "include/magicitems";
+include "include/crafting";
+include ":blacksmithy:blacksmithy";
+include ":tinkering:carpentry";
+include ":tailoring:tailoring";
+include "magicjewelry";
+
+var tinker_cfg_file := ReadConfigFile ("tinkering");
+
+program MakeTinkerItems (character, item)
+	if (!ReserveItem (item) or !item.movable)
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif 
+
+	//if its a toolkit, pick what to use it on.  Otherwise, the use_on item is the item used itself
+	var use_on;
+	if (item.objtype == UOBJ_TINKER_TOOLS or item.objtype == UOBJ_TINKER_TOOLKIT)
+		SendSysmessage (character, "Select your material:");
+		use_on := Target (character);
+		if (!use_on)
+			SendSysMessage (character, "Canceled.");
+			return;
+		endif
+
+		if (!Accessible (character, use_on) )
+			SendSysMessage (character, "You can't reach that.");
+			return;	
+		endif
+
+		if (!ReserveItem (use_on) )
+			SendSysMessage (character, "You can't use that right now.");
+			return;
+		endif
+	else
+		use_on := item;
+	endif
+
+	//try to make magic jewelry
+	if (GetObjProperty (use_on, "gem") )
+		MakeMagicItem (character, use_on);
+		return;
+	elseif (IsMetalArmor (use_on) and item.objtype == UOBJ_TINKER_TOOLKIT)
+		RepairBlacksmithyItem (character, item, use_on, SKILLID_TINKERING);
+		return;
+	elseif (IsMetalWeapon (use_on) and item.objtype == UOBJ_TINKER_TOOLKIT)
+		RepairBlacksmithyItem (character, item, use_on, SKILLID_TINKERING);
+		return;
+	elseif (IsWoodenShield (use_on) and item.objtype == UOBJ_TINKER_TOOLKIT)
+		RepairCarpentryItem (character, item, use_on, SKILLID_TINKERING);
+		return;
+	elseif (IsWoodenArmor (use_on) and item.objtype == UOBJ_TINKER_TOOLKIT)
+		RepairCarpentryItem (character, item, use_on, SKILLID_TINKERING);
+		return;
+	elseif (IsWoodenWeapon (use_on) and item.objtype == UOBJ_TINKER_TOOLKIT)
+		RepairCarpentryItem (character, item, use_on, SKILLID_TINKERING);
+		return;
+	elseif (IsLeatherArmor (use_on) and item.objtype == UOBJ_TINKER_TOOLKIT)
+		RepairTailoringItem (character, item, use_on, SKILLID_TINKERING);
+		return;
+	elseif (IsLeatherBoots (use_on) and item.objtype == UOBJ_TINKER_TOOLKIT)
+		RepairTailoringItem (character, item, use_on, SKILLID_TINKERING);
+		return;
+	elseif (IsClothItem (use_on) and item.objtype == UOBJ_TINKER_TOOLKIT)
+		RepairTailoringItem (character, item, use_on, SKILLID_TINKERING);
+		return;
+	endif
+
+	case (use_on.objtype)
+		UOBJ_LOGS:
+			BasicMakeSomething (character, use_on, "logmenu", SFX_CARPENTRY);
+		UOBJ_GLASS:
+			BasicMakeSomething (character, use_on, "glassmenu", SFX_GLASSBREAK4);
+		UOBJ_IRON_INGOT:
+		UOBJ_IRON_INGOT:
+		UOBJ_BRONZE_INGOT:
+		UOBJ_DULLCOPPER_INGOT:
+		UOBJ_COPPER_INGOT:
+		UOBJ_ONYX_INGOT:
+		UOBJ_PYRITE_INGOT:
+		UOBJ_MALACHITE_INGOT:
+		UOBJ_AZURITE_INGOT:
+		UOBJ_BLUESTEEL_INGOT:
+		UOBJ_RUBYSTEEL_INGOT:
+			BasicMakeSomething (character, use_on, "metalmenu", SFX_ANVIL);
+		UOBJ_CLAY:
+			if (!SearchForOvenInArea (character) )
+				SendSysmessage (character, "You must be near an oven to make clay items!");
+				return;
+			endif
+			BasicMakeSomething (character, use_on, "claymenu", SFX_HAMMER);
+		UOBJ_GOLD_INGOT:
+			MakeJewelry (character, use_on);
+		UOBJ_OBSIDIAN:
+			MakeObsidianTotem (character, use_on);
+		UOBJ_PORCELAIN:
+			MakePorcelainTotem (character, use_on);
+		UOBJ_HEAD:
+			MakePreservedHead (character, use_on);
+		UOBJ_AXLE:
+			MakeMultiComponentItem (character, UOBJ_AXLE_AND_GEARS, item, UOBJ_GEARS, "gears", SFX_CARPENTRY);
+		UOBJ_GEARS:
+			MakeMultiComponentItem (character, UOBJ_AXLE_AND_GEARS, item, UOBJ_AXLE, "axle", SFX_CARPENTRY);
+		UOBJ_CLOCK_FRAME:
+			MakeMultiComponentItem (character, UOBJ_CLOCK, item, UOBJ_CLOCK_PARTS, "clock parts", SFX_ANVIL);
+		UOBJ_CLOCK_PARTS:
+			MakeMultiComponentItem (character, UOBJ_CLOCK, item, UOBJ_CLOCK_FRAME, "clock frame", SFX_ANVIL);
+		UOBJ_AXLE_AND_GEARS: 
+			MakeMultiComponentItem (character, UOBJ_CLOCK_PARTS, item,UOBJ_SPRINGS, "springs", SFX_ANVIL);
+		UOBJ_SPRINGS: 
+			MakeMultiComponentItem (character, UOBJ_CLOCK_PARTS,  item, UOBJ_CLOCK_PARTS, "clock parts", SFX_ANVIL);
+		UOBJ_SEXTANT_PARTS:
+			MakeMultiComponentItem (character, UOBJ_SEXTANT, item, UOBJ_AXLE, "axle", SFX_ANVIL);
+		UOBJ_HINGE:
+			MakeMultiComponentItem (character, UOBJ_SEXTANT_PARTS, item, UOBJ_AXLE_AND_GEARS, "axle and gears", SFX_ANVIL);
+		UOBJ_ELIXER_POTION:
+			MakeManaStone (character, use_on);
+		default:
+			if (item == use_on)
+				SendSysMessage (character, "You don't know how to use that.");
+			else
+				SendSysMessage (character, "You don't know how to use those together.");
+			endif
+	endcase 
+        
+endprogram
+
+
+
+
+///////////////////
+//  Allows the user to select what they want to make off of the menu
+///////////////////
+
+function BasicMakeSomething ( character, use_on, menu, skillsound)
+
+	var chosen_item := SelectWhatToMakeFromMenu (character, menu, tinker_cfg_file, GetAttribute (character, ATTRIBUTEID_TINKERING), use_on.amount, "Tinkering:");
+	if (!chosen_item)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+
+	//find the item in tinkering.cfg file
+	var selection := FindConfigElem (tinker_cfg_file, chosen_item);
+	if (!selection)
+		SendSysMessage (character, "That was an invalid selection");
+		return;
+	endif
+
+	var material_needed := cint (selection.material);
+	var item_skill := cint (selection.skill);
+	var item_name := selection.name;
+	var item_stackable := selection.stackable;
+	var item_lockable := selection.lockable;
+	SendSysMessage(character, "(skill: " + item_skill + ", Ingots: " + material_needed + ")");
+
+	var loopit := YesNo(character,"Autoloop?");
+	var craftingbag := FindCraftingBag (character);
+	var x := character.x;
+	var y := character.y;
+
+	SendSysMessage (character, "You begin tinkering...");
+	repeat
+		if ( use_on.amount >= material_needed )
+			for i := 1 to 3
+				PlaySoundEffect (character, skillsound);
+				sleep (2);
+			endfor
+			if (CheckSkill (character, SKILLID_TINKERING, item_skill, 0))
+				var created_item := 0;
+				
+				if (chosen_item == UOBJ_OBSIDIAN or chosen_item == UOBJ_PORCELAIN or chosen_item == UOBJ_EMPTY_BOTTLE or chosen_item == UOBJ_LOCKPICKS)
+					var amount_to_create := CINT (use_on.amount/material_needed);
+					if (amount_to_create > 10)
+						amount_to_create := 10;
+					endif
+
+					created_item := CreateItemInContainer (craftingbag, chosen_item, amount_to_create);
+					if (!created_item)
+						PrintTextAbovePrivate (character, "*Your backpack is full*", character);
+						return;
+					endif
+					SubtractAmount (use_on, material_needed*amount_to_create);
+				else
+					created_item := CreateItemInContainer (craftingbag, chosen_item, 1);
+					if (!created_item)
+						PrintTextAbovePrivate (character, "*Your backpack is full*", character);
+						return;
+					endif
+					created_item.movable := 1;
+					if (!item_stackable)
+						created_item.name := item_name + " [crafted by " + character.name + "]";
+						//created_item.buyprice := 0;
+					endif
+					//metal chests get colored
+					if (created_item.objtype == 0xe40 or created_item.objtype == 0xe41)
+						created_item.color := use_on.color;
+					endif
+					SubtractAmount (use_on, material_needed);
+				endif
+				if (item_lockable and CheckSkill (character, SKILLID_TINKERING, 40, 0) )
+					PrintTextAbovePrivate (character, "Lockable!", character);
+					SetObjProperty(created_item, "lockable", "1");
+					var lockid := AllocLockId();
+					var thekey := CreateItemInContainer (created_item, UOBJ_COPPER_KEY, 1); 
+					SetObjProperty (thekey, "lockid", lockid);
+					SetObjProperty (created_item, "lockid", lockid);
+				endif
+				SendSysmessage (character, "You create the item and place it in your pack.");
+			else
+				SendSysMessage (character, "You fail, destroying some material.");
+				SubtractAmount (use_on, RandomInt (material_needed) );
+			endif
+		else
+			SendSysMessage (character, "You run out of material.");
+			return;
+		endif
+
+		if (!loopit)
+			return;
+		else
+			sleep (2);
+		endif
+
+	until (character.x != x or character.y != y);
+	SendSysMessage (character, "You stop tinkering...");
+
+endfunction
+
+
+
+
+///////////////////
+//  makes gold items
+///////////////////
+
+function MakeJewelry (character, use_on)
+	var chosen_item := SelectWhatToMakeFromMenu (character, "goldmenu", tinker_cfg_file, GetAttribute (character, ATTRIBUTEID_TINKERING), use_on.amount, "Tinkering:");
+	if (!chosen_item)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+
+	//find the item in tinkering.cfg file
+	var selection := FindConfigElem (tinker_cfg_file, chosen_item);
+	if (!selection)
+		SendSysMessage (character, "That was an invalid selection");
+		return;
+	endif
+
+	var material_needed := cint (selection.material);
+	var item_skill := cint (selection.skill);
+	var item_name := selection.name;
+	SendSysMessage(character, "(skill: " + item_skill + ", Ingots: " + material_needed + ")");
+
+	if ( use_on.amount >= material_needed )
+		SendSysmessage (character, "Select a gem for this item.");
+		var thegem := Target (character);
+		if (!thegem)  
+			SendSysmessage (character, "Canceled.");
+			return;
+		endif
+		if (!ReserveItem(thegem))
+			SendSysMessage (character, "You can't use that right now.");
+			return;
+		endif
+		if (!IsAGem (thegem.objtype))
+			SendSysMessage (character, "That is not a gem!");
+			return;
+		endif
+		if (!Accessible(character, thegem))
+			SendSysmessage (character, "You can't reach that!");
+			return;
+		endif
+
+		for i := 1 to 3
+			PlaySoundEffect (character, SFX_HAMMER);
+			sleep (2);
+		endfor
+
+		if (CheckSkill (character, SKILLID_TINKERING, item_skill, 0))
+			var created_item := CreateItemInContainer (FindCraftingBag (character), chosen_item, 1);
+			if (!created_item)
+				PrintTextAbovePrivate (character, "*Your backpack is full*", character);
+				return;
+			endif
+			created_item.movable := 1;
+			SetObjProperty (created_item, "gem", thegem.objtype);
+			case (thegem.objtype)
+				UOBJ_GEM_DIAMOND:
+					created_item.name := "a diamond " + item_name;
+				UOBJ_GEM_SAPPHIRE:
+					created_item.name := "a sapphire " + item_name;
+				UOBJ_GEM_STAR_SAPPHIRE:
+					created_item.name := "a star sapphire " + item_name;
+				UOBJ_GEM_EMERALD:
+					created_item.name := "an emerald " + item_name;
+				UOBJ_GEM_RUBY:
+					created_item.name := "a ruby " + item_name;
+				UOBJ_GEM_AMETHYST:
+					created_item.name := "an amethyst " + item_name;
+				UOBJ_GEM_CITRINE:
+					created_item.name := "a citrine " + item_name;
+				UOBJ_GEM_TOURMALINE:
+					created_item.name := "a tourmaline " + item_name;
+				UOBJ_GEM_AMBER:
+					created_item.name := "an amber " + item_name;
+			endcase
+			SubtractAmount (use_on, material_needed);
+			SubtractAmount (thegem, 1);
+			SendSysmessage (character, "You create the item and place it in your pack.");
+		else
+			SendSysMessage (character, "You fail, destroying some material.");
+			SubtractAmount (use_on, RandomInt (material_needed) );
+		endif
+	else
+		SendSysMessage (character, "You don't have enough material.");
+		return;
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  This function makes items that require a couple of items to make.
+///////////////////
+
+function MakeMultiComponentItem (character, end_product, clicked_part, required_part, required_name, thesound)
+	if (clicked_part.objtype == UOBJ_TINKER_TOOLS or clicked_part.objtype == UOBJ_TINKER_TOOLKIT)
+		SendSysMessage (character, "You can't make anything with that.");
+		return;
+	endif
+
+	var element := FindConfigElem (tinker_cfg_file, end_product);
+	if (!element)
+		SendSysMessage (character, "There was an error making that item.");
+		return;
+	endif
+
+	var skill_needed := element.skill;
+	var item_stackable := element.stackable;
+	var item_name := element.name;
+	var other_part := FindObjtypeInContainer (character.backpack, required_part);
+	if (!other_part)
+		SendSysMessage (character, "You don't have a " + required_name);
+		return;
+	endif
+
+	PlaySoundEffect (character, thesound);
+	sleep(2);
+
+	if (CheckSkill (character, SKILLID_TINKERING, skill_needed, 0) )
+		var created_item := CreateItemInContainer (FindCraftingBag (character), end_product, 1);
+		if (!created_item)
+			PrintTextAbovePrivate (character, "*Your backpack is full*", character);
+			return;
+		endif
+
+		SubtractAmount (clicked_part, 1);
+		SubtractAmount (other_part, 1);
+		created_item.movable := 1;
+		if (!item_stackable)
+			created_item.name := item_name + " [crafted by " + character.name + "]";
+			//created_item.buyprice := 0;
+		endif
+	else
+		SendSysMessage (character, "You fail to tinker the components together.");
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  Makes an obsidian golem
+///////////////////
+
+function MakeObsidianTotem (character, obsidian)
+	if (obsidian.amount < 200)
+		SendSysMessage (character, "You don't have enough obsidian to make anything.");
+		return;
+	endif
+
+	if (GetAttribute (character, ATTRIBUTEID_MAGERY) < 71)
+		SendSysMessage (character, "You're not a skilled enough mage to work with that.");
+		return;
+	endif
+
+	if (GetAttribute (character, ATTRIBUTEID_TINKERING) < 71)
+		sendsysmessage (character, "You're not a skilled enough tinker to work with that.");
+		return;
+	endif
+
+	var selectmenu := CreateMenu ("What do you want to make?");
+	AddMenuItem (selectmenu, 0x20d7, "obsidian golem");
+	AddMenuItem (selectmenu, 0x2121, "obsidian steed");
+	AddMenuItem (selectmenu, 0x20f6, "obsidian llama");
+	AddMenuItem (selectmenu, 0x2136, "obsidian ostard");
+	AddMenuItem (selectmenu, 0x1eba, "obsidian repair kit");
+	var selection := SelectMenuItem2 (character, selectmenu);
+	if (!selection.objtype)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	for i := 1 to 3
+		PlaySoundEffect (character, SFX_GLASSBREAK4);
+		sleep (2);
+	endfor
+
+	if (!CheckSkill (character, SKILLID_MAGERY, 90, 0) or !CheckSkill (character, SKILLID_TINKERING, 90, 0))
+		SendSysMessage (character, "You fail to make anything useful.");
+		SubtractAmount (obsidian, RandomInt (30)+20);
+		return;
+	endif
+
+	var totem;
+	case (selection.objtype)
+		0x20d7:
+			totem := CreateItemInContainer (FindCraftingBag (character), selection.objtype, 1);
+			if (!totem)
+				SendSysMessage (character, "Your backpack is full!");
+				return;
+			endif
+			totem.name := "an obsidian golem";
+			SetObjProperty (totem, "critter", "obsidiangolem");
+			SetObjProperty (totem, "critcolor", 1109);
+		0x2121:
+			totem := CreateItemInContainer (FindCraftingBag (character), selection.objtype, 1);
+			if (!totem)
+				SendSysMessage (character, "Your backpack is full!");
+				return;
+			endif
+			totem.name := "an obsidian steed";
+			SetObjProperty (totem, "critter", "obsidiansteed");
+			SetObjProperty (totem, "critcolor", 1109);
+		0x20f6:
+			totem := CreateItemInContainer (FindCraftingBag (character), selection.objtype, 1);
+			if (!totem)
+				SendSysMessage (character, "Your backpack is full!");
+				return;
+			endif
+			totem.name := "an obsidian llama";
+			SetObjProperty (totem, "critter", "obsidianllama");
+			SetObjProperty (totem, "critcolor", 1106);
+		0x2136:
+			totem := CreateItemInContainer (FindCraftingBag (character), selection.objtype, 1);
+			if (!totem)
+				SendSysMessage (character, "Your backpack is full!");
+				return;
+			endif
+			totem.name := "an obsidian ostard";
+			SetObjProperty (totem, "critter", "obsidianostard");
+			SetObjProperty (totem, "critcolor", 1107);
+		0x1eba:
+			totem := CreateItemInContainer (FindCraftingBag (character), 0x170b6, 1);
+			if (!totem)
+				SendSysMessage (character, "Your backpack is full!");
+				return;
+			endif
+			SetObjProperty (totem, "materialtype", "obsidian");
+			totem.name := "an obsidian repair kit (new)";
+			SubtractAmount (obsidian, 200);
+			return;
+		default:
+			SendSysMessage (character, "This isn't supposed to happen!");
+			return;
+	endcase
+	
+	SubtractAmount (obsidian, 200);
+	totem.color := 906;
+	totem.usescript := ":dundee:totem";
+	totem.movable := 1;
+endfunction
+
+
+
+
+///////////////////
+//  Makes an porcelain golem
+///////////////////
+
+function MakePorcelainTotem (character, porcelain)
+
+	if (porcelain.amount < 200)
+		SendSysMessage (character, "You don't have enough porcelain to make anything.");
+		return;
+	endif
+
+	if (GetAttribute (character, ATTRIBUTEID_MAGERY) < 71)
+		SendSysMessage (character, "You're not a skilled enough mage to work with that.");
+		return;
+	endif
+
+	if (GetAttribute (character, ATTRIBUTEID_TINKERING) < 71)
+		sendsysmessage (character, "You're not a skilled enough tinker to work with that.");
+		return;
+	endif
+
+	var selectmenu := CreateMenu ("What do you want to make?");
+	AddMenuItem (selectmenu, 0x211f, "porcelain steed");
+	AddMenuItem (selectmenu, 0x1eba, "porcelain repair kit");
+	var selection := SelectMenuItem2 (character, selectmenu);
+	if (!selection.objtype)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	for i := 1 to 3
+		PlaySoundEffect (character, SFX_GLASSBREAK4);
+		sleep (2);
+	endfor
+
+	if (!CheckSkill (character, SKILLID_MAGERY, 90, 0) or !CheckSkill (character, SKILLID_TINKERING, 90, 0))
+		SendSysMessage (character, "You fail to make anything useful.");
+		SubtractAmount (porcelain, RandomInt (30)+20);
+		return;
+	endif
+
+	var totem;
+	case (selection.objtype)
+		0x211f:
+			totem := CreateItemInContainer (FindCraftingBag (character), 0x211f, 1);
+			if (!totem)
+				SendSysMessage (character, "Your backpack is full!");
+				return;
+			endif
+			totem.name := "a porcelain steed";
+			SetObjProperty (totem, "critter", "porcelainsteed");
+			SetObjProperty (totem, "critcolor", 0);
+			totem.usescript := ":dundee:totem";
+			totem.movable := 1;
+		0x1eba:
+			totem := CreateItemInContainer (FindCraftingBag (character), 0x170b6, 1);
+			if (!totem)
+				SendSysMessage (character, "Your backpack is full!");
+				return;
+			endif
+			SetObjProperty (totem, "materialtype", "porcelain");
+			totem.name := "a porcelain repair kit (new)";
+			SubtractAmount (porcelain, 200);
+			return;
+		default:
+			SendSysMessage (character, "This isn't supposed to happen!");
+			return;
+	endcase
+	SubtractAmount (porcelain, 200);
+
+endfunction
+
+
+
+
+///////////////////
+//  makes a mana stone that can be used to transfer magic between items
+///////////////////
+
+function MakeManaStone (character, potion)
+	if (GetAttribute (character, ATTRIBUTEID_TINKERING) < 91)
+		SendSysMessage (character, "Your skill is too low to do that!");
+		return;
+	endif
+
+	var gems := FindObjtypeInContainer (character.backpack, UOBJ_GEM_STAR_SAPPHIRE);
+	if (!gems or gems.amount < 10)
+		SendSysMessage (character, "You need 10 star sapphires to make a mana stone.");
+		return;
+	endif
+	if (!ReserveItem (gems))
+		SendSysMessage (character, "You need 10 star sapphires to make a mana stone.");
+		return;
+	endif
+
+	var gold_bar := FindObjtypeInContainer (character.backpack, UOBJ_GOLD_INGOT);
+	if (!gold_bar)
+		SendSysMessage (character, "You need a bar of gold to make a mana stone.");
+		return;
+	endif
+	if (!ReserveItem (gold_bar))
+		SendSysMessage (character, "You need a bar of gold to make a mana stone.");
+		return;
+	endif
+
+	PlaySoundEffect (character, 0x104);
+	sleep (3);
+
+	var mana_stone := CreateItemInContainer (FindCraftingBag (character), 0x17082, 1);
+	if (!mana_stone)
+		PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+		return;
+	endif
+
+	SubtractAmount (potion, 1);
+	SubtractAmount (gems, 10);
+	SubtractAmount (gold_bar, 1);
+
+endfunction
+
+
+
+
+///////////////////
+//  preserves the given head so that it doesn't decay
+///////////////////
+
+function MakePreservedHead (character, head)
+	if (!ReserveItem (head) )
+		SendSysMessage (character, "You can't use that right now!");
+		return;
+	endif
+	
+	var curepotion := FindObjtypeInContainer (character.backpack, UOBJ_GREATER_CURE_POTION);
+	if (!curepotion)
+		SendSysMessage (character, "You need a greater cure potion to preserve the head.");
+		return;
+	endif
+
+	if (!ReserveItem (curepotion))
+		SendSysMessage (character, "You need a greater cure potion to preserve the head.");
+		return;
+	endif
+
+	var straw := FindObjtypeInContainer (character.backpack, 0x100d);
+	if (!straw)
+		SendSysMessage (character, "You need some straw to preserve the head.");
+		return;
+	endif
+
+	if (!ReserveItem (straw))
+		SendSysMessage (character, "You need some straw to preserve the head.");
+		return;
+	endif
+	
+	SubtractAmount (straw, 1);
+	SubtractAmount (curepotion, 1);
+	if (!CheckSkill (character, SKILLID_TINKERING, -1, 0 ) )
+		SendSysMessage (character, "You fail to preserve the head.");
+		return;
+	endif
+
+	SendSysMessage (character, "You successfully preserve the head.");
+	SetObjProperty (head, "preserved", 1);
+	var tempstring := head.desc - "the head of ";
+	tempstring := "the preserved head of " + tempstring;
+	head.name := tempstring;
+endfunction
+
+
+
+
+///////////////////
+//  Searches the area around the character for an oven
+///////////////////
+
+function SearchForOvenInArea (character)
+	foreach item in ListItemsNearLocation (character.x, character.y, character.z, 2, character.realm)
+		if ((item.objtype >= 0x0461) and (item.objtype <= 0x046f))
+			return 1;
+		elseif ((item.objtype >= 0x092b) and (item.objtype <= 0x0934))
+			return 1;
+		endif
+	endforeach
+	return 0;
+endfunction
+
+
+

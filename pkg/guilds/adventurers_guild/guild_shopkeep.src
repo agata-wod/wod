@@ -1,0 +1,179 @@
+use uo;
+use os;
+use npc;
+
+include "../pkg/npcs/npc_util";
+include "../pkg/guilds/guilds";
+include "../pkg/npcs/main_ai/setup/setup";
+
+CONST HALT_THRESHOLD := 6;
+
+var next_possible_spam := ReadGameClock ();
+
+program guild_shopkeep_ai()
+	if (!me.backpack)
+		DoMerchantOnCreationSetup ();
+	endif
+
+	EnableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN, 2);
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_ENTEREDAREA, HALT_THRESHOLD);
+	WalkHome ();
+
+	var ev;
+	while (me)
+		if (me.hidden)
+			sleep (30);
+			me.hidden := 0;
+		endif
+		
+		ev := wait_for_event (120);
+		if (ev)
+			ProcessEvent (ev);
+		endif
+	endwhile
+
+endprogram
+
+
+
+
+///////////////////
+//  pretty obvious - processes events picked up in the main AI loop
+///////////////////
+
+function ProcessEvent (byref ev)
+
+	case (ev.type)
+		EVID_ENGAGED:
+		EVID_DAMAGED:
+			me.hidden := 1;
+			SetVital (me, "Life", GetVitalMaximumValue (me, "Life"));
+		EVID_ENTEREDAREA:
+			if (ev.source.npctemplate)
+				return 0;
+			endif
+
+			if (ReadGameClock() > next_possible_spam)
+				GreetCustomer (ev.source);
+				next_possible_spam := ReadGameClock() + 60;
+			endif
+		EVID_SPEECH:
+			if (ev.source.npctemplate)
+				return 0;
+			endif
+
+			var evtext := lower(ev.text);
+			if (evtext["buy"])
+				TurnToward (ev.source);
+				if (IsAGuildMember (ev.source, "adventurers_guild") )
+					if (DetermineMoneyOwed (ev.source))
+						PrintTextAbovePrivate (me, "I'm sorry, but you owe us " + DetermineMoneyOwed (ev.source) + " gold!", ev.source);
+						sleep (1);
+						PrintTextAbovePrivate (me, "You have to pay the guildmaster before I can sell you anything.", ev.source);
+						return 0;
+					endif
+
+					var parms := array;
+					parms[1] := me;
+					parms[2] := ev.source;
+					parms[3] := "adventurers_guild";
+					start_script (":guilds:buyitems", parms);
+				else
+					PrintTextAbovePrivate (me, "Glamour! Excitement!  Adventure!  Join today!", ev.source);
+				endif
+			elseif (evtext["sell"])
+				TurnToward (ev.source);
+				Say ("Sorry, but I'm not interested.");
+			elseif (evtext["join"] or evtext["resign"] or evtext["quit"] or evtext["quest"])
+				TurnToward (ev.source);
+				Say ("I don't handle that stuff.  Talk to the guildmaster.");
+			elseif (evtext["status"])
+				TurnToward (ev.source);
+				if (IsAGuildMember (ev.source, "adventurers_guild") )
+					var players_tickets := CountPlayersTickets (ev.source.acctname, "adventurers_guild");
+					PrintTextAbovePrivate (me, "You have " + players_tickets + " tickets in your account.", ev.source);
+				else
+					PrintTextAbovePrivate (me, "Glamour! Excitement!  Adventure!  Join today!", ev.source);
+				endif
+			endif
+
+		EVID_MERCHANT_BOUGHT:
+			TurnToward (ev.source);
+			return 1;
+
+		EVID_ITEM_GIVEN:
+			TurnToward (ev.source);
+			Say ("I don't want that!");
+			MoveItemToContainer (ev.item, ev.source.backpack);
+	endcase
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  when a player enters the NPCs range, this function makes them
+//  yell a greeting
+///////////////////
+
+function GreetCustomer (customer)
+
+	if (customer.npctemplate)
+		return;
+	endif
+
+	if (customer.concealed)
+		return;
+	endif
+
+	TurnToward (customer);
+	case (RandomInt (10) )
+		0:
+			Say ("Wonderous wares from across the planet!");
+		1:
+			Say ("Welcome to my shop!");
+		2:
+			Say ("Let me know if you need help.");
+		3:
+			Say ("Let me show what I just got in!");
+		4:
+			Say ("I bet I have something you want!");
+		5:
+			Say ("Can I help you with anything?");
+		6:
+			Say ("Exotic merchandise from all over Britannia!");
+		7:
+			Say (customer.name + "!  Its good to see you again.");
+		8:
+			Say ("Glamour!  Excitement!  Adventure!  Join today!");
+		9:
+			Say ("Ah, " + customer.name + ", one of my best customers returns!");
+	endcase
+
+endfunction
+
+
+
+
+///////////////////
+//  called when the NPC is first created, this function names
+//  them and clothes them
+///////////////////
+
+function DoMerchantOnCreationSetup()
+	var newbackpack := CreateItemAtLocation (5288, 1176, 0, UOBJ_BACKPACK, 1, REALM_BRITANNIA);
+	EquipItem (me, newbackpack);
+
+	me.gender := RandomInt (2);
+	me.graphic := 400+me.gender;
+	me.name := RandomName ( me );
+	me.title_suffix := " the guild shopkeep";
+	me.title_race := "Adventurer's Guild";
+
+	var parms := array;
+	parms[1]:= me;
+	parms[2]:= "rich";
+	start_script ("::/misc/dressme", parms);
+endfunction

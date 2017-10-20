@@ -1,0 +1,17 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+
+
+program destroyscript_seermap (map)
+	//We need to remove the bankbox that is used to store the chest buried by the map
+	var storage_area := FindStorageArea ("seer_chest_storage");
+	if (storage_area)
+		DestroyRootItemInStorageArea (storage_area, CSTR ("map_" + map.serial));
+	endif
+	return 1;
+endprogram

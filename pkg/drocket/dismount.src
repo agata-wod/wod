@@ -1,0 +1,210 @@
+use uo;
+use os;
+use vitals;
+
+include "include/client";
+include "include/objtype";
+include "include/spawn";
+include "include/utility";
+include "include/wodinc";
+include "include/attributes";
+
+program dismount_from_horse (parms)
+	var character := parms[1];
+	var mount := parms[2];
+
+	if (!character)
+		return;
+	endif
+
+	if (!mount)
+		mount := GetEquipmentByLayer (character, LAYER_MOUNT);
+		if (!mount)
+			mount := TryToFindMount (character);
+			if (!mount)
+				return 0;
+			endif
+		endif
+	endif
+
+	if (!GetObjProperty (mount, "npctemplate"))
+		SendGMErrorMessage ("Dismount: Doing old dismount thing for " + character.name, 1);
+		return DoOldDismount (character, mount);
+	endif
+
+	set_critical (1);
+	var npctemplate := GetObjProperty (mount, "npctemplate");
+	var animal := SpawnNPCAtLocation (npctemplate, character.x, character.y, character.z, 0, character.realm);
+	if (!animal)
+		animal := SpawnNPCAtLocation (npctemplate, character.x+1, character.y, character.z, 0, character.realm);
+		if (!animal)
+			animal := SpawnNPCAtLocation (npctemplate, character.x, character.y+1, character.z, 0, character.realm);
+			if (!animal)
+				animal := SpawnNPCAtLocation (npctemplate, character.x-1, character.y, character.z, 0, character.realm);
+				if (!animal)
+					animal := SpawnNPCAtLocation (npctemplate, character.x, character.y-1, character.z, 0, character.realm);
+					if (!animal)
+						SendGMErrorMessage ("Dismount:  Can't spawn a " + npctemplate + " for " + character.name, 1);
+						SendGMErrorMessage ("Dismount:  Location: " + character.x + ", " + character.y + ", " + character.z + ", " + character.realm, 1);
+						return DoOldDismount (character, mount);
+					endif
+				endif
+			endif
+		endif
+	endif
+	animal.color := mount.color;
+	SetObjProperty (animal, "color", mount.color);
+
+	foreach property in GetObjPropertyNames (mount)
+		if (property != "master")
+			var value := GetObjProperty (mount, property);
+			SetObjProperty (animal, property, value);
+		endif
+	endforeach
+	
+	var skills := GetObjProperty (mount, "skills");
+	if (skills)
+		for i := 0 to 57
+			var skill := skills[i];
+			if (!skill)
+				skill := 0;
+			endif
+			SetAttributeBaseValue (animal, GetAttributeIDBySkillID(i), skill*10);
+		endfor
+		SetObjProperty (animal, "skills", skills);
+	endif
+	
+	var stats := GetObjProperty (mount, "stats");
+	if (stats)
+		SetAttributeBaseValue (animal, "Strength", stats[1] * 10);
+		SetAttributeBaseValue (animal, "Intelligence", stats[2] * 10);
+		SetAttributeBaseValue (animal, "Dexterity", stats[3] * 10);
+		RecalcVitals(animal);
+		SetObjProperty (animal, "stats", stats);
+	endif
+
+	if (GetObjProperty (mount, "petname"))
+		animal.name := GetObjProperty (mount, "petname");
+	endif
+	if (Getobjproperty (mount, "pethp"))
+		SetVital (animal, "Life", GetObjProperty (mount, "pethp")*100);
+	endif
+	if (Getobjproperty (mount, "petmana"))
+		SetVital (animal, "Mana", GetObjProperty (mount, "petmana")*100);
+	endif
+	if (Getobjproperty (mount, "petgraphic"))
+		animal.graphic := GetObjProperty (mount, "petgraphic");
+	endif
+
+	animal.facing := character.facing;
+	//if its a player, retame the creature
+	if (character.acctname)
+//		var freetime := GetObjProperty (mount, "freetime");
+
+		SetObjProperty (animal, "master", character.serial);
+		animal.script := "::tamed";
+		RestartScript (animal);
+	elseif (character.npctemplate or character.objtype == UOBJ_CORPSE)
+		//if its a follower, try to transfer it to their master
+		if (GetObjProperty (character, "master"))
+			SetObjProperty (animal, "master", GetObjProperty (character, "master"));
+			SetObjProperty (animal, "freetime", ReadGameClock() + 600);
+
+			animal.script := "::tamed";
+			RestartScript (animal);
+		endif
+	endif
+	
+
+	DestroyItem (mount);
+	set_critical (0);
+	return animal;
+
+endprogram
+
+
+
+
+///////////////////
+//  old dismount without the npctemplate of what we're creating, so people can dismount old creatures
+///////////////////
+
+function DoOldDismount (me, mount)
+
+	if (!mount)
+		return 0;
+	endif
+
+	var critter := "";
+	case (mount.graphic)
+		0x3ea2:	critter := ":domestic_animals:horse";
+		0x3e9f:	critter := ":domestic_animals:horse2";
+		0x3ea0:	critter := ":domestic_animals:horse3";
+		0x3ea1:	critter := ":domestic_animals:horse4";
+		0x3ea6:	critter := ":domestic_animals:llama";
+		0x3ea3:	critter := ":wild_animals:desertostard";
+		0x3ea4:	critter := ":wild_animals:frenziedostard";
+		0x3ea5:	critter := ":wild_animals:forestostard";
+	endcase
+	if (mount.color == 1109)
+		critter := ":diablo:nightmare";
+	endif
+
+	set_critical(1);
+	var animal := CreateNPCFromTemplate (critter, me.x, me.y, me.z, 0, me.realm);
+	if (!animal)
+		SendGMErrorMessage ("Dismount:  Can't create animal with old dismount!", 1);
+		return 0;
+	endif
+
+	animal.color := mount.color;
+	SetObjProperty (animal, "color", mount.color);
+
+	if (GetObjProperty (mount, "petname"))
+		animal.name := GetObjProperty (mount, "petname");
+	endif
+	if (Getobjproperty(mount,"pethp"))
+		SetVital (animal, "Life", GetObjProperty (mount, "pethp")*100);
+	endif
+	if (Getobjproperty (mount, "petmana"))
+		SetVital (animal, "Mana", GetObjProperty (mount, "petmana")*100);
+	endif
+
+	if (me)
+		if (!me.corpsetype)
+			SetObjProperty (animal, "master", me.serial );
+			animal.script := "::tamed";
+			animal.facing := me.facing;
+			RestartScript (animal);
+		elseif (me.npctemplate)
+			SetObjProperty (animal, "master", GetObjProperty (me, "master"));
+			animal.script := "::tamed";
+			animal.facing := me.facing;
+			RestartScript (animal);
+		endif
+	else
+		SetObjProperty(animal,"killme",1);
+	endif
+
+	if (DestroyItem (mount))
+		return animal;
+	else
+		return 0;
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  if no mount was specified, then probably it was a corpse that died, so we'll search for mounts there
+///////////////////
+
+function TryToFindMount (corpse)
+	foreach item in EnumerateItemsInContainer (corpse)
+		if (item.objtype == UOBJ_MOUNT or item.objtype == 0xf021)
+			return item;
+		endif
+	endforeach
+endfunction

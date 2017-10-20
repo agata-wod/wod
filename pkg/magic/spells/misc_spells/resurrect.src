@@ -1,0 +1,264 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+include "include/spawn";
+include "../pkg/npcs/townfolk/guards/henchman";
+var spell_circle := 8;
+
+program spell_resurrect (parms, spellid)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+
+	var cast_on;
+	if (parms[1] == "#MOB")
+		cast_on :=  parms[3];
+	elseif (parms[1] == "#WAND")
+		cast_on :=  parms[3];
+	else
+		var cx := caster.x;
+		var cy := caster.y;
+		cast_on := Target (caster, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+		if(!cast_on)
+			SendSysMessage (caster, "Canceled.");
+			return 0;
+		endif
+		if (cx != caster.x or cy != caster.y)
+			SendSysMessage (caster,"You've lost your concentration.");
+			return 0;
+		endif
+	endif
+
+	if (cast_on.dead)
+		ResurrectPlayer (caster, cast_on);
+		return 1;
+	elseif (cast_on.objtype == UOBJ_CORPSE)
+		if (GetObjProperty (cast_on, "npctemplate") == "warrior" or GetObjProperty (cast_on, "npctemplate") == ":guards:warrior")
+			Syslog ("Resurrecting henchman...");
+			TryToResurrectHenchman (caster, cast_on);
+			return 1;
+		elseif (GetObjProperty (cast_on, "master"))
+			ResurrectPet (caster, cast_on);
+			return 1;
+		endif
+	endif
+
+	SendSysMessage (caster, "You can't resurrect that!");
+	return 0;
+endprogram
+
+
+
+function ResurrectPlayer (caster, cast_on)
+	if (!cast_on.dead)
+		SendSysMessage(caster,"That isn't dead!");
+		return;
+	endif
+
+//	if (!YesNoRes (cast_on, "Live Again?"))
+//		return;
+//	endif
+
+	PlaySoundEffect (caster, SFX_SPELL_RESSURECTION);
+	PlaySoundEffect (cast_on, SFX_SPELL_RESSURECTION);
+
+	Resurrect (cast_on);
+
+        // added for races 
+//        checkrace(cast_on);
+
+	AwardVirtueForRes (caster,cast_on);
+      
+endfunction
+
+function checkrace(character)
+	var subrace := GetObjProperty(character, "subrace");
+	var sex := character.gender;
+
+	if ( subrace )
+	// This handles any ob property subraces add as needed for your game
+	if ( subrace == "elf")
+		if ( sex )
+			// we have a female
+
+			character.graphic := character.trueobjtype;
+			character.color := character.truecolor;
+
+			character.graphic := 0x25e;
+			character.race := RACE_ELF;
+		else
+			// we have a male
+
+			character.graphic := character.trueobjtype;
+			character.color := character.truecolor;
+
+			character.graphic := 0x25d;
+			character.race := RACE_ELF;
+		endif
+		var racecolor := 57;
+		var tempracecolor := GetObjProperty(character, "racecolor");
+		if ( tempracecolor )
+			racecolor := tempracecolor;
+		endif
+		character.color := racecolor;
+	elseif ( subrace == "centaur" )
+
+		character.graphic := character.trueobjtype;
+		character.color := character.truecolor;
+
+		character.graphic := 0x65;
+		character.race := RACE_ELF;
+		character.color := 0;
+	elseif ( subrace == "goblin" )
+
+		character.graphic := character.trueobjtype;
+		character.color := character.truecolor;
+
+		character.graphic := 0x8a;
+		character.race := RACE_ELF;
+		character.color := 0;
+	elseif ( subrace == "merfolk" )
+		if ( sex )
+    		// we have a female
+	
+			character.graphic := character.trueobjtype;
+			character.color := character.truecolor;
+
+			character.graphic := 0x25e;
+			character.race := RACE_ELF;
+		else
+			// we have a male
+
+			character.graphic := character.trueobjtype;
+			character.color := character.truecolor;
+
+			character.graphic := 0x25d;
+			character.race := RACE_ELF;
+		endif
+		var racecolor := 92;
+		var tempracecolor := GetObjProperty(character, "racecolor");
+		if ( tempracecolor )
+			racecolor := tempracecolor;
+		endif
+
+		character.color := racecolor;
+	elseif ( subrace == "minotaur" )
+
+		character.graphic := character.trueobjtype;
+		character.color := character.truecolor;
+
+		character.graphic := 0x119;
+		character.race := RACE_ELF;
+		character.color := 0;
+	endif
+
+endif
+
+endfunction
+
+function TryToResurrectHenchman (caster, corpse)
+	if (!ResurrectHenchman (corpse) )
+		SendSysMessage (caster, "You can't resurrect that!");
+	endif
+endfunction
+
+
+
+
+function ResurrectPet (caster, corpse)
+	var npctemplate := GetObjProperty (corpse, "npctemplate");
+	if (!npctemplate)
+		SendSysMessage (caster, "You can't resurrect that!");
+		return;
+	endif
+
+	var master_serial := GetObjProperty (corpse, "master");
+	if (!master_serial)
+		SendSysMessage (caster, "You can't resurrect that!");
+		return;
+	endif
+
+	var master := SystemFindObjectBySerial (master_serial);
+	if (!master)
+		SendSysMessage (caster, "You can't resurrect that!");
+		return;
+	endif
+
+	var rescount := GetObjProperty (corpse, "rescount");
+	if (!rescount)
+		rescount := 0;
+	endif
+
+	if (rescount * 10 > GetAttribute (caster, ATTRIBUTEID_TAMING))
+		SendSysMessage (caster, "It seems to have gone to the big pet shop in the sky...");
+		return;
+	endif
+
+	set_critical (1);
+	var new_npc := SpawnNPCAtLocation (npctemplate, corpse.x, corpse.y, corpse.z, 0, corpse.realm);
+	if (!new_npc)
+		SendSysMessage (caster, "It seems to have gone to the big pet shop in the sky...");
+		return;
+	endif
+
+	var newbackpack := CreateItemAtLocation (5288 , 1176 , 0, UOBJ_BACKPACK, 1, REALM_BRITANNIA);
+	EquipItem (new_npc, newbackpack);
+
+	foreach item in ListRootItemsInContainer (corpse)
+		if (!equipItem (new_npc, item))
+			MoveItemToContainer (item, new_npc.backpack);
+		endif
+	endforeach
+
+	if (GetObjProperty (corpse, "color") )
+		new_npc.color := GetObjProperty (corpse, "color");
+		SetObjProperty (new_npc, "color", GetObjProperty (corpse, "color"));
+	endif
+
+	SetObjProperty (new_npc, "master", master.serial);
+	new_npc.script := "::tamed";
+	RestartScript (new_npc);
+	
+	var skills := GetObjProperty (corpse, "skills");
+	if (skills)
+		for i := 0 to 57
+			var skill := skills[i];
+			if (!skill)
+				skill := 0;
+			endif
+			SetAttributeBaseValue (new_npc, GetAttributeIDBySkillID(i), skill*10);
+		endfor
+		SetObjProperty (new_npc, "skills", skills);
+	endif
+	
+	var stats := GetObjProperty (corpse, "stats");
+	if (stats)
+		SetAttributeBaseValue (new_npc, "Strength", stats[1] * 10);
+		SetAttributeBaseValue (new_npc, "Intelligence", stats[2] * 10);
+		SetAttributeBaseValue (new_npc, "Dexterity", stats[3] * 10);
+		SetObjProperty (new_npc, "stats", stats);
+		RecalcVitals (new_npc);
+	endif
+
+	SetVital (new_npc, "Life", 100);
+	var temp_string := corpse.desc;
+	temp_string["A corpse of "] := "";
+	new_npc.name := temp_string;
+	SetObjProperty (new_npc, "rescount", rescount + 1);
+	
+	DestroyItem (corpse);
+	set_critical (0);
+
+endfunction
+
+
+
+
+
+

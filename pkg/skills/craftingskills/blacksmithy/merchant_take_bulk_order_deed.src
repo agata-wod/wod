@@ -1,0 +1,173 @@
+use uo;
+use os;
+
+include "include/utility";
+include "include/accounts";
+include "../pkg/character/virtue/virtue";
+
+program merchant_take_bulk_order_deed (parms)
+	var player := parms[1];
+	var merchant := parms[2];
+	var deed := parms[3];
+	
+	if (!player or !merchant or !deed)
+		if (player)
+			SendSysMessage (player, "Error:  Missing data!");
+			if (deed)
+				MoveItemToContainer (deed, player.backpack);
+			endif
+		endif
+		return;
+	endif
+
+	if (!GetObjProperty (deed, "completed"))
+		PrintTextAbovePrivate (merchant, "But that order is not yet filled!", player);
+		MoveItemToContainer (deed, player.backpack);
+		return;
+	endif
+
+	var required_items := GetObjProperty (deed, "required_items");
+	if (!required_items)
+		SendSysMessage (player, "Error:  That contract seems to be broken...");
+		MoveItemToContainer (deed, player.backpack);
+		return;
+	elseif (required_items.size() < 8)
+		SendSysMessage (player, "Error:  That contract seems to be broken...");
+		MoveItemToContainer (deed, player.backpack);
+		return;
+	endif
+	
+	var gold_reward := required_items[7];
+	if (!gold_reward)
+		SendSysMessage (player, "Error:  That contract seems to be broken...");
+		MoveItemToContainer (deed, player.backpack);
+		return;
+	endif
+	
+	//players can 'cheat' merchants by modifying the contract, but that's an evil act
+	var modified_gold_reward := required_items[9];
+	if (modified_gold_reward)
+		gold_reward := modified_gold_reward;
+	endif
+	
+	var merchant_serial := GetObjProperty (deed, "merchant_serial");
+	if (merchant_serial)
+		if (merchant_serial == merchant.serial)
+			PrintTextAbove (merchant, "You finished the job!  Thanks!");
+			
+			//if its a modified contract, the merchant may detect it
+			if (modified_gold_reward)
+				if (!CheckSkill (player, SKILLID_STEALING, 100, 0))
+					sleep (1);
+					PrintTextAbove (merchant, "Wait a minute...");
+					sleep (1);
+					PrintTextAbove (merchant, "Thief!  Thief!");
+					player.SetCriminal (1);
+					DestroyItem (deed);
+					return 1;
+				endif
+			endif
+		else
+			var merchant_name := GetObjProperty (deed, "merchant_name");
+			var merchant_location := GetObjProperty (deed, "merchant_location");
+			if (!merchant_name or !merchant_location)
+				SendSysMessage (player, "Error:  That contract seems to be broken...");
+				MoveItemToContainer (deed, player.backpack);
+				return;
+			endif
+			
+			var merchant_distance := CoorDist (merchant.x, merchant.y, merchant_location[1], merchant_location[2]);
+			if (merchant_distance < 10)
+				PrintTextAbovePrivate (merchant, "Oh, this is for " + merchant_name + ".  They're around here somewhere...", player);
+				sleep (1);
+				PrintTextAbovePrivate (merchant, "I'll pass this along when I see them.", player);
+			else
+				PrintTextAbovePrivate (merchant, "I'll pass this along.  For a small commission, of course...", player);
+				if (merchant_distance < 100)
+					gold_reward := CINT (gold_reward * 0.95);
+				elseif (merchant_distance < 200)
+					gold_reward := CINT (gold_reward * 0.94);
+				elseif (merchant_distance < 500)
+					gold_reward := CINT (gold_reward * 0.93);
+				elseif (merchant_distance < 1000)
+					gold_reward := CINT (gold_reward * 0.92);
+				elseif (merchant_distance < 2000)
+					gold_reward := CINT (gold_reward * 0.91);
+				else
+					gold_reward := CINT (gold_reward * 0.90);
+				endif	
+			endif
+		endif
+
+		//its easier to fool a different merchant, but still requires a check
+		if (modified_gold_reward)
+			if (!CheckSkill (player, SKILLID_STEALING, -1, 0))
+				sleep (1);
+				PrintTextAbove (merchant, "Wait a minute...");
+				sleep (1);
+				PrintTextAbove (merchant, "Thief!  Thief!");
+				player.SetCriminal (1);
+				DestroyItem (deed);
+				return 1;
+			endif
+		endif
+	endif
+	
+	//let the player get another contract, if this was the last one they got
+	var player_contract := GetObjProperty (player, "#bulk_order_deed");
+	if (player_contract)
+		if (player_contract[2] == deed.serial)
+			EraseObjProperty (player, "#bulk_order_deed");
+		endif
+	endif
+	
+	if (!DestroyItem (deed))
+		SendSysMessage (player, "Error:  Unable to destroy deed");
+		MoveItemToContainer (deed, player.backpack);
+		return;
+	endif
+	
+	SendSysMessage (player, "You recieve " + gold_reward + " gold.");
+	if (required_items[9])
+		AddVirtue (player, (0-(3+RandomInt(4))));
+	else
+		AddVirtue (player, 3+RandomInt(4));
+	endif
+
+	//Record statistics
+	var total_deeds := GetAccountProperty (player.acctname, "blacksmithy_bulk_order_deeds_number");
+	if (!total_deeds)
+		total_deeds := 0;
+	endif
+	total_deeds := total_deeds + 1;
+	SetAccountProperty (player.acctname, "blacksmithy_bulk_order_deeds_number", total_deeds);
+
+	var total_value := GetAccountProperty (player.acctname, "blacksmithy_bulk_order_deeds_value");
+	if (!total_value)
+		total_value := 0;
+	endif
+	total_value := total_value + gold_reward;
+	SetAccountProperty (player.acctname, "blacksmithy_bulk_order_deeds_value", total_value);
+
+	//Create the gold
+	if (gold_reward > 60000)
+		repeat
+			var thegold := CreateItemInContainer (player.backpack, UOBJ_GOLD_COIN, 60000);
+			if (!thegold)
+				PrintTextAbovePrivate (player, "*Your backpack is full!*", player);
+				CreateItemAtLocation (player.x, player.y, player.z, UOBJ_GOLD_COIN, 60000, REALM_BRITANNIA);
+			endif
+			gold_reward := gold_reward - 60000;
+		until (gold_reward <= 60000);
+	endif
+	var thegold := CreateItemInContainer (player.backpack, UOBJ_GOLD_COIN, gold_reward);
+	if (!thegold)
+		PrintTextAbovePrivate (player, "*Your backpack is full!*", player);
+		CreateItemAtLocation (player.x, player.y, player.z, UOBJ_GOLD_COIN, gold_reward, player.realm);
+	endif
+
+	return 1;
+endprogram
+
+
+

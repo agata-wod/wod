@@ -1,0 +1,109 @@
+use os;
+use uo;
+use cfgfile;
+
+program jailcheck (character)
+	var acct := character.acct;
+	if (acct.getProp ("jailed"))
+		DealWithJailedAccount (character);
+	endif
+
+	if (GetObjProperty (character, "jailed"))
+		DealWithJailedCharacter (character);
+	endif
+
+	return;
+endprogram
+
+
+
+
+///////////////////
+//  If an individual character has been jailed, this function makes sure that they're in jail, or
+//  releases them after their term is up
+///////////////////
+
+function DealWithJailedCharacter (character)
+	var jailed := GetObjProperty (character, "jailed");
+	if (!jailed)
+		return;
+	endif
+	
+	var endtime := CINT (jailed [1]);
+	if (!endtime or endtime < ReadGameClock())
+		if (IsInsideTheJail (character.x, character.y))
+			MoveObjectToLocation( character, 1390, 1625, 30, REALM_BRITANNIA, MOVEOBJECT_FORCELOCATION );
+		endif
+		EraseObjProperty (character, "jailed");
+		return;
+	endif
+	
+	if (!IsInsideTheJail (character.x, character.y))
+		MoveObjectToLocation( character, 5281, 1185, 0, REALM_BRITANNIA, MOVEOBJECT_FORCELOCATION );
+	endif
+	if (jailed[2])
+		SendStringAsTipWindow (character, jailed[2]);
+	endif
+
+	return;
+endfunction
+
+
+
+
+///////////////////
+//  If all the characters on an account have been jailed, this function sticks them in prison when they log
+//  in, or releases them after their term is up
+///////////////////
+
+function DealWithJailedAccount (character)
+	var acct := character.acct;
+	var jailed := acct.getProp ("jailed");
+	var endtime := CINT (jailed [1]);
+	if (!endtime or endtime < ReadGameClock())
+		if (IsInsideTheJail (character.x, character.y))
+			MoveObjectToLocation( character, 1390, 1625, 30, REALM_BRITANNIA, MOVEOBJECT_FORCELOCATION );
+		endif
+		var stillinjail := 0;
+		for counter := 1 to 7
+			var player := acct.GetCharacter (counter);
+			if (player)
+				if (IsInsideTheJail (player.x, player.y))
+					if (!GetObjProperty (player, "jailed"))
+						stillinjail := 1;
+					endif
+				endif
+			endif
+		endfor
+		if (!stillinjail)
+			acct.EraseProp ("jailed");
+		endif
+
+		return;
+	endif
+	
+	if (!IsInsideTheJail (character.x, character.y))
+		MoveObjectToLocation( character, 5281, 1185, 0, REALM_BRITANNIA, MOVEOBJECT_FORCELOCATION );
+	endif
+	if (jailed[2])
+		SendStringAsTipWindow (character, jailed[2]);
+	endif
+	return;
+endfunction
+
+
+
+
+///////////////////
+//  This function figures out if the character is within the jail area
+///////////////////
+
+function IsInsideTheJail (x, y)
+	if (x < 5272 or x > 5310)
+		return 0;
+	elseif (y < 1160 or y > 1190)
+		return 0;
+	endif
+	return 1;
+endfunction
+

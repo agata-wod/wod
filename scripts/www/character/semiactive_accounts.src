@@ -1,0 +1,130 @@
+use uo;
+use os;
+use http;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/string";
+include "include/clock";
+include "include/accounts";
+include "../pkg/items/housing/house";
+
+program search_for_inactive_accounts ()
+	WriteHTML ("<html><head><title>Inactive accounts</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+
+	WriteHTML ("<center><b>Inactive accounts with characters:</b></center>");
+	WriteHTML ("<br>(Accounts that have logged in recently, but have less than 10 hours of playtime during the past 2 months)");
+	
+	WriteHTML ("<p><table border=1 align=center width=60% cellpadding=5>");
+	WriteHTML ("<tr><td align=right>Account name</td><td>Last Logon</td></tr>");
+	
+	var noplayers := 0;
+	var active_accounts := 0;
+	var inactive_accounts := 0;
+	foreach acctname in ListAccounts ()
+		if (GetAccountLastLogon (acctname) < 60)
+			if (CheckIfCharacterExists (acctname))
+				var recent_playtime := GetAccountRecentPlaytime (acctname);
+				if (recent_playtime < 36000)
+					WriteHTML ("<tr><td align=right><a href=/character/account_info.ecl?acctname=" + acctname +">" + acctname + "</a></td>");
+					var hours := CINT (recent_playtime/3600);
+					var minutes := recent_playtime - hours*3600;
+					minutes := CINT (minutes/60);
+
+					WriteHTML ("<td>" + hours + " hours, " + minutes + " minutes</td></tr>");
+					inactive_accounts := inactive_accounts + 1;
+				endif
+			else
+				noplayers := noplayers + 1;
+			endif
+		else
+			active_accounts := active_accounts + 1;
+		endif
+	endforeach
+	WriteHTML ("</table>");
+	WriteHTML ("<center>Inactive accounts with characters: " + inactive_accounts + "</center><br>");
+	WriteHTML ("<center>Inactive accounts without characters: " + noplayers + "</center><br>");
+	WriteHTML ("<center>Active accounts: " + active_accounts + "</center><br>");
+	
+	WriteHTML ("</body></html>");
+endprogram
+
+
+
+
+///////////////////
+//  Checks to see if a character exists on this account
+///////////////////
+
+function CheckIfCharacterExists (acctname)
+	var acct := FindAccount (acctname);
+	for counter := 1 to 7
+		var player := acct.GetCharacter (counter);
+		if (player)
+			return 1;
+		endif
+	endfor
+	
+	//if this character has no characters, nuke his bankbox (just to be safe)
+	var bankbox := FindBankBox (acctname);
+	if (bankbox)
+		var worldbank := OpenWorldBank();
+		DestroyRootItemInStorageArea (worldbank, bankbox);
+	endif
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Gets the time that this account has spent online during the previous 2 months
+///////////////////
+
+function GetAccountRecentPlaytime (acctname)
+	var this_month_string := GetCurrentPlaytimeMonth ();
+	var last_month_string := GetPreviousPlaytimeMonth ();
+	var second_month_string := GetPreviousPlaytimeMonth (2);
+
+	var the_playtime := GetAccountProperty (acctname, this_month_string);
+	the_playtime := the_playtime + GetAccountProperty (acctname, last_month_string);
+	the_playtime := the_playtime + GetAccountProperty (acctname, second_month_string);
+
+	return the_playtime;
+endfunction
+
+
+
+
+///////////////////
+//  Figured out how long its been since an account has logged on, in days
+///////////////////
+
+function GetAccountLastLogon (accountname)
+	var account := FindAccount (accountname);
+	if (!account)
+		Syslog ("Error finding accountname " + accountname);
+		return 9999;
+	endif
+	
+	var logontime := 0;
+	for counter := 1 to 7
+		var player := account.GetCharacter (counter);
+		if (player)
+			var templogontime := GetObjProperty (player, "logontime");
+			if (templogontime and templogontime > logontime)
+				logontime := templogontime;
+			endif
+		endif
+	endfor
+	
+	var seconds := ReadGameClock () - logontime;
+	var days := CINT (seconds/86400);
+	return days;
+endfunction
+
+
+

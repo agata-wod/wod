@@ -1,0 +1,72 @@
+use uo;
+use os;
+use http;
+use datafile;
+
+WriteHTML ("<html><head><title>Search for stolen items by house owner</title></head>");
+WriteHTML ("<body bgcolor=\"#dcdeed\">");
+
+var acctname := QueryParam ("acctname");
+if (!acctname)
+	WriteHTML ("Please enter an account name");
+	WriteHTML ("<form method=GET action=houseowner.ecl>");
+	WriteHTML ("House owner account: <input name=acctname>");
+	WriteHTML ("<input id=submit1 name=submit1 type=submit value=Search>");
+	WriteHTML ("</body></html>");
+	return;
+endif
+
+var acct := FindAccount (acctname);
+if (!acct)
+	WriteHTML ("That account does not exist</body></html>");
+	return;
+endif
+
+var infodf := OpenDataFile (":containers:ContainerLog");
+if (!infodf)
+	infodf := CreateDataFile (":containers:ContainerLog");
+	if (!infodf)
+		WriteHTML ("Unable to create container log!</body></html>");
+		return;
+	endif
+endif
+
+var keys := infodf.Keys();
+if (!len (keys))
+	WriteHTML ("Data file empty</body></html>");
+	return;
+endif
+
+var entry;
+var found := 0;
+foreach key in keys
+	entry := infodf.FindElement (key);
+	if (entry)
+		var houseowner := entry.GetProp ("HouseOwner");
+		if (houseowner and houseowner == acctname)
+			if (!found)
+				WriteHTML ("<table width=80% border=1 align=center><tr><td>");
+			else
+				WriteHTML ("</td></tr><tr><td>");
+			endif
+			WriteHTML ("Character: " + entry.GetProp ("Character") + "<br>");
+			WriteHTML ("Account Name: " + entry.GetProp ("AcctName") + "<br>");
+			WriteHTML ("Item Name: " + entry.GetProp ("ItemName") + "<br>");
+			var serial := entry.GetProp ("ItemSerial");
+			WriteHTML ("Item Serial: <a href=item_search.ecl?serial=" + serial + ">" + serial + "<br>");
+			found := found + 1;
+		endif
+	endif
+endforeach
+
+if (!found)
+	WriteHTML ("No entries found.</body></html>");
+else
+	WriteHTML ("</td></tr>");
+	WriteHTML (found + " entries found</body></html>");
+endif
+
+
+
+
+

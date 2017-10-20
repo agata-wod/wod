@@ -1,0 +1,28 @@
+use uo;
+use os;
+use cfgfile;
+
+const SIGNSTART := 0xB95;
+const SIGNEND := 0xC0E;
+
+program destroy_radius ( character, radius )
+
+	radius := CINT (radius);
+
+	if (!radius)
+		radius := 3;
+	endif
+
+	if (radius > 10)
+		radius := 10;
+	endif
+
+	var item_count := 0;
+	foreach item in ListItemsNearLocation (character.x, character.y, character.z, radius, character.realm)
+		DestroyItem (item);
+		item_count := item_count + 1;
+	endforeach
+
+	SendSysMessage (character, "Total items destroyed: " + item_count);
+
+endprogram

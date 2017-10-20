@@ -1,0 +1,1 @@
+.reply will send a message back to the person that last sent a message to you, even if they are in private mode.

@@ -1,0 +1,13 @@
+use uo;
+use os;
+use polsys;
+
+program Install()
+	Print("INSTALLING packethook: Weapon Abilities");
+	return 1;
+endprogram
+           
+exported function HandleAbilityButtons(who, byref packet)
+	var result := run_script_to_completion ( ":weapons:abilityRequest", array {who, packet});
+	return result;
+endfunction

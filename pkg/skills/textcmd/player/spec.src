@@ -1,0 +1,463 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/skills";
+include "include/string";
+include "../pkg/skills/skillpick";
+
+var gumplayout := array { };
+var gumpdata := array { };
+var originalspecs := array {};
+var specs := array {};
+var maxstr, maxint, maxdex;
+
+program Specialize (character)
+	originalspecs := LoadSpecializations (character);
+	specs := originalspecs;
+
+	var done := 0;
+	repeat
+		SetMaxStats (character, 0);
+		LoadGumpLayout (character);
+		done := ListSkills (character);
+	until (done or !character);
+endprogram
+
+
+
+
+///////////////////
+//  Does most of the work for handling the gump.  Returns 1 when finished, 0 for another interation
+///////////////////
+
+function ListSkills (character)
+	var gump_return := SendDialogGump (character, gumplayout, gumpdata);
+	if (!gump_return and gump_return[0] != 0)
+		SendSysMessage (character, "You must close other gumps before you can do this.");
+		return 1;
+	endif
+	
+	gump_return := gump_return[0];
+	if (!gump_return)
+		SendSysMessage (character, "No changes made.");
+		return 1;
+	endif
+
+	if (GetSkillName (specs[gump_return]) != "None" )	//remove a skill
+		var skillname := GetSkillName (specs[gump_return]);
+		RemoveSkill (character, specs[gump_return]);
+		SendSysMessage (character, skillname + " removed, but changes are not saved yet.");
+	elseif (gump_return == 9)						//Save the changes to skills
+		var nochanges := 1;
+		for i := 1 to 8
+			if (!specs[i] and specs[i] != 0)
+				SendSysMessage (character, "You must select all specializations before saving.");
+				return 0;
+			elseif (specs[i] != originalspecs[i])
+				nochanges := 0;			
+			endif
+		endfor
+		
+		if (nochanges)
+			SendSysMessage (character, "You haven't made any changes!");
+			return 0;
+		endif
+		
+		SetObjProperty (character, "primary1", specs[1]);
+		SetObjProperty (character, "primary2", specs[2]);
+		SetObjProperty (character, "primary3", specs[3]);
+		SetObjProperty (character, "secondary1", specs[4]);
+		SetObjProperty (character, "secondary2", specs[5]);
+		SetObjProperty (character, "secondary3", specs[6]);
+		SetObjProperty (character, "tradeskill", specs[7]);
+		SetObjProperty (character, "compskill", specs[8]);
+		SetMaxStats (character, 1);
+		SendSysMessage (character, "Changes saved!");
+		return 1;
+	else										//specialize in a skill
+		var SkillNum := error;
+		if (gump_return == 7)
+			SkillNum := PickATradeSkill(character);
+		elseif (gump_return == 8)
+			if (specs[1] == error or specs[2] == error or specs[3] == error)
+				SendSysMessage (character, "You must choose your primary skills first!");
+				return 0;
+			endif
+			SkillNum := PickACompSkill(character, specs);
+		else
+			Skillnum := PickASkill (character);
+		endif
+		if (SkillNum or SkillNum == 0)
+			var skillname := GetSkillName (skillnum);
+			
+			for i := 1 to 8
+				if (specs[i] == SkillNum)
+					SendSysMessage (character, "You're already specialized in that!");
+					return 0;
+				endif
+			endfor
+
+			specs [gump_return] := skillnum;
+			SetMaxStats (character, 0);
+			SendSysMessage (character, "You specialize in " + skillname);
+			return 0;
+		else
+			SendSysMessage (character, "Canceled");
+			return 1;
+		endif
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Removes a skill from specialization
+///////////////////
+
+function RemoveSkill (character, skillid)
+	for i := 1 to 8
+		if (specs[i] == skillid)
+			specs[i] := error;
+			if (i < 4)
+				specs[8] := error;
+			endif
+			return i;
+		endif
+	endfor
+	SendSysMessage (character, "Wait, you're not specialized in that...");
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Figures out the character's new maximum stats
+///////////////////
+
+function SetMaxStats (character, savethem := 0)
+	maxstr := 0;
+	maxint := 0;
+	maxdex := 0;
+	for i := 1 to 6
+		if (!specs[i] and specs[i] != 0)
+			maxstr := "-";
+			maxint := "-";
+			maxdex := "-";
+			return;
+		endif
+		maxstr := maxstr + GetStrCap (specs[i]);
+		maxint := maxint + GetIntCap (specs[i]);
+		maxdex := maxdex + GetDexCap (specs[i]);
+	endfor
+
+	//Primaries count double
+	for i := 1 to 3
+		maxstr := maxstr + GetStrCap (specs[i]);
+		maxint := maxint + GetIntCap (specs[i]);
+		maxdex := maxdex + GetDexCap (specs[i]);
+	endfor
+
+	maxstr := CINT (maxstr/9);
+	maxint := CINT (maxint/9);
+	maxdex := CINT (maxdex/9);
+	
+	var totalstats := (maxstr + maxint + maxdex);
+	if (totalstats < 225)
+		if (maxstr > maxint)
+			if (maxstr > maxdex)
+				maxstr := maxstr + (225 - totalstats);
+			else
+				maxdex := maxdex + (225 - totalstats);
+			endif
+		else
+			if (maxint > maxdex)
+				maxint := maxint + (225 - totalstats);
+			else
+				maxdex := maxdex + (225 - totalstats);
+			endif
+		endif
+	endif
+
+	if (savethem)
+		SetObjProperty (character, "maxstr", maxstr);
+		SetObjProperty (character, "maxdex", maxdex);
+		SetObjProperty (character, "maxint", maxint);
+	endif
+endfunction
+
+
+function GetStrCap (skillid)
+	var retname := 75;
+	case (skillid)
+		SKILLID_ALCHEMY:		retname :=  50;
+		SKILLID_ANATOMY:		retname :=  85;
+		SKILLID_ANIMALLORE:		retname :=  60;
+		SKILLID_ITEMID:		retname :=  60;
+		SKILLID_ARMSLORE:		retname :=  80;
+		SKILLID_PARRY:			retname :=  120;
+		SKILLID_LEADERSHIP:		retname :=  90;
+		SKILLID_BLACKSMITHY:	retname :=  110;
+		SKILLID_BOWCRAFT:		retname :=  95;
+		SKILLID_PEACEMAKING:	retname :=  80;
+		SKILLID_CAMPING:		retname :=  75;
+		SKILLID_CARPENTRY:		retname :=  95;
+		SKILLID_CARTOGRAPHY:	retname :=  75;
+		SKILLID_COOKING:		retname :=  80;
+		SKILLID_DETECTINGHIDDEN:	retname :=  70;
+		SKILLID_DISCORDANCE:	retname :=  75;
+		SKILLID_INVOCATION:		retname :=  60;
+		SKILLID_HEALING:		retname :=  80;
+		SKILLID_FISHING:		retname :=  75;
+		SKILLID_FORENSICS:		retname :=  75;
+		SKILLID_HERDING:		retname :=  90;
+		SKILLID_HIDING:		retname :=  70;
+		SKILLID_PROVOCATION:	retname :=  70;
+		SKILLID_INSCRIPTION:	retname :=  60;
+		SKILLID_LOCKPICKING:	retname :=  60;
+		SKILLID_MAGERY:		retname :=  50;
+		SKILLID_MAGICRESISTANCE:	retname :=  80;
+		SKILLID_TACTICS:		retname :=  100;
+		SKILLID_SNOOPING:		retname :=  60;
+		SKILLID_MUSICIANSHIP:	retname :=  80;
+		SKILLID_POISONING:		retname :=  65;
+		SKILLID_ARCHERY:		retname :=  85;
+		SKILLID_NECROMANCY:		retname :=  80;
+		SKILLID_STEALING:		retname :=  60;
+		SKILLID_TAILORING:		retname :=  75;
+		SKILLID_TAMING:		retname :=  80;
+		SKILLID_TASTEID:		retname :=  70;
+		SKILLID_TINKERING:		retname :=  75;
+		SKILLID_TRACKING:		retname :=  80;
+		SKILLID_VETERINARY:		retname :=  80;
+		SKILLID_SWORDSMANSHIP:	retname :=  110;
+		SKILLID_MACEFIGHTING:	retname :=  110;
+		SKILLID_FENCING:		retname :=  110;
+		SKILLID_WRESTLING:		retname :=  110;
+		SKILLID_LUMBERJACKING:	retname :=  110;
+		SKILLID_MINING:		retname :=  110;
+		SKILLID_MEDITATION:		retname :=  110;
+		SKILLID_STEALTH:		retname :=  60;
+		SKILLID_REMOVETRAP:		retname :=  75;
+		SKILLID_AOSNECROMANCY:	retname :=  80;
+		SKILLID_FOCUS:			retname :=  75;
+		SKILLID_CHIVALRY:		retname :=  90;
+		SKILLID_BUSHIDO:		retname :=  90;
+		SKILLID_NINJITSU:		retname :=  75;
+		SKILLID_SPELLWEAVING:	retname :=  50;
+		SKILLID_THROWING:		retname :=  90;
+		SKILLID_IMBUING:		retname :=  75;
+		SKILLID_MYSTICISM:		retname :=  50;
+	endcase
+	return retname;
+endfunction
+
+function GetDexCap (skillid)
+	var retname := 75;
+	case (skillid)
+		SKILLID_ALCHEMY:		retname :=  65;
+		SKILLID_ANATOMY:		retname :=  60;
+		SKILLID_ANIMALLORE:		retname :=  55;
+		SKILLID_ARCHERY:		retname :=  100;
+		SKILLID_BLACKSMITHY:	retname :=  65;
+		SKILLID_CAMPING:		retname :=  75;
+		SKILLID_CARPENTRY:		retname :=  70;
+		SKILLID_CARTOGRAPHY:	retname :=  75;
+		SKILLID_COOKING:		retname :=  65;
+		SKILLID_DETECTINGHIDDEN:	retname :=  65;
+		SKILLID_FENCING:		retname :=  110;
+		SKILLID_FISHING:		retname :=  70;
+		SKILLID_HEALING:		retname :=  70;
+		SKILLID_HIDING:		retname :=  100;
+		SKILLID_INSCRIPTION:	retname :=  55;
+		SKILLID_INVOCATION:		retname :=  50;
+		SKILLID_LEADERSHIP:		retname :=  65;
+		SKILLID_LOCKPICKING:	retname :=  80;
+		SKILLID_LUMBERJACKING:	retname :=  65;
+		SKILLID_MACEFIGHTING:	retname :=  110;
+		SKILLID_MAGERY:		retname :=  60;
+		SKILLID_MAGICRESISTANCE:	retname :=  60;
+		SKILLID_MEDITATION:		retname :=  0;
+		SKILLID_MINING:		retname :=  75;
+		SKILLID_MUSICIANSHIP:	retname :=  75;
+		SKILLID_NECROMANCY:		retname :=  55;
+		SKILLID_PARRY:			retname :=  130;
+		SKILLID_PEACEMAKING:	retname :=  90;
+		SKILLID_POISONING:		retname :=  85;
+		SKILLID_PROVOCATION:	retname :=  85;
+		SKILLID_STEALING:		retname :=  85;
+		SKILLID_STEALTH:		retname :=  90;
+		SKILLID_SWORDSMANSHIP:	retname :=  110;
+		SKILLID_TACTICS:		retname :=  100;
+		SKILLID_TAILORING:		retname :=  75;
+		SKILLID_TAMING:		retname :=  65;
+		SKILLID_TINKERING:		retname :=  75;
+		SKILLID_TRACKING:		retname :=  65;
+		SKILLID_WRESTLING:		retname :=  110;
+		SKILLID_DISCORDANCE:	retname :=  70;
+
+		SKILLID_ARMSLORE:		retname :=  55;
+		SKILLID_BOWCRAFT:		retname :=  80;
+		SKILLID_FORENSICS:		retname :=  65;
+		SKILLID_HERDING:		retname :=  65;
+		SKILLID_ITEMID:		retname :=  55;
+		SKILLID_REMOVETRAP:		retname :=  75;
+		SKILLID_SNOOPING:		retname :=  90;
+		SKILLID_TASTEID:		retname :=  60;
+		SKILLID_VETERINARY:		retname :=  65;
+		SKILLID_AOSNECROMANCY:	retname :=  55;
+		SKILLID_FOCUS:			retname :=  75;
+		SKILLID_CHIVALRY:		retname :=  80;
+		SKILLID_BUSHIDO:		retname :=  80;
+		SKILLID_NINJITSU:		retname :=  75;
+		SKILLID_SPELLWEAVING:	retname :=  60;
+		SKILLID_THROWING:		retname :=  95;
+		SKILLID_IMBUING:		retname :=  75;
+		SKILLID_MYSTICISM:		retname :=  60;
+	endcase
+	return retname;
+endfunction
+
+function GetIntCap(skillid)
+	var retname := 75;
+	case (skillid)
+		SKILLID_ALCHEMY:		retname :=  110;
+		SKILLID_ANATOMY:		retname :=  80;
+		SKILLID_ANIMALLORE:		retname :=  110;
+		SKILLID_ARCHERY:		retname :=  35;
+		SKILLID_BLACKSMITHY:	retname :=  50;
+		SKILLID_CAMPING:		retname :=  75;
+		SKILLID_CARPENTRY:		retname :=  60;
+		SKILLID_CARTOGRAPHY:	retname :=  75;
+		SKILLID_COOKING:		retname :=  80;
+		SKILLID_DETECTINGHIDDEN:	retname :=  90;
+		SKILLID_FENCING:		retname :=  0;
+		SKILLID_FISHING:		retname :=  80;
+		SKILLID_HEALING:		retname :=  75;
+		SKILLID_HIDING:		retname :=  55;
+		SKILLID_INSCRIPTION:	retname :=  110;
+		SKILLID_INVOCATION:		retname :=  115;
+		SKILLID_LEADERSHIP:		retname :=  70;
+		SKILLID_LOCKPICKING:	retname :=  85;
+		SKILLID_LUMBERJACKING:	retname :=  50;
+		SKILLID_MACEFIGHTING:	retname :=  0;
+		SKILLID_MAGERY:		retname :=  115;
+		SKILLID_MAGICRESISTANCE:	retname :=  85;
+		SKILLID_MEDITATION:		retname :=  120;
+		SKILLID_MINING:		retname :=  40;
+		SKILLID_MUSICIANSHIP:	retname :=  70;
+		SKILLID_NECROMANCY:		retname :=  90;
+		SKILLID_PARRY:			retname := -25;
+		SKILLID_PEACEMAKING:	retname :=  55;
+		SKILLID_POISONING:		retname :=  75;
+		SKILLID_PROVOCATION:	retname :=  70;
+		SKILLID_STEALING:		retname :=  80;
+		SKILLID_STEALTH:		retname :=  75;
+		SKILLID_SWORDSMANSHIP:	retname :=  0;
+		SKILLID_TACTICS:		retname :=  25;
+		SKILLID_TAILORING:		retname :=  75;
+		SKILLID_TAMING:		retname :=  80;
+		SKILLID_TINKERING:		retname :=  75;
+		SKILLID_TRACKING:		retname :=  80;
+		SKILLID_WRESTLING:		retname :=  0;
+		SKILLID_DISCORDANCE:	retname :=  80;
+
+		SKILLID_ARMSLORE:		retname :=  90;
+		SKILLID_BOWCRAFT:		retname :=  50;
+		SKILLID_FORENSICS:		retname :=  90;
+		SKILLID_HERDING:		retname :=  70;
+		SKILLID_ITEMID:		retname :=  110;
+		SKILLID_REMOVETRAP:		retname :=  75;
+		SKILLID_SNOOPING:		retname :=  75;
+		SKILLID_TASTEID:		retname :=  95;
+		SKILLID_VETERINARY:		retname :=  80;
+		SKILLID_AOSNECROMANCY:	retname :=  90;
+		SKILLID_FOCUS:			retname :=  75;
+		SKILLID_CHIVALRY:		retname :=  55;
+		SKILLID_BUSHIDO:		retname :=  55;
+		SKILLID_NINJITSU:		retname :=  75;
+		SKILLID_SPELLWEAVING:	retname :=  115;
+		SKILLID_THROWING:		retname :=  40;
+		SKILLID_IMBUING:		retname :=  75;
+		SKILLID_MYSTICISM:		retname :=  115;
+	endcase
+	return retname;
+endfunction
+
+
+
+
+///////////////////
+//  Creates the gump
+///////////////////
+
+function LoadGumpLayout (character)
+	gumplayout := array { 
+		"nodispose",
+		"page 0",
+		"gumppic 0 50 500",
+		"page 1",
+		"gumppic 0 50 500",
+		"button 356 50 502 502 0 2",
+		"text 50 60 1350 0",
+
+		"text 55 100 0 1",
+		"button 40 105 2104 2103 1 0 1",
+		"text 55 140 0 2",
+		"button 40 145 2104 2103 1 0 2",
+		"text 55 180 0 3",
+		"button 40 185 2104 2103 1 0 3",
+
+		"text 235 60 1350 4",
+
+		"text 245 100 0 5",
+		"button 230 105 2104 2103 1 0 4",
+		"text 245 140 0 6",
+		"button 230 145 2104 2103 1 0 5",
+		"text 245 180 0 7",
+		"button 230 185 2104 2103 1 0 6",
+
+		"text 35 215 0 8",
+		"text 35 235 0 9",
+
+		"button 250 235 2360 2360 1 0 9",			//save changes
+		"text 270 230 37 15",
+
+		"page 2",
+		"gumppic 0 50 500",
+		"button 0 50 501 501 0 1",
+
+		"text 70 60 1350 10",
+
+		"text 55 100 0 11",
+		"button 40 105 2104 2103 1 0 7",
+		
+		"text 235 60 1350 12",
+		
+		"text 245 100 0 13",
+		"button 230 105 2104 2103 1 0 8"
+	};
+	
+	gumpdata := array {
+		"Primary Skills",
+		GetSkillName(specs[1])+" " + GetSkillValDisplay (character, specs[1]),
+		GetSkillName(specs[2])+" " + GetSkillValDisplay (character, specs[2]),
+		GetSkillName(specs[3])+" " + GetSkillValDisplay (character, specs[3]),
+		"Secondary Skills",
+		GetSkillName(specs[4])+" " + GetSkillValDisplay (character, specs[4]),
+		GetSkillName(specs[5])+" " + GetSkillValDisplay (character, specs[5]),
+		GetSkillName(specs[6])+" " + GetSkillValDisplay (character, specs[6]),
+		"STR/DEX/INT Caps:",
+		maxstr + " / " + maxdex + " / " + maxint,
+		"Trade skill",
+		GetSkillName(specs[7])+" "+ GetSkillValDisplay(character, specs[7]),
+		"Complementary skill",
+		GetSkillName(specs[8])+" "+ GetSkillValDisplay(character, specs[8]),
+		"",
+		"Save Changes"
+	};
+endfunction
+

@@ -1,0 +1,286 @@
+use uo;
+use os;
+use datafile;
+
+program textcmd_guardspawner (character, text)
+	text := Lower (text);
+	if (!text)
+		var optionmenu := CreateMenu ("Select an option:");
+		AddMenuItem (optionmenu, 0, "Create new guardspawner route");
+		AddMenuItem (optionmenu, 0, "Create new guardspawner post");
+		AddMenuItem (optionmenu, 0, "Delete guardspawner route");
+		AddMenuItem (optionmenu, 0, "Run guardspawner");
+		AddMenuItem (optionmenu, 0, "View guardspawner help");
+		
+		var selection := SelectMenuItem2 (character, optionmenu);
+		if (!selection)
+			SendSysMessage (character, "Canceled");
+			return;
+		endif
+
+		case (selection.index)
+			1:	text := "new route";
+			2:	text := "new post";
+			3:	text := "delete";
+			4:	text := "go";
+			5:	text := "help";
+			default:
+				SendSysMessage (character, "Error in gump return!");
+				return;
+		endcase
+	endif
+	
+	case (text)
+		"new route":
+			CreateNewGuardRoute (character);
+		"new post":
+			CreateNewGuardPost (character);
+		"delete":
+			DeleteGuardRoute (character);
+		"go":
+			SendSysMessage (character, "Forcing guard spawn");
+			start_script (":guardspawner:doguardspawn");
+		"help":
+			SendSysMessage (character, "Guardspawner:  Assorted options related to the guardspawner");
+			SendSysMessage (character, "Options include:");
+			SendSysMessage (character, "new route:  Create a new guardspawner route");
+			SendSysMessage (character, "new post:  Create a new guardspawner post");
+			SendSysMessage (character, "delete:  Delete an existing route");
+			SendSysMessage (character, "go:  Force the guardspawner to run, if it isn't running already");
+			SendSysMessage (character, "help:  You're looking at it");
+		default:
+			SendSysMessage (character, "Unknown option.  Use '.guardspawner help' for more information");
+	endcase
+endprogram
+
+
+
+
+///////////////////
+//  Create a new guard route
+///////////////////
+
+function CreateNewGuardRoute (character)
+	UnloadDataFile (":guardspawner:guardspawn");
+	var guardspawn_df := OpenDataFile (":guardspawner:guardspawn");
+	if (!guardspawn_df)
+		guardspawn_df := CreateDataFile (":guardspawner:guardspawn");
+		if (!guardspawn_df)
+			SendSysMessage (character, "Unable to open guard spawn file");
+			Syslog ("Error opening guardspawn data file!");
+			return;
+		endif
+	endif
+	
+	//Get a name for this spawn
+	SendSysMessage (character, "Enter a name for this guard spawn location");
+	var spawnname := SendTextEntryGump (character, "", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "Spawnname:");
+	if (!spawnname)
+		SendSysMessage (character, "Canceled");
+		return;
+	elseif (spawnname.size > 30)
+		SendSysMessage (character, "Name too long.  Canceled");
+		return;
+	endif
+	
+	//make sure the name isn't already used
+	if (guardspawn_df.FindElement(spawnname))
+		SendSysMessage (character, "That name is already in use.  Canceled.");
+		return;
+	endif
+
+	//Now get down to selecting locations
+	SendSysMessage (character, "Target the location where the guard should start/spawn:");
+	var startloc := TargetCoordinates (character);
+	if (!startloc)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+	
+	SendSysMessage (character, "Target the first walk-to location:");
+	SendSysMessage (character, "(This should also be near the last point, creating a continuous route)");
+	var first_loc := TargetCoordinates (character);
+	if (!first_loc)
+		SendSysMessage (character, "Canceled (at least 2 points needed)");
+		return;
+	elseif (first_loc.item)
+		SendSysMessage (character, "Error:  there's an item there.");
+		return;
+	endif
+	
+	SendSysMessage (character, "Target the second walk-to location:");
+	SendSysMessage (character, "(This should not be too far from the first, 10 tiles or so at most)");
+	var second_loc := TargetCoordinates (character);
+	if (!second_loc)
+		SendSysMessage (character, "Canceled (at least 2 points needed)");
+		return;
+	elseif (second_loc.item)
+		SendSysMessage (character, "Error:  there's an item there.");
+		return;
+	endif
+
+	var myroute := dictionary;
+	myroute[1] := {"go", first_loc.x, first_loc.y, first_loc.z};
+	myroute[2] := {"go", second_loc.x, second_loc.y, second_loc.z};
+	var pointcounter := 3;
+
+	SendSysMessage (character, "Continue adding locations, press escape to cancel.");
+	SendSysMessage (character, "(If you target the same location twice in a row, the guard will pause there.)");
+	SendSysMessage (character, "(If you target a door, the guard will open it, if he's close.)");
+	var done := 0;
+	var targetted;
+	var oldtargetted := second_loc;
+	repeat
+		targetted := TargetCoordinates (character);
+		if (!targetted)
+			//save the data and finish up
+			UnloadDataFile (":guardspawner:guardspawn");
+			guardspawn_df := OpenDataFile (":guardspawner:guardspawn");
+			if (!guardspawn_df)
+				SendSysMessage (character, "Error saving data:  datafile no longer exists");
+				return;
+			endif
+			guardspawn_df.CreateElement(spawnname);
+			var thespawn := guardspawn_df.FindElement(spawnname);
+			if (!thespawn)
+				SendSysMessage (character, "Unable to create element in datafile");
+				return;
+			endif
+			
+			thespawn.SetProp ("npctemplate", ":guardspawner:guardspawner_townguard");
+			thespawn.SetProp ("spawnloc", array{startloc.x, startloc.y, startloc.z});
+			thespawn.SetProp ("route", myroute);
+
+			UnloadDataFile (":guardspawner:guardspawn");
+			
+			SendSysMessage (character, "Finished");
+			return;
+		endif
+
+		if (targetted.x == oldtargetted.x and targetted.y == oldtargetted.y)
+			SendSysMessage (character, "Inserting pause");
+			myroute[pointcounter] := {"wait"};
+			pointcounter := pointcounter + 1;
+		elseif (targetted.item.isa (POLCLASS_DOOR))
+			SendSysMessage (character, "Inserting door");
+			myroute[pointcounter] := {"door"};
+			pointcounter := pointcounter + 1;
+		else
+			myroute[pointcounter] := {"go", targetted.x, targetted.y, targetted.z};
+			pointcounter := pointcounter + 1;
+			if (pointcounter > 75)
+				SendSysMessage (character, "The route is getting rather large.  Maybe you should wrap it up...");
+			elseif (pointcounter == 50)
+				SendSysMessage (character, "The route is getting rather large.  Maybe you should wrap it up...");
+			endif
+			oldtargetted := targetted;
+		endif
+	until (done or !character);
+endfunction
+
+
+
+
+///////////////////
+//  Create new guardspawner guard post
+///////////////////
+
+function CreateNewGuardPost (character)
+	UnloadDataFile (":guardspawner:guardspawn");
+	var guardspawn_df := OpenDataFile (":guardspawner:guardspawn");
+	if (!guardspawn_df)
+		guardspawn_df := CreateDataFile (":guardspawner:guardspawn");
+		if (!guardspawn_df)
+			SendSysMessage (character, "Unable to open guard spawn file");
+			Syslog ("Error opening guardspawn data file!");
+			return;
+		endif
+	endif
+
+	//Get a name for this spawn
+	SendSysMessage (character, "Enter a name for this guard spawn location");
+	var spawnname := SendTextEntryGump (character, "", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "Spawnname:");
+	if (!spawnname)
+		SendSysMessage (character, "Canceled");
+		return;
+	elseif (spawnname.size > 30)
+		SendSysMessage (character, "Name too long.  Canceled");
+		return;
+	endif
+	
+	//make sure the name isn't already used
+	if (guardspawn_df.FindElement(spawnname))
+		SendSysMessage (character, "That name is already in use.  Canceled.");
+		return;
+	endif
+
+	//Now get down to selecting locations
+	SendSysMessage (character, "Target the location where the guard should start/spawn:");
+	SendSysMessage (character, "(Your facing determines facing of guard)");
+	var startloc := TargetCoordinates (character);
+	if (!startloc)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+
+	//save the data and finish up
+	UnloadDataFile (":guardspawner:guardspawn");
+	guardspawn_df := OpenDataFile (":guardspawner:guardspawn");
+	if (!guardspawn_df)
+		SendSysMessage (character, "Error saving data:  datafile no longer exists");
+		return;
+	endif
+	guardspawn_df.CreateElement(spawnname);
+	var thespawn := guardspawn_df.FindElement(spawnname);
+	if (!thespawn)
+		SendSysMessage (character, "Unable to create element in datafile");
+		return;
+	endif
+	
+	thespawn.SetProp ("npctemplate", ":guardspawner:guardspawner_post_guard");
+	thespawn.SetProp ("spawnloc", array {startloc.x, startloc.y, startloc.z});
+	thespawn.SetProp ("spawnfacing", character.facing);
+
+	UnloadDataFile (":guardspawner:guardspawn");
+
+endfunction
+
+
+
+
+///////////////////
+//  Deletes an existing guard route
+///////////////////
+
+function DeleteGuardRoute (character)
+	UnloadDataFile (":guardspawner:guardspawn");
+	var guardspawn_df := OpenDataFile (":guardspawner:guardspawn");
+	if (!guardspawn_df)
+		guardspawn_df := CreateDataFile (":guardspawner:guardspawn");
+		if (!guardspawn_df)
+			SendSysMessage (character, "Unable to open guard spawn file");
+			Syslog ("Error opening guardspawn data file!");
+			return;
+		endif
+	endif
+	
+	//Get the name of the route to delete
+	var spawnname := SendTextEntryGump (character, "Enter a guardspawner route to delete", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "Spawnname:");
+	if (!spawnname)
+		SendSysMessage (character, "Canceled");
+		return;
+	elseif (spawnname.size > 30)
+		SendSysMessage (character, "Name too long.  Canceled");
+		return;
+	endif
+	
+	//make sure the name isn't already used
+	if (guardspawn_df.FindElement(spawnname))
+		guardspawn_df.DeleteElement(spawnname);
+		SendSysMessage (character, "Route deleted");
+		SendSysMessage (character, "You can .kill the guard now, if you want");
+	else
+		SendSysMessage (character, "Invalid route name");
+	endif
+
+endfunction

@@ -1,0 +1,107 @@
+use uo;
+use os;
+use datafile;
+
+include "include/client";
+include "include/spawn";
+include "include/wodinc";
+
+var guardspawn_df, global_guard_list;
+
+program guardspawner ()
+	if (GetGlobalProperty ("#guardspawner_running"))
+		if (GetProcess (GetGlobalProperty ("#guardspawner_running")))
+			SendGMErrorMessage ("Guardspawner is still running from last invocation", 1);
+			return;
+		endif
+	endif
+	SetGlobalProperty ("#guardspawner_running", GetPID());
+	SendGMErrorMessage ("Guardspawner running", 0);
+	
+	UnloadDataFile (":guardspawner:guardspawn");
+	guardspawn_df := OpenDataFile (":guardspawner:guardspawn");
+	if (!guardspawn_df)
+		guardspawn_df := CreateDataFile (":guardspawner:guardspawn");
+		if (!guardspawn_df)
+			SendGMErrorMessage ("Error opening guardspawn data file!", 1);
+			return;
+		endif
+	endif
+
+	global_guard_list := GetGlobalProperty ("global_guard_list");
+	if (!global_guard_list)
+		global_guard_list := dictionary;
+	endif
+	
+	var guardserial, theguard;
+	foreach dfkey in (guardspawn_df.Keys())
+		guardserial := global_guard_list[dfkey];
+		if (guardserial)
+			theguard := SystemFindObjectBySerial (guardserial);
+			if (!theguard)
+				SpawnNewGuard (dfkey);
+				sleep (1);
+			endif
+		else
+			SpawnNewGuard (dfkey);
+			sleep (1);
+		endif
+	endforeach
+
+	SetGlobalProperty ("global_guard_list", global_guard_list);
+	EraseGlobalProperty ("#guardspawner_running");
+	UnloadDataFile (":guardspawner:guardspawn");
+	SendGMErrorMessage ("Guardspawner finished", 0);
+endprogram
+
+
+
+
+///////////////////
+//  Spawns a new guard, if needed
+///////////////////
+
+function SpawnNewGuard (dfkey)
+	var theelem := guardspawn_df.FindElement(dfkey);
+	if (!theelem)
+		SendGMErrorMessage ("Unable to find guard datafile key " + dfkey, 1);
+		return;
+	endif
+	var npctemplate := theelem.GetProp ("npctemplate");
+        SendGMErrorMessage(npctemplate);
+
+	if (!npctemplate)
+		SendGMErrorMessage ("Error in guard datafile key " + dfkey, 1);
+		return;
+	endif
+
+	var spawnloc := theelem.GetProp ("spawnloc");
+	if (!spawnloc or spawnloc.Size() < 3)
+		SendGMErrorMessage ("Error in guard datafile key " + dfkey, 1);
+		return;
+	endif
+	var spawnlocr := spawnloc[4];
+	if (!spawnlocr)
+		spawnlocr := _DEFAULT_REALM;
+	endif
+	
+	var theguard := SpawnNPCAtLocation (npctemplate, spawnloc[1], spawnloc[2], spawnloc[3], 0, spawnlocr);
+	if (!theguard)
+		SendGMErrorMessage ("Unable to spawn guard " + dfkey + ": " + theguard.errortext, 1);
+		return;
+	endif
+
+	SendGMErrorMessage ("Respawned guard " + dfkey, 0);
+
+	SetObjProperty (theguard, "guardspawner", dfkey);
+	global_guard_list[dfkey] := theguard.serial;
+	return;
+endfunction
+
+
+
+
+
+
+
+

@@ -1,0 +1,357 @@
+use uo;
+use os;
+use npc;
+
+include "../pkg/npcs/npc_util";
+include "../pkg/guilds/guilds";
+include "../pkg/npcs/main_ai/setup/setup";
+
+CONST HALT_THRESHOLD := 6;
+
+var next_possible_spam := ReadGameClock ();
+
+program guild_questmaster_ai()
+	if (!me.backpack)
+		DoMerchantOnCreationSetup ();
+	endif
+
+	EnableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN, 2);
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_ENTEREDAREA, HALT_THRESHOLD);
+	WalkHome ();
+
+	var ev;
+	while (me)
+		if (me.hidden)
+			sleep (30);
+			me.hidden := 0;
+		endif
+		
+		ev := wait_for_event (120);
+		if (ev)
+			ProcessEvent (ev);
+		endif
+	endwhile
+
+endprogram
+
+
+
+
+///////////////////
+//  pretty obvious - processes events picked up in the main AI loop
+///////////////////
+
+function ProcessEvent (byref ev)
+
+	case (ev.type)
+		EVID_ENGAGED:
+		EVID_DAMAGED:
+			me.hidden := 1;
+			SetVital (me, "Life", GetVitalMaximumValue (me, "Life"));
+		EVID_ENTEREDAREA:
+			if (ev.source.npctemplate)
+				return 0;
+			endif
+
+			if (ReadGameClock() > next_possible_spam)
+				GreetCustomer (ev.source);
+				next_possible_spam := ReadGameClock() + 60;
+			endif
+		EVID_SPEECH:
+			if (ev.source.npctemplate)
+				return 0;
+			endif
+
+			var evtext := lower(ev.text);
+			if (evtext["buy"])
+				TurnToward (ev.source);
+				PrintTextAbovePrivate (me, "Sorry, but I don't handle that.  Talk to the guild shopkeep.", ev.source);
+			elseif (evtext["sell"])
+				TurnToward (ev.source);
+				PrintTextAbovePrivate (me, "Sorry, but I don't handle that.  Talk to the guild shopkeep.", ev.source);
+			elseif (evtext["pay"])
+				TurnToward (ev.source);
+				if (!DetermineMoneyOwed (ev.source))
+					PrintTextAbovePrivate (me, "You don't owe us anything right now.", ev.source);
+					return 1;
+				endif
+				var player := ev.source;
+				var owed := DetermineMoneyOwed (player);
+				PrintTextAbovePrivate (me, "You owe us " + owed + " gold.", player);
+				if (!player.spendgold (owed) )
+					sleep (1);
+					PrintTextAbovePrivate (me, "Come back when you have the money.", ev.source);
+				else
+					PrintTextAbovePrivate (me, "Thank you!", ev.source);
+					PayOffGuildFees (ev.source);
+				endif
+			elseif (evtext["status"])
+				TurnToward (ev.source);
+				if (IsAGuildMember (ev.source, "adventurers_guild") )
+					var player := ev.source;
+					if (GetObjProperty (player, "guild_quest") )
+						var quest_parms := GetObjProperty (player, "guild_quest");
+						if (quest_parms [7] < ReadGameClock () )
+							PrintTextAbovePrivate (me, "Looks like you didn't get that last quest done in time.", player);
+							EraseObjProperty (player, "guild_quest");
+							return 1;
+						endif
+
+						var quest_cfg_file := ReadConfigFile (":adventurers_guild:quests_heads");
+						var chosen_quest := FindConfigElem (quest_cfg_file, quest_parms[2]);
+						if (!chosen_quest)
+							Syslog ("error opening " + quest_parms[2] + " quest in adventurers guild quest cfgfile!");
+							PrintTextAbovePrivate (me, "Sorry, but I'm having a bit of a problem right now.", player);
+							return;
+						endif
+						
+						var timeleft := quest_parms[7] - ReadGameClock();
+						var daysleft := CINT (timeleft/86400);
+						if (daysleft < 1)
+							daysleft := 1;
+						endif
+
+						var desc_plural := chosen_quest.desc_plural;
+						PrintTextAbovePrivate (me, "Bring me the heads of " + quest_parms[6] + " " + desc_plural + " within " 
+							+ daysleft + " more days.", player);
+					else
+						PrintTextAbovePrivate (me, "Welcome back!  Good to see you again.", ev.source);
+					endif
+				else
+					PrintTextAbovePrivate (me, "Thinking about joining?  We can always use more members.", ev.source);
+				endif
+			elseif (evtext["quest"])
+				TurnToward (ev.source);
+				if (IsAGuildMember (ev.source, "adventurers_guild") )
+					var parms := array;
+					parms[1] := me;
+					parms[2] := ev.source;
+					start_script (":adventurers_guild:givequest", parms);
+				else
+					PrintTextAbovePrivate (me, "I'm afraid I only give quests to members.  Want to join?", ev.source);
+				endif
+			elseif (evtext["join"])
+				TurnToward (ev.source);
+				if (IsAGuildMember (ev.source, "adventurers_guild") )
+					PrintTextAbovePrivate (me, "But you're already a member!", ev.source);
+				elseif (!CanJoinGuild (ev.source))
+					PrintTextAbovePrivate (me, "I'm afraid you can't join us right now.", ev.source);
+				else
+					PrintTextAbovePrivate (me, "It costs 1000 gold to join, and 100 gold per week in guild dues.", ev.source);
+					if (!YesNo (ev.source, "Join guild?") )
+						PrintTextAbovePrivate (me, "OK, then.  Maybe another time.", ev.source);
+					else
+						var player := ev.source;
+						if (!player.spendgold (1000) )
+							PrintTextAbovePrivate (me, "Come back when you have the money.", ev.source);
+						else
+							JoinGuild (ev.source, "adventurers_guild", "Adventurer's Guild");
+							PrintTextAbovePrivate (me, "Welcome to the guild, " + ev.source.name + "!", ev.source);
+						endif
+					endif
+				endif
+			elseif (evtext["resign"] or evtext["quit"])
+				TurnToward (ev.source);
+				if (!IsAGuildMember (ev.source, "adventurers_guild") )
+					PrintTextAbovePrivate (me, "But you're not even a member!", ev.source);
+				else
+					PrintTextAbovePrivate (me, "Are you sure you want to quit?  You won't be able to join again for some time.", ev.source);
+					if (!YesNo (ev.source, "Quit guild?") )
+						PrintTextAbovePrivate (me, "Glad to hear it.", ev.source);
+					else
+						PrintTextAbovePrivate (me, "If you're sure...  Sorry to see you go.", ev.source);
+						QuitGuild (ev.source, "adventurers_guild");
+					endif
+				endif
+			elseif (evtext["transfer"])
+				if (IsAGuildMember (ev.source, "adventurers_guild") )
+					TurnToward (ev.source);
+					TransferTickets (ev.source);
+				endif
+			endif
+
+		EVID_MERCHANT_BOUGHT:
+			TurnToward (ev.source);
+			return 1;
+
+		EVID_ITEM_GIVEN:
+			TurnToward (ev.source);
+			if (!AcceptItem (ev.source, ev.item))
+				MoveItemToContainer (ev.item, ev.source.backpack);
+			endif
+	endcase
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  when a player enters the NPCs range, this function makes them
+//  yell a greeting
+///////////////////
+
+function GreetCustomer (customer)
+
+	if (customer.npctemplate)
+		return;
+	endif
+
+	if (customer.concealed)
+		return;
+	endif
+
+	TurnToward (customer);
+	case (RandomInt (10) )
+		0:
+			Say ("Glamour! Excitement!  Adventure!  Join today!");
+		1:
+			Say ("Welcome to the Adventurer's Guild!");
+		2:
+			Say ("I have a lot of job orders to fill, if you're interested");
+		3:
+			Say ("Join today and earn exciting rewards!");
+		4:
+			Say ("Want to travel to exotic locations?  Join today!");
+		5:
+			Say ("Maybe you can help me with a little assignment?");
+		6:
+			Say ("I have quite a few assignments for experienced adventurers.");
+		7:
+			Say (customer.name + "!  Its good to see you again.");
+		8:
+			Say ("I'm looking for a few good people.");
+		9:
+			Say ("Ah, " + customer.name + ", one of my best customers returns!");
+	endcase
+
+endfunction
+
+
+
+
+///////////////////
+//  when given a head, this function is called to complete the quest
+///////////////////
+
+function AcceptItem (player, item)
+	var quest_parms := GetObjProperty (player, "guild_quest");
+	if (!quest_parms)
+		PrintTextAbovePrivate (me, "Why are you giving me this?", player);
+		return 0;
+	endif
+
+	if (CINT (quest_parms[3]) != item.objtype)
+		PrintTextAbovePrivate (me, "Why are you giving me this?", player);
+		return 0;
+	endif
+
+	var gottenprop := Lower (GetObjProperty (item, quest_parms[4]));
+	if (!gottenprop or gottenprop != Lower (quest_parms[5]))
+		PrintTextAbovePrivate (me, "Sorry, but this isn't the right one.", player);
+		return 0;
+	endif
+
+	if (GetObjProperty (item, "preserved") )
+		PrintTextAbovePrivate (me, "What did you do to this thing?", player);
+		return 0;
+	endif
+	
+	if (quest_parms [7] < ReadGameClock () )
+		PrintTextAbovePrivate (me, "Looks like you didn't get that one done on time...", player);
+		EraseObjProperty (player, "guild_quest");
+		return 0;
+	endif
+
+	//if this is the last item needed
+	if (quest_parms [6] == 1)
+		PrintTextAbovePrivate (me, "Congratulations!  This is it!", player);
+		Sleep (1);
+		PrintTextAbovePrivate (me, "I'll add the " + quest_parms[8] + " tickets to your account!", player);
+		AddTicketsToPlayer (player.acctname, quest_parms[8], "adventurers_guild");
+		AddToMonthlyTicketCounter (player.acctname, quest_parms[8], "adventurers_guild");
+		AddGuildRankingPoints (player, quest_parms[8], "adventurers_guild");
+		DestroyItem (item);
+		EraseObjproperty (player, "guild_quest");
+		return 1;
+	endif
+
+	//otherwise, just give them a point and tell them to keep working on it.
+	quest_parms[6] := quest_parms[6] - 1;
+	quest_parms[8] := quest_parms[8] - 1;
+	
+	PrintTextAbovePrivate (me, "I'll give you one ticket for this one.", player);
+	Sleep (1);
+	PrintTextAbovePrivate (me, "Bring me " + quest_parms[6] + " more to complete the quest.", player);
+	AddTicketsToPlayer (player.acctname, 1, "adventurers_guild");
+	AddToMonthlyTicketCounter (player.acctname, 1, "adventurers_guild");
+	AddGuildRankingPoints (player, 1, "adventurers_guild");
+	DestroyItem (item);
+	SetObjProperty (player, "guild_quest", quest_parms);
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+// allows a guild member to transfer tickets to another guild member
+///////////////////
+
+function TransferTickets (player)
+	PrintTextAbovePrivate (me, "Who do you want to transfer tickets to?", player);
+	var targetted := Target (player);
+	if (!targetted)
+		PrintTextAbovePrivate (me, "OK, never mind then.", player);
+		return;
+	endif
+
+	if (!targetted.acctname or targetted.dead or targetted == player)
+		PrintTextAbovePrivate (me, "I really don't think they want them.", player);
+		return;
+	endif
+
+	var playertickets := CountPlayersTickets (player.acctname, "adventurers_guild");
+	var ticketamount := CINT (Sendtextentrygump (player, "How many tickets to transfer:", 
+				TE_CANCEL_DISABLE, TE_STYLE_NORMAL, 10, "(You have " + playertickets + " tickets)"));
+
+	if (!ticketamount or ticketamount < 1)
+		PrintTextAbovePrivate (me, "OK, never mind then.", player);
+		return;
+	endif
+
+	if (ticketamount > playertickets)
+		PrintTextAbovePrivate (me, "You don't even have that many!", player);
+		return;
+	endif
+
+	AddTicketsToPlayer (player.acctname, (0-ticketamount), "adventurers_guild");
+	AddTicketsToPlayer (targetted.acctname, ticketamount, "adventurers_guild");
+	PrintTextAbovePrivate (me, "OK, there you go.", player);
+	PrintTextAbovePrivate (me, player.name + " just gave you " + ticketamount + " tickets.", targetted);
+endfunction
+
+
+
+
+///////////////////
+//  called when the NPC is first created, this function names
+//  them and clothes them
+///////////////////
+
+function DoMerchantOnCreationSetup()
+	var newbackpack := CreateItemAtLocation (5288, 1176, 0, UOBJ_BACKPACK, 1, REALM_BRITANNIA);
+	EquipItem (me, newbackpack);
+
+	me.gender := RandomInt (2);
+	me.graphic := 400+me.gender;
+	me.name := RandomName ( me );
+	me.title_suffix := " the Guildmaster";
+	me.title_race := "Adventurer's Guild";
+
+	var parms := array;
+	parms[1]:= me;
+	parms[2]:= "rich";
+	start_script ("::/misc/dressme", parms);
+endfunction

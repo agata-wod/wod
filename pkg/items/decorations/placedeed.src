@@ -1,0 +1,1632 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/utility";
+include "include/itemtypes";
+include "../pkg/items/housing/house";
+
+
+program Place_Deed (character, deed)
+	var maxlockdowns, lockdowns;
+
+	if (!ReserveItem (deed))
+		SendSysMessage (character, "You can't use this right now.");
+		return;
+	endif
+
+	var sign := FindHouseSign (character);
+	if (!sign)
+		if (!character.cmdlevel)
+			SendSysMessage (character, "You must be in your house to use this!");
+			return;
+		endif
+		SendSysMessage (character, "There's no house sign here, but we'll let that go.");
+		maxlockdowns := 100;
+		lockdowns := 0;
+	else
+		maxlockdowns := GetMaxLockdowns (sign);
+		lockdowns := GetLockdowns (sign);
+
+		if (lockdowns >= maxlockdowns)
+			SendSysMessage (character, "You don't have any more lockdowns left.");
+			return;
+		endif
+	endif
+
+	foreach item in ListItemsNearLocation (character.x, character.y, character.z, 1, character.realm)
+ 		If (item.isa (POLCLASS_DOOR))
+			SendSysMessage (character, "You're too close to a door!");
+			return;
+  		endif
+	endforeach
+
+	foreach item in ListItemsNearLocationWithFlag (character.x, character.y, character.z, 0, TILEDATA_FLAG_IMPASSABLE, character.realm)
+		if (item.z == character.z)
+			SendSysMessage (character, "There's already an item here!");
+			return;
+		endif
+	endforeach
+
+	if (GetObjProperty (deed, "itemtype"))
+		DoOldPlaceDeedStuff (character, deed, sign);
+		return;
+	endif
+
+	var characterx := character.x;
+	var charactery := character.y;
+
+	var item;
+	case (deed.objtype)
+		0xB000:	//	Anvils
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x0FAF, "Anvil");
+			AddMenuItem (select_menu, 0x0FB0, "Anvil");
+			AddMenuItem (select_menu, 0x2dd5, "Elven Anvil");
+			AddMenuItem (select_menu, 0x2dd6, "Elven Anvil");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			item := CreateItemAtLocation (character.x, character.y, character.z, selected_item.objtype, 1, character.realm);
+			if (item)
+				if (sign)
+					SetObjProperty (item, "lockeddown", sign.serial);
+				endif
+				SetObjProperty (item, "deedobjtype", deed.objtype);
+				DestroyItem (deed);
+			else
+				SendSysMessage (character, "Can't place it here.");
+			endif
+			return;
+
+		0xB001:	//forge
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x0FB1, "Small forge");
+			AddMenuItem (select_menu, 0x197A, "Forge");
+			AddMenuItem (select_menu, 0x1986, "Forge");
+			AddMenuItem (select_menu, 0x199E, "Forge");
+			AddMenuItem (select_menu, 0x1992, "Forge");
+			AddMenuItem (select_menu, 0x2dd8, "Elven Forge");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+		
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+	
+			case (selected_item.index)
+			1:	//small forge
+				var item := CreateItemAtLocation (character.x, character.y, character.z, 0x0FB1, 1, character.realm);
+				if (item)
+					if (sign)
+						SetObjProperty (item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (item, "deedobjtype", deed.objtype);
+					DestroyItem (deed);
+				else
+					SendSysMessage (character, "Can't place it here.");
+				endif
+			2:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_forge_we");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+
+			3:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_forge_ns");
+				MoveObjectToLocation (character, character.x+1, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+
+			4:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_forge_ew");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+
+			5:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_forge_sn");
+				MoveObjectToLocation (character, character.x+1, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+				
+			6:	//elven forge
+				var item := CreateItemAtLocation (character.x, character.y, character.z, 0x2dd8, 1, character.realm);
+				if (item)
+					if (sign)
+						SetObjProperty (item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (item, "deedobjtype", deed.objtype);
+					DestroyItem (deed);
+				else
+					SendSysMessage (character, "Can't place it here.");
+				endif
+			endcase
+			return;
+
+		0xB002:	//	Training Dummies
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x1070, "Training Dummy");
+			AddMenuItem (select_menu, 0x1074, "Training Dummy");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			item := CreateItemAtLocation (character.x, character.y, character.z, selected_item.objtype, 1, character.realm);
+			if (item)
+				if (sign)
+					SetObjProperty (item, "lockeddown", sign.serial);
+				endif
+				SetObjProperty (item, "deedobjtype", deed.objtype);
+				DestroyItem (deed);
+			else
+				SendSysMessage (character, "Can't place it here.");
+			endif
+			return;
+
+		0xB003:	//	Pickpocket Dip Deeds
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x1EC0, "Pickpocket Dip");
+			AddMenuItem (select_menu, 0x1EC3, "Pickpocket Dip");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			item := CreateItemAtLocation (character.x, character.y, character.z, selected_item.objtype, 1, character.realm);
+			if (item)
+				if (sign)
+					SetObjProperty (item, "lockeddown", sign.serial);
+				endif
+				SetObjProperty (item, "deedobjtype", deed.objtype);
+				DestroyItem (deed);
+			else
+				SendSysMessage (character, "Can't place it here.");
+			endif
+			return;
+
+		0xB004:	//Spinning wheels
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x1015, "Spinning Wheel");
+			AddMenuItem (select_menu, 0x1019, "Spinning Wheel");
+			AddMenuItem (select_menu, 0x101C, "Spinning Wheel");
+			AddMenuItem (select_menu, 0x10A4, "Spinning Wheel");
+			AddMenuItem (select_menu, 0x2dd9, "Elven Spinning Wheel");
+			AddMenuItem (select_menu, 0x2dda, "Elven Spinning Wheel");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			item := CreateItemAtLocation (character.x, character.y, character.z, selected_item.objtype, 1, character.realm);
+			if (item)
+				if (sign)
+					SetObjProperty (item, "lockeddown", sign.serial);
+				endif
+				SetObjProperty (item, "deedobjtype", deed.objtype);
+				DestroyItem (deed);
+			else
+				SendSysMessage (character, "Can't place it here.");
+			endif
+			return;
+
+		0xB005:	//	Beds
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x0A74, "Bed");
+			AddMenuItem (select_menu, 0x0A70, "Bed");
+			AddMenuItem (select_menu, 0x0A5D, "Bed");
+			AddMenuItem (select_menu, 0x0A63, "Bed");
+			AddMenuItem (select_menu, 0x11e4, "Bed");
+			AddMenuItem (select_menu, 0x11e2, "Bed");
+			AddMenuItem (select_menu, 0x3053, "Bed");
+			AddMenuItem (select_menu, 0x3058, "Bed");
+			AddMenuItem (select_menu, 0x304d, "Bed");
+			AddMenuItem (select_menu, 0x3051, "Bed");
+			AddMenuItem (select_menu, 0x295c, "Futon");
+			AddMenuItem (select_menu, 0x295d, "Futon");
+			AddMenuItem (select_menu, 0x295e, "Futon");
+			AddMenuItem (select_menu, 0x295f, "Futon");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			case (selected_item.index)
+			1:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_largebed_ns");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+
+			2:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_largebed_ew");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+
+			3:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_smallbed_ew");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+
+			4:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_smallbed_ns");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+
+			5:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_strawmat_ew");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+
+			6:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_strawmat_ns");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+				
+			7:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_largeelvenbed_ew");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+
+			8:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_largeelvenbed_ns");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+
+			9:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_smallelvenbed_ew");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+
+			10:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_smallelvenbed_ns");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+
+			11:
+				CreateSinglePartDeededItem (character, deed, sign, character.x, character.y, character.z, 0x295c);
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+				
+			12:
+				CreateSinglePartDeededItem (character, deed, sign, character.x, character.y, character.z, 0x295d);
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+				
+			13:
+				CreateSinglePartDeededItem (character, deed, sign, character.x, character.y, character.z, 0x295e);
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+				
+			14:
+				CreateSinglePartDeededItem (character, deed, sign, character.x, character.y, character.z, 0x295f);
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+				
+			endcase
+			return;
+
+		0xB006:	//	looms
+			if (lockdowns + 1 >= maxlockdowns)
+				SendSysMessage (character, "You don't have enough lockdowns left.");
+				return;
+			endif
+
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x105F, "Loom");
+			AddMenuItem (select_menu, 0x1062, "Loom");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			case (selected_item.index)
+			1:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_loom_ns");
+				MoveObjectToLocation (character, character.x+1, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+
+			2:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_loom_ew");
+				MoveObjectToLocation (character, character.x, character.y+1, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endcase
+			return;
+
+		0xB007:	//	mills
+			if (lockdowns + 1 >= maxlockdowns)
+				SendSysMessage (character, "You don't have enough lockdowns left.");
+				return;
+			endif
+
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x1922, "Mill");
+			AddMenuItem (select_menu, 0x192E, "Mill");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			case (selected_item.index)
+			1:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_mill_ew");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+
+			2:
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_mill_ns");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endcase
+			return;
+
+		0xB008:	//	pentagram
+			if (lockdowns + 8 >= maxlockdowns)
+				SendSysMessage (character, "You don't have enough lockdowns left.");
+				return;
+			endif
+			
+			CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_pentagram");
+			return;
+
+		0xB009:	//	Brown Bearskin rug
+			if (lockdowns + 8 >= maxlockdowns)
+				SendSysMessage (character, "You don't have enough lockdowns left.");
+				return;
+			endif
+
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x1E37, "Bearskin rug");
+			AddMenuItem (select_menu, 0x1E41, "Bearskin rug");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.objtype == 0x1E37)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_bearskinrug_brown_ns");
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_bearskinrug_brown_ew");
+			endif
+			return;
+
+		0xB00A:	//	White Bearskin rug
+			if (lockdowns + 8 >= maxlockdowns)
+				SendSysMessage (character, "You don't have enough lockdowns left.");
+				return;
+			endif
+
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x1E4A, "Bearskin rug");
+			AddMenuItem (select_menu, 0x1E54, "Bearskin rug");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.objtype == 0x1E4A)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_bearskinrug_white_ns");
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_bearskinrug_white_ew");
+			endif
+			return;
+
+		0xB00B:	//	Fireplaces
+			if (lockdowns + 1 >= maxlockdowns)
+				SendSysMessage (character, "You don't have enough lockdowns left.");
+				return;
+			endif
+
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x0953, "Fireplace");
+			AddMenuItem (select_menu, 0x0961, "Fireplace");
+			AddMenuItem (select_menu, 0x0937, "Fireplace");
+			AddMenuItem (select_menu, 0x0945, "Fireplace");
+			AddMenuItem (select_menu, 0x0475, "Fireplace");
+			AddMenuItem (select_menu, 0x047B, "Fireplace");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			item := CreateItemAtLocation (character.x, character.y, character.z, selected_item.objtype, 1, character.realm);
+			if (item)
+				if (sign)
+					SetObjProperty (item, "lockeddown", sign.serial);
+				endif
+				SetObjProperty (item, "deedobjtype", deed.objtype);
+				item.movable := 0;
+				DestroyItem (deed);
+			else
+				SendSysMessage (character, "Can't place it here.");
+			endif
+
+			case (item.objtype)
+				0x0953:
+					var new_item := CreateItemAtLocation (character.x, character.y-1, character.z, 0x0959, 1, character.realm);
+					if (sign)
+						SetObjProperty (new_item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (new_item, "deedobjtype", deed.objtype);
+					SetObjProperty (new_item, "otheritems", array{item.serial, new_item.serial});
+					SetObjProperty (item, "otheritems",array {item.serial, new_item.serial});
+					new_item.movable := 0;
+				0x0961:
+					var new_item := CreateItemAtLocation (character.x-1, character.y, character.z, 0x0967, 1, character.realm);
+					if (sign)
+						SetObjProperty (new_item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (new_item, "deedobjtype", deed.objtype);
+					SetObjProperty (new_item, "otheritems", array{item.serial, new_item.serial});
+					SetObjProperty (item, "otheritems", array{item.serial, new_item.serial});
+					new_item.movable := 0;
+				0x0937:
+					var new_item := CreateItemAtLocation (character.x, character.y-1, character.z, 0x093D, 1, character.realm);
+					if (sign)
+						SetObjProperty (new_item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (new_item, "deedobjtype", deed.objtype);
+					SetObjProperty (new_item, "otheritems", array{item.serial, new_item.serial});
+					SetObjProperty (item, "otheritems", array{item.serial, new_item.serial});
+					new_item.movable := 0;
+				0x0945:
+					var new_item := CreateItemAtLocation (character.x-1, character.y, character.z, 0x094B, 1, character.realm);
+					if (sign)
+						SetObjProperty (new_item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (new_item, "deedobjtype", deed.objtype);
+					SetObjProperty (new_item, "otheritems", array{item.serial, new_item.serial});
+					SetObjProperty (item, "otheritems", array{item.serial, new_item.serial});
+					new_item.movable := 0;
+				0x0475:
+					var new_item := CreateItemAtLocation (character.x, character.y-1, character.z, 0x0489, 1, character.realm);
+					if (sign)
+						SetObjProperty (new_item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (new_item, "deedobjtype", deed.objtype);
+					SetObjProperty (new_item, "otheritems", array{item.serial, new_item.serial});
+					SetObjProperty (item, "otheritems", array{item.serial, new_item.serial});
+					new_item.movable := 0;
+				0x047B:
+					var new_item := CreateItemAtLocation (character.x-1, character.y, character.z, 0x0482, 1, character.realm);
+					if (sign)
+						SetObjProperty (new_item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (new_item, "deedobjtype", deed.objtype);
+					SetObjProperty (new_item, "otheritems", array{item.serial, new_item.serial});
+					SetObjProperty (item, "otheritems", array{item.serial, new_item.serial});
+					new_item.movable := 0;
+				default:
+					SendSysMessage (character, "Error!  Please report this.");
+					return;
+			endcase;			
+			DestroyItem (deed);
+			return;
+
+		0xB00C:	//	Ovens
+			if (lockdowns + 1 >= maxlockdowns)
+				SendSysMessage (character, "You don't have enough lockdowns left.");
+				return;
+			endif
+
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x092B, "Oven");
+			AddMenuItem (select_menu, 0x0930, "Oven");
+			AddMenuItem (select_menu, 0x0461, "Oven");
+			AddMenuItem (select_menu, 0x046f, "Oven");
+			AddMenuItem (select_menu, 0x2ddb, "Elven Stove");
+			AddMenuItem (select_menu, 0x2ddc, "Elven Stove");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			item := CreateItemAtLocation (character.x, character.y, character.z, selected_item.objtype, 1, character.realm);
+			if (item)
+				if (sign)
+					SetObjProperty (item, "lockeddown", sign.serial);
+				endif
+				SetObjProperty (item, "deedobjtype", deed.objtype);
+				item.movable := 0;
+				item.facing := 29;
+				DestroyItem (deed);
+			else
+				SendSysMessage (character, "Can't place it here.");
+			endif
+
+			case (item.objtype)
+				0x092B:
+					var new_item := CreateItemAtLocation (character.x, character.y-1, character.z, 0x092C, 1, character.realm);
+					if (sign)
+						SetObjProperty (new_item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (new_item, "deedobjtype", deed.objtype);
+					SetObjProperty (new_item, "otheritems", array{item.serial, new_item.serial});
+					SetObjProperty (item, "otheritems", array{item.serial, new_item.serial});
+					new_item.movable := 0;
+					new_item.facing := 29;
+				0x0930:
+					var new_item := CreateItemAtLocation (character.x-1, character.y, character.z, 0x0931, 1, character.realm);
+					if (sign)
+						SetObjProperty (new_item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (new_item, "deedobjtype", deed.objtype);
+					SetObjProperty (new_item, "otheritems", array{item.serial, new_item.serial});
+					SetObjProperty (item, "otheritems", array{item.serial, new_item.serial});
+					new_item.movable := 0;
+					new_item.facing := 29;
+				0x0461:
+					var new_item := CreateItemAtLocation (character.x, character.y-1, character.z, 0x0462, 1, character.realm);
+					if (sign)
+						SetObjProperty (new_item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (new_item, "deedobjtype", deed.objtype);
+					SetObjProperty (new_item, "otheritems", array{item.serial, new_item.serial});
+					SetObjProperty (item, "otheritems", array{item.serial, new_item.serial});
+					new_item.movable := 0;
+					new_item.facing := 29;
+				0x046f:
+					var new_item := CreateItemAtLocation (character.x-1, character.y, character.z, 0x046e, 1, character.realm);
+					if (sign)
+						SetObjProperty (new_item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (new_item, "deedobjtype", deed.objtype);
+					SetObjProperty (new_item, "otheritems", array{item.serial, new_item.serial});
+					SetObjProperty (item, "otheritems", array{item.serial, new_item.serial});
+					new_item.movable := 0;
+					new_item.facing := 29;
+				0x2ddb:
+				0x2ddc:
+					item.facing := 29;
+				default:
+					SendSysMessage (character, "Error!  Please report this.");
+					return;
+			endcase;			
+			DestroyItem (deed);
+			return;
+
+		0xB00E:	//	Fishtank
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x09CF, "N/S");
+			AddMenuItem (select_menu, 0x09CE, "E/W");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_fishtank_ns");
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_fishtank_ew");
+			endif
+
+		0xB012:	//Piano
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x0b2d, "N/S");
+			AddMenuItem (select_menu, 0x0b2c, "E/W");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_piano_ns");
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_piano_ew");
+			endif
+
+		0xB013:	//lightposts
+			var select_menu := CreateMenu ("Select type:");
+			AddMenuItem (select_menu, 0x0B20, "Square lamp post");
+			AddMenuItem (select_menu, 0x0B22, "Round lamp post");
+			AddMenuItem (select_menu, 0x0B24, "Fancy lamp post");
+			AddMenuItem (select_menu, 0x0A07, "Wall torch");
+			AddMenuItem (select_menu, 0x0A0C, "Wall torch");
+			AddMenuItem (select_menu, 0x09FD, "Wall candle");
+			AddMenuItem (select_menu, 0x0A02, "Wall candle");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+			
+			var zoffset := 0;
+			case (selected_item.objtype)
+				0x0A07:
+				0x0A0C:
+				0x09FD:
+				0x0A02:
+					zoffset := 10;
+			endcase
+
+			item := CreateItemAtLocation (character.x, character.y, character.z+zoffset, selected_item.objtype, 1, character.realm);
+			if (item)
+				if (sign)
+					SetObjProperty (item, "lockeddown", sign.serial);
+				endif
+				SetObjProperty (item, "deedobjtype", 0xB013);
+				SetObjProperty (item, "otheritems", array{item.serial});
+				item.movable := 0;
+				DestroyItem (deed);
+			else
+				SendSysMessage (character, "Can't place it here.");
+			endif
+			return;
+
+		0xB014:	//ankh deed
+			var select_menu := CreateMenu ("Select type:");
+			AddMenuItem (select_menu, 0x02, "N-S Ankh");
+			AddMenuItem (select_menu, 0x03, "N-S Ankh");
+			AddMenuItem (select_menu, 0x04, "E-W Ankh");
+			AddMenuItem (select_menu, 0x05, "E-W Ankh");
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			item := CreateItemAtLocation (character.x, character.y, character.z, selected_item.objtype, 1, character.realm);
+			if (item)
+				if (sign)
+					SetObjProperty (item, "lockeddown", sign.serial);
+				endif
+				SetObjProperty (item, "deedobjtype", 0xB014);
+				item.movable := 0;
+				DestroyItem (deed);
+			else
+				SendSysMessage (character, "Can't place it here.");
+			endif
+			case (item.objtype)
+				0x02:
+					var new_item := CreateItemAtLocation (character.x, character.y-1, character.z, 0x03, 1, character.realm);
+					if (sign)
+						SetObjProperty (new_item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (new_item, "deedobjtype", 0xB014);
+					SetObjProperty (new_item, "otheritems", array{item.serial, new_item.serial});
+					SetObjProperty (item, "otheritems", array{item.serial, new_item.serial});
+					new_item.movable := 0;
+				0x03:
+					var new_item := CreateItemAtLocation (character.x, character.y+1, character.z, 0x02, 1, character.realm);
+					if (sign)
+						SetObjProperty (new_item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (new_item, "deedobjtype", 0xB014);
+					SetObjProperty (new_item, "otheritems", array{item.serial, new_item.serial});
+					SetObjProperty (item, "otheritems", array{item.serial, new_item.serial});
+					new_item.movable := 0;
+				0x04:
+					var new_item := CreateItemAtLocation (character.x+1, character.y, character.z, 0x05, 1, character.realm);
+					if (sign)
+						SetObjProperty (new_item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (new_item, "deedobjtype", 0xB014);
+					SetObjProperty (new_item, "otheritems", array{item.serial, new_item.serial});
+					SetObjProperty (item, "otheritems", array{item.serial, new_item.serial});
+					new_item.movable := 0;
+				0x05:
+					var new_item := CreateItemAtLocation (character.x-1, character.y, character.z, 0x04, 1, character.realm);
+					if (sign)
+						SetObjProperty (new_item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (new_item, "deedobjtype", 0xB014);
+					SetObjProperty (new_item, "otheritems", array{item.serial, new_item.serial});
+					SetObjProperty (item, "otheritems", array{item.serial, new_item.serial});
+					new_item.movable := 0;
+			endcase;			
+			return;
+
+		0xB015:	//	fountains
+			if (lockdowns + 16 >= maxlockdowns)
+				SendSysMessage (character, "You don't have enough lockdowns left.");
+				return;
+			endif
+
+			var select_menu := CreateMenu ("Select Type:");
+			AddMenuItem (select_menu, 0x1739, "Marble");
+			AddMenuItem (select_menu, 0x19cb, "Sandstone");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_fountain_marble");
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_fountain_sandstone");
+			endif
+
+		0xB016:	//	tombstones
+			if (!deed.movable)
+				return;
+			endif
+			var select_menu := CreateMenu ("Select Type:");
+			for i := 4453 to 4484
+				AddMenuItem (select_menu, i, "gravestone");
+			endfor
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+			
+			var text := SendTextEntryGump (character, "Enter a description", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+			if (!text)
+				text := "a tombstone";
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			item := CreateItemAtLocation (character.x, character.y, character.z, 0xB016, 1, character.realm);
+			if (item)
+				item.graphic := selected_item.objtype;
+				item.name := text;
+				item.movable := 0;
+				if (sign)
+					SetObjProperty (item, "lockeddown", sign.serial);
+				endif
+				SetObjProperty (item, "deedobjtype", 0xB016);
+				SetObjProperty (item, "otheritems", array{item.serial});
+				DestroyItem (deed);
+			else
+				SendSysMessage (character, "Can't place it here.");
+			endif
+			return;
+
+		0xB017:	//	curtains
+			var select_menu := CreateMenu ("Select Type:");
+			AddMenuItem (select_menu, 0, "left east-facing curtains");
+			AddMenuItem (select_menu, 0, "right east-facing curtains");
+			AddMenuItem (select_menu, 0, "east-facing top curtain sash");
+
+			AddMenuItem (select_menu, 0, "right south-facing curtains");
+			AddMenuItem (select_menu, 0, "left south-facing curtains");
+			AddMenuItem (select_menu, 0, "south-facing top curtain sash");
+
+			AddMenuItem (select_menu, 0, "east-facing red curtains");
+			AddMenuItem (select_menu, 0, "south-facing red curtains");
+			AddMenuItem (select_menu, 0, "east-facing door curtains");
+			AddMenuItem (select_menu, 0, "south-facing door curtains");
+			AddMenuItem (select_menu, 0, "east facing window curtains");
+			AddMenuItem (select_menu, 0, "south facing window curtains");
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			item := CreateItemAtLocation (character.x, character.y, character.z, 0x12db, 1, character.realm);
+			if (item)
+				case (selected_item.index)
+					1: item.graphic := 4827;
+					2: item.graphic := 4831;
+					3: item.graphic := 4834;
+					4: item.graphic := 4838;
+					5: item.graphic := 4842;
+					6: item.graphic := 4845;
+					7: item.graphic := 5645;
+					8: item.graphic := 5646;
+					9: item.graphic := 41064;
+					10: item.graphic := 41066;
+					11: item.graphic := 41068;
+					12: item.graphic := 41070;
+				endcase
+				item.movable := 0;
+				if (sign)
+					SetObjProperty (item, "lockeddown", sign.serial);
+				endif
+				SetObjProperty (item, "deedobjtype", 0xB017);
+				SetObjProperty (item, "otheritems", array{item.serial});
+				SubtractAmount (deed, 1);
+			else
+				SendSysMessage (character, "Can't place it here.");
+			endif
+			return;
+
+		0xB019:	//	large stone dragon statue
+			var select_menu := CreateMenu ("Select direction:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_dragon_statue_ns");
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_dragon_statue_ew");
+			endif
+			return;
+
+		0xB020:	//	large marble horse statue
+			var select_menu := CreateMenu ("Select direction:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_marble_horse_ns");
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_marble_horse_ew");
+			endif
+			return;
+		0xB021:
+			SendSysMessage (character, "That deed is not implemented yet.");
+			return;		
+		0xB022:	//	dresser
+			var select_menu := CreateMenu ("Select direction:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_dresser_ns");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_dresser_ew");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endif
+			return;
+		0xB023:	//	elven bookshelf
+			var select_menu := CreateMenu ("Select direction:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_elven_bookshelf_ns");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_elven_bookshelf_ew");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endif
+			return;
+		0xB024:	//	ornate elven chest
+			var select_menu := CreateMenu ("Select direction:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_ornate_elven_chest_ns");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_ornate_elven_chest_ew");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endif
+			return;
+		0xB025:	//	elven wash basin
+			var select_menu := CreateMenu ("Select direction:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_elven_washbasin_ns");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_elven_washbasin_ew");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endif
+			return;
+		0xB026:	//	elven dresser
+			var select_menu := CreateMenu ("Select direction:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_elven_dresser_ns");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_elven_dresser_ew");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endif
+			return;			
+		0xB027:	//	alchemist table
+			var select_menu := CreateMenu ("Select direction:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_alchemist_table_ns");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_alchemist_table_ew");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endif
+			return;
+		0xB028:	//	hardwood table
+			var select_menu := CreateMenu ("Select direction:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_hardwood_table_ns");
+				MoveObjectToLocation (character, character.x, character.y+3, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_hardwood_table_ew");
+				MoveObjectToLocation (character, character.x+3, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endif
+			return;
+		0xB029:	//	ornate table
+			var select_menu := CreateMenu ("Select direction:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_ornate_table_ns");
+				MoveObjectToLocation (character, character.x, character.y+3, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_ornate_table_ew");
+				MoveObjectToLocation (character, character.x+3, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endif
+			return;
+		0xB02a:	//	elven loveseat
+			var select_menu := CreateMenu ("Select direction:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_elven_loveseat_ns");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_elven_loveseat_ew");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endif
+			return;		
+		0xB02b:	//	gargish dresser
+			var select_menu := CreateMenu ("Select direction:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_gargish_dresser_ns");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_gargish_dresser_ew");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endif
+			return;			
+		0xB02c:	//	gargish couch
+			var select_menu := CreateMenu ("Select direction:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_gargish_couch_ns");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_gargish_couch_ew");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endif
+			return;		
+		0xB02d:	//	gargish long table
+			var select_menu := CreateMenu ("Select direction:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item.index)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+
+			if (selected_item.index == 1)
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_gargish_longtable_ns");
+				MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			else
+				CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_gargish_longtable_ew");
+				MoveObjectToLocation (character, character.x+2, character.y, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+			endif
+			return;		
+		0xB02e:	//	gargish short table
+			CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_gargish_shorttable");
+			MoveObjectToLocation (character, character.x, character.y+2, character.z, character.realm, MOVEOBJECT_FORCELOCATION);
+		0xB02f:	//	abbatoir
+			if (lockdowns + 8 >= maxlockdowns)
+				SendSysMessage (character, "You don't have enough lockdowns left.");
+				return;
+			endif
+			
+			CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_abbatoir");
+			return;
+
+		0xB030:	//	arcane circle
+			if (lockdowns + 8 >= maxlockdowns)
+				SendSysMessage (character, "You don't have enough lockdowns left.");
+				return;
+			endif
+			
+			CreateMultipartItemFromConfig (character, deed, sign, character.x, character.y, character.z, ":decorations:decoration_arcane_circle");
+			return;
+		0xB031:
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+		
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+	
+			case (selected_item.index)
+			1:	
+				var item := CreateItemAtLocation (character.x, character.y, character.z, 0x2d0f, 1, character.realm);
+				if (item)
+					if (sign)
+						SetObjProperty (item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (item, "deedobjtype", deed.objtype);
+					DestroyItem (deed);
+				else
+					SendSysMessage (character, "Can't place it here.");
+				endif
+			2:
+				var item := CreateItemAtLocation (character.x, character.y, character.z, 0x2d0e, 1, character.realm);
+				if (item)
+					if (sign)
+						SetObjProperty (item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (item, "deedobjtype", deed.objtype);
+					DestroyItem (deed);
+				else
+					SendSysMessage (character, "Can't place it here.");
+				endif
+			endcase
+		0xB032:
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+		
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+	
+			case (selected_item.index)
+			1:	
+				var item := CreateItemAtLocation (character.x, character.y, character.z, 0x2d11, 1, character.realm);
+				if (item)
+					if (sign)
+						SetObjProperty (item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (item, "deedobjtype", deed.objtype);
+					DestroyItem (deed);
+				else
+					SendSysMessage (character, "Can't place it here.");
+				endif
+			2:
+				var item := CreateItemAtLocation (character.x, character.y, character.z, 0x2d10, 1, character.realm);
+				if (item)
+					if (sign)
+						SetObjProperty (item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (item, "deedobjtype", deed.objtype);
+					DestroyItem (deed);
+				else
+					SendSysMessage (character, "Can't place it here.");
+				endif
+			endcase
+		0xB033:
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0, "North-South");
+			AddMenuItem (select_menu, 0, "East-West");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+		
+			if (characterx != character.x or charactery != character.y)
+				SendSysMessage (character, "Canceled because of move.");
+				return;
+			endif
+	
+			case (selected_item.index)
+			1:	
+				var item := CreateItemAtLocation (character.x, character.y, character.z, 0x2d13, 1, character.realm);
+				if (item)
+					if (sign)
+						SetObjProperty (item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (item, "deedobjtype", deed.objtype);
+					DestroyItem (deed);
+				else
+					SendSysMessage (character, "Can't place it here.");
+				endif
+			2:
+				var item := CreateItemAtLocation (character.x, character.y, character.z, 0x2d12, 1, character.realm);
+				if (item)
+					if (sign)
+						SetObjProperty (item, "lockeddown", sign.serial);
+					endif
+					SetObjProperty (item, "deedobjtype", deed.objtype);
+					DestroyItem (deed);
+				else
+					SendSysMessage (character, "Can't place it here.");
+				endif
+			endcase
+
+		default:
+			SendSysMessage (character, "That deed appears to be broken.");
+			return;
+	endcase
+
+endprogram
+
+
+
+
+///////////////////
+//  the old deeds used a different system to determine what items to place.  This is a temporary hack
+//  so people can use the old deeds for a while.  This will be removed eventually.
+///////////////////
+
+function DoOldPlaceDeedStuff (character, deed, sign)
+
+	var itemtype := CINT(GetObjProperty (deed, "itemtype"));
+
+	var item;
+	case (itemtype)
+		0x0FB1:	//small forge
+			item := CreateItemAtLocation (character.x, character.y, character.z, 0x0FB1, 1, character.realm);
+			if (item)
+				DestroyItem (deed);
+			else
+				SendSysMessage (character, "Can't place it here.");
+			endif
+			return;
+		0x1015:	//
+		0x1019:	//Spinning wheels
+		0x101C:	//
+		0x10A4:	//
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x1015, "Spinning Wheel");
+			AddMenuItem (select_menu, 0x1019, "Spinning Wheel");
+			AddMenuItem (select_menu, 0x101C, "Spinning Wheel");
+			AddMenuItem (select_menu, 0x10A4, "Spinning Wheel");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			item := CreateItemAtLocation (character.x, character.y, character.z, selected_item.objtype, 1, character.realm);
+			if (item)
+				if (sign)
+					SetObjProperty (item, "lockeddown", sign.serial);
+				endif
+				DestroyItem (deed);
+			else
+				SendSysMessage (character, "Can't place it here.");
+			endif
+			return;
+		0x1070:	//	Training Dummies
+		0x1074:	//
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x1070, "Training Dummy");
+			AddMenuItem (select_menu, 0x1074, "Training Dummy");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			item := CreateItemAtLocation (character.x, character.y, character.z, selected_item.objtype, 1, character.realm);
+			if (item)
+				if (sign)
+					SetObjProperty (item, "lockeddown", sign.serial);
+				endif
+				DestroyItem (deed);
+			else
+				SendSysMessage (character, "Can't place it here.");
+			endif
+			return;
+		0x0FAF:	//	Anvils
+		0x0FB0:	//
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x0FAF, "Anvil");
+			AddMenuItem (select_menu, 0x0FB0, "Anvil");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			item := CreateItemAtLocation (character.x, character.y, character.z, selected_item.objtype, 1, character.realm);
+			if (item)
+				if (sign)
+					SetObjProperty (item, "lockeddown", sign.serial);
+				endif
+				DestroyItem (deed);
+			else
+				SendSysMessage (character, "Can't place it here.");
+			endif
+			return;
+		0x1EC0:	//	Pickpocket Dip Deeds
+		0x1EC3:	//
+			var select_menu := CreateMenu ("Select facing:");
+			AddMenuItem (select_menu, 0x1EC0, "Pickpocket Dip");
+			AddMenuItem (select_menu, 0x1EC3, "Pickpocket Dip");
+			var selected_item := SelectMenuItem2 (character, select_menu);
+			if (!selected_item)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+
+			item := CreateItemAtLocation (character.x, character.y, character.z, selected_item.objtype, 1, character.realm);
+			if (item)
+				if (sign)
+					SetObjProperty (item, "lockeddown", sign.serial);
+				endif
+				DestroyItem (deed);
+			else
+				SendSysMessage (character, "Can't place it here.");
+			endif
+			return;
+		default:
+			SendSysMessage (character, "That deed appears to be broken.");
+			return;
+	endcase
+endfunction
+
+
+
+
+///////////////////
+//  Reads a config file and created the multipart item from that.
+///////////////////
+
+function CreateMultipartItemFromConfig (character, deed, sign, x, y, z, cfgfilename)
+	var cfgfile := ReadConfigFile(cfgfilename);
+	if (!cfgfile)
+		SendSysMessage (character, "This seems to be broken...");
+		return;
+	endif
+	
+	var cfgfile_keys := GetConfigIntKeys (cfgfile);
+	var num_keys := len (cfgfile_keys);
+	if (!num_keys)
+		SendSysMessage (character, "This seems to be broken...");
+		return;
+	endif
+	var numcontainers := GetNumContainers (cfgfile, cfgfile_keys);
+
+	if (sign)
+		//make sure they have enough lockdowns for this
+		var maxlockdowns := GetMaxLockdowns (sign);
+		var lockdowns := GetLockdowns (sign);
+		var maxsecures := GetMaxSecures (sign);
+		var secures := GetSecures (sign);
+		
+	
+		if (lockdowns + (num_keys - numcontainers) > maxlockdowns)
+			SendSysMessage (character, "You don't have enough lockdowns left.");
+			return;
+		elseif ((secures + numcontainers) > maxsecures)
+			SendSysMessage (character, "You don't have enough secures left.");
+			return;
+		endif
+	endif
+
+	var itemserials := array{};
+	foreach cfgkey in cfgfile_keys
+		var elem := FindConfigElem (cfgfile, cfgkey);
+		var itemx := x + elem.x;
+		var itemy := y + elem.y;
+		var itemz := z + elem.z;
+
+		var item := CreateItemAtLocation (itemx, itemy, itemz, elem.objtype, 1, character.realm);
+		if (!item)
+			SendSysMessage (character, "Error creating item.");
+			return;
+		endif
+		item.movable := 0;
+		if (sign)
+			if (elem.container == 1)
+				SetObjProperty (item, "secured", sign.serial);
+			else
+				SetObjProperty (item, "lockeddown", sign.serial);
+			endif
+		endif
+		SetObjProperty (item, "deedobjtype", deed.objtype);
+		SetObjProperty (item, "deedcolor", deed.color);
+		itemserials.append (item.serial);
+
+		if (deed.color)
+			item.color := deed.color;
+		else
+			item.color := elem.color;
+		endif
+		if (elem.name)
+			item.name := elem.name;
+		endif
+		if (elem.facing)
+			item.facing := elem.facing;
+		endif
+	endforeach
+
+	foreach serial in itemserials
+		var item := SystemFindObjectBySerial (serial);
+		if (item)
+			SetObjProperty (item, "otheritems", itemserials);
+		endif
+	endforeach
+	DestroyItem (deed);
+endfunction
+
+function CreateSinglePartDeededItem (character, deed, sign, x, y, z, objtype)
+	if (sign)
+		//make sure they have enough lockdowns for this
+		var maxlockdowns := GetMaxLockdowns (sign);
+		var lockdowns := GetLockdowns (sign);
+	
+		if (lockdowns + 1 > maxlockdowns)
+			SendSysMessage (character, "You don't have enough lockdowns left.");
+			return;
+		endif
+	endif
+
+	var item := CreateItemAtLocation (x, y, z, objtype, 1, character.realm);
+	if (!item)
+		SendSysMessage (character, "Error creating item.");
+		return;
+	endif
+	item.movable := 0;
+	if (sign)
+		SetObjProperty (item, "lockeddown", sign.serial);
+	endif
+	SetObjProperty (item, "deedobjtype", deed.objtype);
+	DestroyItem (deed);
+endfunction
+
+function GetNumContainers (byref cfgfile, cfgfile_keys)
+	var containers := 0;
+	foreach cfgkey in cfgfile_keys
+		var elem := FindConfigElem (cfgfile, cfgkey);
+		if (elem.container == 1)
+			containers := containers + 1;
+		endif
+	endforeach
+	return containers;
+endfunction

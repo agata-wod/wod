@@ -1,0 +1,33 @@
+use uo;
+use os;
+
+program bear_deed (character, deed)
+	if (!ReserveItem (deed) or !deed.movable)
+		SendSysMessage (character, "You cannot use this right now.");
+		return;
+	endif
+	
+	SendSysMessage (character, "Remember, your choice is final");
+	var select_menu := CreateMenu ("Select a painting:");
+	AddMenuItem (select_menu, 0, "Panda Bear");
+	AddMenuItem (select_menu, 0, "Polar Bear");
+
+	var selected_item := SelectMenuItem2 (character, select_menu);
+	if (!selected_item.index)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	var theitem;
+	case (selected_item.index)
+		1:
+			theitem := CreateItemInContainer (character.backpack, 0x48e0, 1);
+		2:
+			theitem := CreateItemInContainer (character.backpack, 0x48e2, 1);
+	endcase
+	if (!theitem)
+		PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+		return;
+	endif	
+	theitem.movable := 1;
+	SubtractAmount (deed, 1);
+endprogram

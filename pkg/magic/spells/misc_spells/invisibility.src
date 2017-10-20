@@ -1,0 +1,44 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 6;
+
+program cast_invis ( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	var duration := GetAttribute (caster, ATTRIBUTEID_MAGERY);
+	PlaySoundEffect (caster, SFX_SPELL_INVISIBILITY);
+	PlaySoundEffect (cast_on, SFX_SPELL_INVISIBILITY);
+	cast_on.hidden := 1;
+	detach();
+
+	var endtime := ReadGameClock()+ duration;
+	var ev := struct;
+	ev.+type := EVID_ENTEREDAREA;
+	ev.+source := cast_on;
+
+	while (cast_on.hidden and ReadGameClock() < endtime)
+		sleepms(200);
+	endwhile
+	cast_on.hidden := 0;
+
+	foreach mobile in ListMobilesNearLocationEx (cast_on.x, cast_on.y, cast_on.z, 15, LISTEX_FLAG_NORMAL, cast_on.realm)
+		SendEvent (mobile, ev);
+	endforeach
+	foreach mobile in ListMobilesNearLocationEx (cast_on.x, cast_on.y, cast_on.z, 6, LISTEX_FLAG_HIDDEN, cast_on.realm )
+		SendEvent (mobile, ev);
+	endforeach
+	return 1;
+endprogram

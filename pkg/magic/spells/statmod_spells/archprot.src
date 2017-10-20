@@ -1,0 +1,50 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 4;
+
+program cast_archprot (parms, spellid)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_loc := GetSpellCastOn (caster, parms, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+	if (!cast_loc)
+		return 0;
+	endif
+
+	if (caster)
+		var caster_animallore := GetAttribute (caster, ATTRIBUTEID_ANIMALLORE);
+		if (caster_animallore > caster_evalint)
+			caster_evalint := caster_animallore;
+		endif
+	
+		var caster_spiritspeak:= GetAttribute (caster, ATTRIBUTEID_NECROMANCY);
+		if (caster_spiritspeak > caster_evalint)
+			caster_evalint := caster_spiritspeak;
+		endif
+	endif
+
+	var mod_amount := CINT(CalcModAmount() * 3 / 4);
+	var duration := CalcModDuration ();
+	if (caster_evalint > 90)
+		var new_mod_amount := CINT(CalcModAmount() * 3 / 4);
+		if (new_mod_amount > mod_amount)
+			mod_amount := new_mod_amount;
+		endif
+	endif
+
+	PlaySoundEffect(caster, SFX_SPELL_PROTECTION);
+	var range := CINT (caster_magery/15);
+	foreach mobile in ListMobilesNearLocation (cast_loc.x, cast_loc.y, cast_loc.z, range, cast_loc.realm );
+		PlayObjectCenteredEffect (mobile, FX_BLESS_EFFECT, 7, 7);
+		DoMagicStatMod (mobile, STATMOD_AR, mod_amount, duration, "Protection Spell");
+	endforeach
+
+	return 1;
+endprogram

@@ -1,0 +1,672 @@
+use uo;
+use cfgfile;
+use os;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/spawn";
+include "include/utility";
+include "include/crafting";
+include "include/attributes";
+
+Const UACTION_CHOP	:= 0x0D;
+Const ITEM_SWARM	:= 0x091b;
+
+var craftingbag;
+
+program use_axe (me , axe)
+	if (!ReserveItem (axe))
+		SendSysMessage (me, "You cannot use that.");
+		return;
+	endif
+
+	if (!TryToEquipItem (me, axe))
+		return;
+	endif
+
+	var tree := SelectTreeToChop (me);
+	If (tree)
+		repeat
+		until (!Do_Chops (me, axe, tree, me.x, me.y));
+	endif
+endprogram
+
+function Do_Chops (character, axe, tree, mex, mey)
+	var difficulty := cint (GetHarvestDifficulty ("wood", tree.x, tree.y, tree.objtype, tree.realm));
+	if (!difficulty)
+		SendSysmessage (character, "There's not enough wood here to chop");
+		return 0;
+	endif
+
+	difficulty := difficulty + RandomInt(10) + 10;
+	for i := 1 to 2
+		PerformAction (character, UACTION_CHOP);
+		sleep (1);
+		PlaySoundEffect (character, SFX_SKILL_LUMBERJACK);
+		sleep (1);
+		if (character.x != mex or character.y != mey)
+			return 0;
+		endif
+	endfor
+
+	if (CheckSkill (character, SKILLID_LUMBERJACKING, difficulty, 0 ))
+		if (DoRandomEvent (character, axe, tree, mex, mey))
+			return;
+		endif
+
+		var wood_amount := HarvestResource ("wood", tree.x, tree.y, 1, 8, tree.realm);
+		if (!wood_amount)
+			SendSysmessage (character, "There's not enough wood here to chop.");
+			return 0;
+		endif
+
+		var skill := GETATTRIBUTE (character, ATTRIBUTEID_LUMBERJACKING);
+		wood_amount := RandomInt(CINT(skill/33)) + CINT(skill/33) + 1;
+		if (!wood_amount)
+			wood_amount := 1;
+		endif
+		if (character.race == RACE_HUMAN)
+			wood_amount := wood_amount + RandomInt(2) + 1;
+		endif
+		var wood_type := DetermineWoodType (character, GetTreeType(tree));
+
+
+		craftingbag := FindCraftingBag (character);
+		var the_logs := CreateItemInContainer (craftingbag, wood_type, wood_amount);
+		if (the_logs)
+			PrintTextAbovePrivate (character, "*"+the_logs.desc+"*", character);
+			return 1;
+		else
+			PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+			return 0;
+		endif
+	else
+		return 1;
+	endif
+endfunction
+
+function SelectTreeToChop (me)
+
+	SendSysmessage ( me , "Select a tree to chop." );
+	var tree := Targetcoordinates( me );
+	if (!tree)
+		return 0;
+	endif
+
+	var distt := coordist( me.x, me.y, tree.x, tree.y );
+	if( distt > 1 )
+		SendSysmessage(me,"That is too far away");
+		return 0;
+	endif
+
+	var difficulty := GetHarvestDifficulty( "wood", tree.x, tree.y, tree.objtype, tree.realm );
+	if (difficulty == error)
+		SendSysmessage(me, "There's not enough wood here to chop.");
+		return 0;
+	endif
+
+	if ( CheckIfIsTree(tree.objtype) )
+		return tree;
+	else
+		SendSysmessage(me,"You cannot harvest wood from that.");
+	return 0;
+	endif
+endfunction
+
+function CheckIfIsTree (theobj)
+	if (theobj == 0x0c95 or theobj == 0x0c96 or theobj == 0x0c9e)
+		return 1;
+	elseif (theobj == 0x0ca8 or theobj == 0x0caa or theobj == 0x0cab)
+		return 1;
+	elseif (theobj >= 0x0cc8 and theobj <= 0x0cea)
+		return 1;
+	elseif (theobj >= 0x0cf8 and theobj <= 0x0d03)
+		return 1;
+	elseif (theobj == 0x0d37 or theobj == 0x0d38)
+		return 1;
+	elseif (theobj >= 0x0d41 and theobj <= 0x0dab)
+		return 1;
+	elseif (theobj >= 0x12b6 and theobj <= 0x12c7)
+		return 1;
+	elseif (theobj == 0x224a or theobj == 0x224b)
+		return 1;
+	elseif (theobj == 0x224c or theobj == 0x224d)
+		return 1;
+	elseif (theobj >= 0x246c and theobj <= 0x247e)
+		return 1;
+	elseif (theobj >= 0x26ed and theobj <= 0x26f3)
+		return 1;
+	elseif (theobj >= 0x309c and theobj <= 0x30de)
+		return 1;
+	elseif (theobj >= 0x3122 and theobj <= 0x3124)
+		return 1;
+	elseif (theobj >= 0x36a0 and theobj <= 0x36a1)
+		return 1;
+	elseif (theobj >= 0x39a3 and theobj <= 0x39d3)
+		return 1;
+	elseif (theobj >= 0x39e7 and theobj <= 0x3a1e)
+		return 1;
+	elseif (theobj >= 0x3a33 and theobj <= 0x3a44)
+		return 1;
+	elseif (theobj >= 0x3a9c and theobj <= 0x3aef)
+		return 1;
+	else
+		return 0;
+	endif
+endfunction
+
+function DetermineWoodType (character, wood_group)
+	var chance := RandomInt (100) + 1;
+	var racialboost := 0;
+	if (character.race == RACE_ELF)
+		racialboost := 20;
+		chance := chance - racialboost;
+	endif
+	case (wood_group)
+		UOBJ_LOG:
+			return UOBJ_LOG;
+
+		UOBJ_OAKLOG:
+			if (chance < 25 and CheckSkill (character, SKILLID_LUMBERJACKING, 65 - racialboost, 0 ))
+				return UOBJ_OAKLOG;
+			else
+				return UOBJ_LOG;
+			endif
+
+		UOBJ_ASHLOG:
+			if (chance < 25 and CheckSkill (character, SKILLID_LUMBERJACKING, 80 - racialboost, 0 ))
+				return UOBJ_ASHLOG;
+			else
+				return UOBJ_LOG;
+			endif
+
+		UOBJ_YEWLOG:
+			if (chance < 25 and CheckSkill (character, SKILLID_LUMBERJACKING, 95 - racialboost, 0 ))
+				return UOBJ_YEWLOG;
+			else
+				return UOBJ_LOG;
+			endif
+
+		UOBJ_HEARTWOODLOG:
+			if (chance < 25 and CheckSkill (character, SKILLID_LUMBERJACKING, 100 - racialboost, 0 ))
+				return UOBJ_HEARTWOODLOG;
+			else
+				return UOBJ_LOG;
+			endif
+
+		UOBJ_BLOODWOODLOG:
+			if (chance < 25 and CheckSkill (character, SKILLID_LUMBERJACKING, 100 - racialboost, 0 ))
+				return UOBJ_BLOODWOODLOG;
+			else
+				return UOBJ_LOG;
+			endif
+
+		UOBJ_FROSTWOODLOG:
+			if (chance < 25 and CheckSkill (character, SKILLID_LUMBERJACKING, 100 - racialboost, 0 ))
+				return UOBJ_FROSTWOODLOG;
+			else
+				return UOBJ_LOG;
+			endif
+
+		UOBJ_SUNWOODLOG:
+			if (chance < 25 and CheckSkill (character, SKILLID_LUMBERJACKING, 100 - racialboost, 0 ))
+				return UOBJ_SUNWOODLOG;
+			else
+				return UOBJ_LOG;
+			endif
+
+	endcase
+	return UOBJ_LOG;
+endfunction
+
+function GetTreeType (tree)
+	var theobj := tree.objtype;
+	if (tree.realm == "britannia")
+		if (tree.x >= 5120 and tree.x <= 6142 and tree.y >= 2305 and tree.y <= 2402)
+			return UOBJ_FROSTWOODLOG;
+		elseif(tree.x >= 6910 and tree.x <= 7167 and tree.y >= 258 and tree.y <= 511)
+			return UOBJ_HEARTWOODLOG;
+		endif
+	elseif (tree.realm == "tokuno")
+		if (tree.x >= 839 and tree.x <= 1009 and tree.y >= 103 and tree.y <= 179)
+			return UOBJ_FROSTWOODLOG;
+		endif
+	endif
+	if (theobj == 0x0c95 or theobj == 0x0c96 or theobj == 0x0c9e)
+		return UOBJ_ASHLOG;
+	elseif (theobj == 0x0ca8 or theobj == 0x0caa or theobj == 0x0cab)
+		return UOBJ_LOG;
+	elseif (theobj >= 0x0cc8 and theobj <= 0x0cd5)
+		return UOBJ_LOG;
+	elseif (theobj >= 0x0cd6 and theobj <= 0x0cea)
+		return UOBJ_OAKLOG;
+	elseif (theobj >= 0x0cf8 and theobj <= 0x0d03)
+		return UOBJ_ASHLOG;
+	elseif (theobj == 0x0d37 or theobj == 0x0d38)
+		return UOBJ_LOG;
+	elseif (theobj >= 0x0d41 and theobj <= 0x0dab)
+		return UOBJ_LOG;
+	elseif (theobj >= 0x12b5 and theobj <= 0x12c7)
+		return UOBJ_YEWLOG;
+	elseif (theobj == 0x224a or theobj == 0x224b)
+		return UOBJ_ASHLOG;
+	elseif (theobj == 0x224c or theobj == 0x224d)
+		return UOBJ_OAKLOG;
+	elseif (theobj >= 0x246c and theobj <= 0x247e)
+		return UOBJ_OAKLOG;
+	elseif (theobj >= 0x26ed and theobj <= 0x26f3)
+		return UOBJ_LOG;
+	elseif (theobj >= 0x309c and theobj <= 0x30de)
+		return UOBJ_LOG;
+	elseif (theobj >= 0x3122 and theobj <= 0x3124)
+		return UOBJ_LOG;
+	elseif (theobj >= 0x36a0 and theobj <= 0x36a1)
+		return UOBJ_LOG;
+	elseif (theobj >= 0x39a3 and theobj <= 0x39d3)
+		return UOBJ_LOG;
+	elseif (theobj >= 0x39e7 and theobj <= 0x3a1e)
+		return UOBJ_LOG;
+	elseif (theobj >= 0x3a33 and theobj <= 0x3a44)
+		return UOBJ_LOG;
+	elseif (theobj >= 0x3a9c and theobj <= 0x3aef)
+		return UOBJ_LOG;
+	else
+		return UOBJ_LOG;
+	endif
+endfunction
+
+
+function TryToEquipItem (character, item)
+	foreach equipped_item in ListEquippedItems (character)
+		if (equipped_item == item)
+			return 1;
+		endif
+	endforeach
+
+	if (!InInventory (character.backpack, item))
+		SendSysMessage (character, "The item must be in your backpack to use it!");
+		return 0;
+	endif
+
+	if (!item.movable)
+		SendSysMessage (character, "You cannot use that item!");
+		return 0;
+	endif
+
+	if (!ReserveItem (item))
+		SendSysMessage (character, "That item is already being used by someone!");
+		return 0;
+	endif
+	
+	//Just try to equip it to be a bit faster
+	if (EquipItem (character, item))
+		sleep (2);
+		return 0;
+	endif
+
+	var thepack := item.container;
+	if (!thepack)
+		thepack := character.backpack;
+	endif
+	
+	//Unequip old items to equip this one
+	var item_hand_one := GetEquipmentByLayer (character, LAYER_HAND1);
+	MoveItemToContainer (item_hand_one, thepack);
+	var item_hand_two := GetEquipmentByLayer (character, LAYER_HAND2);
+	MoveItemToContainer (item_hand_two, thepack);
+	if (EquipItem (character, item))
+		//try to requip whatever else they had and we're done
+		EquipItem (character, item_hand_one);
+		EquipItem (character, item_hand_two);
+		sleep (2);
+		return 0;
+	endif
+	
+	//failure...
+	SendSysmessage (character, "You have to equip that to lumberjack!");
+	EquipItem (character, item_hand_one);
+	EquipItem (character, item_hand_two);
+	return 0;
+endfunction
+
+
+
+///////////////////
+//  makes sure that the item given is one that can be removed
+///////////////////
+
+function RemoveIt (byref character, byref it)
+	if (it == GetEquipmentByLayer (character, LAYER_BEARD))
+		return 0;
+	elseif (it == GetEquipmentByLayer (character, LAYER_HAIR))
+		return 0;
+	elseif (it == GetEquipmentByLayer (character, LAYER_MOUNT))
+		return 0;
+	elseif (it == GetEquipmentByLayer (character, LAYER_HAIR))
+		return 0;
+	elseif (it == (character.backpack))
+		return 0;
+	endif	
+
+	return 1;
+endfunction
+
+
+
+function DoRandomEvent (me, axe, tree, mex, mey)
+	if (axe and mex and mey)
+	endif
+	if (RandomInt (20))
+		return 0;
+	endif
+	
+	case (RandomInt (10))
+		0:
+		1:
+		2:
+		3:
+		4:
+		5:
+			CreateItemInContainer (craftingbag, UOBJ_DEAD_WOOD, 1);
+			SendSysmessage (me, "You have found some deadwood!");
+			return 0;
+		6:
+		7:
+			CreateItemInContainer (craftingbag, 0x0F25, 1);
+			SendSysmessage (me, "You find a chunk of fossilized sap!");
+			return 0;
+
+		8:
+			SendSysmessage (me, "You disturbed a bee hive!");
+			CreateItemAtLocation (tree.x, tree.y, tree.z, ITEM_SWARM, 1, tree.realm);
+			return 1;
+		9:
+			SpawnNPCInArea ("ent", me.x, me.y, 4, 20, me.realm);
+			SendSysmessage (me, "You have angered a Wood Spirit!");
+			return 1;
+	endcase
+	return 0;
+endfunction
+
+///////////////////
+//  determines what type of logs are harvested
+///////////////////
+
+function DetermineLogType (character, tree)
+	var chance := RandomInt (100) + 1;
+	var racialboost := 0;
+	if (character.race == RACE_ELF)
+		racialboost := 20;
+		chance := chance + racialboost;
+	endif
+
+	case (tree)
+		GROUP_NORMAL_ORE:
+			if (chance < 7 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				if (region == REGION_WORLD)
+					return UOBJ_AZURITE_ORE;
+				elseif (RandomInt (2) )
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 14 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 21 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 29 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 38 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 49 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 60 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_IRON:
+			if (chance < 5 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				if (region == REGION_WORLD)
+					return UOBJ_AZURITE_ORE;
+				elseif (RandomInt (2) )
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 10 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 15 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 20 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 25 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 32 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 40 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_BRONZE:
+			if (chance < 5 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				if (region == REGION_WORLD)
+					return UOBJ_AZURITE_ORE;
+				elseif (RandomInt (2) )
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 10 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 15 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 20 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 25 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 32 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 80 and CheckSkill (character, SKILLID_MINING, 35 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_DULL_COPPER:
+			if (chance < 5 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				if (region == REGION_WORLD)
+					return UOBJ_AZURITE_ORE;
+				elseif (RandomInt (2) )
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 10 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 15 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 20 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 25 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 60 and CheckSkill (character, SKILLID_MINING, 45 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 70 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_COPPER:
+			if (chance < 5 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				if (region == REGION_WORLD)
+					return UOBJ_AZURITE_ORE;
+				elseif (RandomInt (2) )
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 10 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 15 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 20 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 55 and CheckSkill (character, SKILLID_MINING, 55 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 62 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 70 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_ONYX:
+			if (chance < 5 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				if (region == REGION_WORLD)
+					return UOBJ_AZURITE_ORE;
+				elseif (RandomInt (2) )
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 10 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 15 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 45 and CheckSkill (character, SKILLID_MINING, 65 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 52 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 60 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 70 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_PYRITE:
+			if (chance < 5 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				if (region == REGION_WORLD)
+					return UOBJ_AZURITE_ORE;
+				elseif (RandomInt (2) )
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 10 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 40 and CheckSkill (character, SKILLID_MINING, 75 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 45 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 50 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 60 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 70 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_MALACHITE:
+			if (chance < 5 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				if (region == REGION_WORLD)
+					return UOBJ_AZURITE_ORE;
+				elseif (RandomInt (2) )
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 30 and CheckSkill (character, SKILLID_MINING, 85 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 35 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 40 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 48 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 54 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 65 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_AZURITE:
+			if (chance < 22 and CheckSkill (character, SKILLID_MINING, 85 - racialboost, 0 ))
+				return UOBJ_AZURITE_ORE;
+			elseif (chance < 27 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 32 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 37 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 42 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 50 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 60 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_BLUESTEEL:
+			if (chance < 25 and CheckSkill (character, SKILLID_MINING, 85 - racialboost, 0 ))
+				if (RandomInt (8) == 0)
+					return UOBJ_RUBYSTEEL_ORE;
+				else
+					return UOBJ_BLUESTEEL_ORE;
+				endif
+			elseif (chance < 30 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 35 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 40 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 48 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 55 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 65 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+		GROUP_RUBYSTEEL:
+			if (chance < 25 and CheckSkill (character, SKILLID_MINING, 85 - racialboost, 0 ))
+				if (RandomInt (8) == 0)
+					return UOBJ_BLUESTEEL_ORE;
+				else
+					return UOBJ_RUBYSTEEL_ORE;
+				endif
+			elseif (chance < 30 and CheckSkill (character, SKILLID_MINING, 90 - racialboost, 0 ))
+				return UOBJ_MALACHITE_ORE;
+			elseif (chance < 35 and CheckSkill (character, SKILLID_MINING, 80 - racialboost, 0 ))
+				return UOBJ_PYRITE_ORE;
+			elseif (chance < 40 and CheckSkill (character, SKILLID_MINING, 70 - racialboost, 0 ))
+				return UOBJ_ONYX_ORE;
+			elseif (chance < 48 and CheckSkill (character, SKILLID_MINING, 60 - racialboost, 0 ))
+				return UOBJ_COPPER_ORE;
+			elseif (chance < 55 and CheckSkill (character, SKILLID_MINING, 50 - racialboost, 0 ))
+				return UOBJ_DULLCOPPER_ORE;
+			elseif (chance < 65 and CheckSkill (character, SKILLID_MINING, 40 - racialboost, 0 ))
+				return UOBJ_BRONZE_ORE;
+			else
+				return UOBJ_IRON_ORE;
+			endif
+
+	endcase
+endfunction
+

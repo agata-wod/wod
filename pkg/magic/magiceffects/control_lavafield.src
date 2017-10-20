@@ -1,0 +1,43 @@
+use uo;
+use util;
+use os;
+
+include "include/client";
+include "include/magic";
+include "include/wodinc";
+
+Const SOUND_EFFECT_FIREFIELD := 0x1DE;
+
+program field_control (field)
+	var creator;
+	var creator_serial := getobjproperty (field, "creator");
+	if (creator_serial)
+		creator := SystemFindObjectBySerial (CInt(creator_serial));
+		if (creator)
+			SetScriptController (creator);
+		endif
+	endif
+
+	caster_evalint := GetObjProperty (field, "caster_evalint");
+	if (!caster_evalint)
+		caster_evalint := 100;
+	endif
+
+	var dmg := 0;
+	var loop_counter := 1;
+	while (field)
+		foreach mobile in ListMobilesNearLocationEx (field.x, field.y, field.z, 0, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, field.realm)
+			dmg := RandomInt (4) + 2;
+			dmg := Resisted (creator, mobile, dmg);
+			DoDamageByType (creator, mobile, dmg, DAMAGETYPE_FIRE);
+		endforeach
+
+		loop_counter := loop_counter + 1;
+		if (loop_counter == 8)
+			PlaySoundEffect (field, SOUND_EFFECT_FIREFIELD);
+			loop_counter := 1;
+		endif
+		sleep(1);
+	endwhile
+
+endprogram

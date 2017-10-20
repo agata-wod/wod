@@ -1,0 +1,25 @@
+use os;
+use uo;
+
+include "include/dotempmods";
+include "include/longtermmods";
+include "include/skills";
+
+program unmod( me )
+
+	var starttime := GetObjProperty(me, "logontime");
+
+	while (me)
+		CheckMods (me, 0);
+		CheckMods (me, 1);
+		CheckSkillMods (me);
+		CheckLongTermMods (me);
+		sleep (30);
+		if (me)
+			if ( starttime != GetObjProperty(me, "logontime") )
+				return;
+			endif
+		endif
+	endwhile	
+
+endprogram

@@ -1,0 +1,6 @@
+use uo;
+use os;
+
+program poker (character)
+	SendSysMessage (character, "This dot command has been changed to .games");
+endprogram

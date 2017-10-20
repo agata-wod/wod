@@ -1,0 +1,18 @@
+use uo;
+use os;
+use util;
+
+
+program maketestloot (character)
+	var item := Target (character, TGTOPT_NOCHECK_LOS);
+	if (!item)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	var propvalue;
+	foreach propname in GetObjPropertyNames (item)
+		propvalue := GetObjProperty (item, propname);
+		SendSysmessage (character, propname + ": " + propvalue);
+	endforeach
+endprogram

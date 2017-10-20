@@ -1,0 +1,8 @@
+This package contains scripts and functions related to shrunken mobs.  Mobs can be shrunk
+with .shrinknpc, which creates a totem item.  This totem item can be double-clicked to create
+a copy of the original mob anywhere.  This copy retains the name, skills, stats and items of
+the original
+
+
+
+

@@ -1,0 +1,43 @@
+use uo;
+use util;
+use os;
+
+include "include/client";
+include "include/magic";
+
+program control_parafield (field)
+	var creator;
+	var creator_serial := getobjproperty (field, "creator");
+	if (creator_serial)
+		creator := SystemFindObjectBySerial (CInt(creator_serial));
+		if (creator)
+			SetScriptController (creator);
+		endif
+	endif
+
+	caster_evalint := GetObjProperty (field, "caster_evalint");
+	if (!caster_evalint)
+		caster_evalint := 100;
+	endif
+
+	var soundeffecttimer := ReadGameClock() - 2;
+
+	//var loop_counter := 1;
+	while (field)
+		foreach mobile in ListMobilesNearLocationEx (field.x, field.y, field.z, 0, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, field.realm)
+			if (	CheckSkill ( mobile, SKILLID_MAGICRESISTANCE, caster_evalint, 0) )
+				PrintTextAbovePrivate (mobile, "You resist the spell", mobile);
+			elseif (!mobile.concealed and !mobile.paralyzed)
+				PlayStationaryEffect (mobile.x , mobile.y, mobile.z , FX_CURSE_EFFECT , 10 , 0xa , 0, field.realm );
+				if (ReadGameClock() > soundeffecttimer)
+					PlaySoundEffect (mobile, SFX_SPELL_PARALYZE);
+					soundeffecttimer := ReadGameClock() + 2;
+				endif
+				PrintTextAbovePrivate (mobile, "You are paralyzed!", mobile);
+				DoMagicStatMod (mobile, STATMOD_PARALYZE, 1, 5, "Paralysis Field");
+			endif
+		endforeach
+		sleep(1);
+	endwhile
+
+endprogram

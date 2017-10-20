@@ -1,0 +1,1 @@
+Usage is .arm [1 2 or 3]. The default is .arm 1. This command will arm whichever weapon/shield set is assigned to the number chosen. The weapon and shield may be in any container in your pack.

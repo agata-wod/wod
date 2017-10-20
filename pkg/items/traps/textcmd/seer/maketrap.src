@@ -1,0 +1,160 @@
+use uo;
+use os;
+
+Const UOBJ_MAGICTRAP := 0x7081;
+
+program make_trap (seer, text)
+	if (text and text=="chest")
+		MakeTrapOnChest (seer);
+		return;
+	endif
+
+	var trapmenu := CreateMenu ("Select a trap type:");
+	AddMenuItem (trapmenu, 0, "flamestrike");
+	AddMenuItem (trapmenu, 0, "darkness");
+	AddMenuItem (trapmenu, 0, "poisonfield (ns)");
+	AddMenuItem (trapmenu, 0, "poisonfield (ew)");
+
+	AddMenuItem (trapmenu, 0, "firefield (ns)");
+	AddMenuItem (trapmenu, 0, "firefield (ew)");
+
+	AddMenuItem (trapmenu, 0, "energyfield (ns)");
+	AddMenuItem (trapmenu, 0, "energyfield (ew)");
+
+	AddMenuItem (trapmenu, 0, "parafield (ns)");
+	AddMenuItem (trapmenu, 0, "parafield (ew)");
+
+	AddMenuItem (trapmenu, 0, "stone wall (ns)");
+	AddMenuItem (trapmenu, 0, "stone wall (ew)");
+
+	AddMenuItem (trapmenu, 0, "Explosion");
+	
+	var selection := SelectMenuItem2 (seer, trapmenu);
+	if (!selection or !selection.index)
+		SendSysMessage (seer, "Canceled");
+		return;
+	endif
+
+	case (selection.index)
+		1:
+			var trap := CreateItemAtLocation (seer.x, seer.y, seer.z, UOBJ_MAGICTRAP, 1, seer.realm);
+			SetObjProperty (trap, "traptype", "flamestrike");
+
+		2:
+			var trap := CreateItemAtLocation (seer.x, seer.y, seer.z, UOBJ_MAGICTRAP, 1, seer.realm);
+			SetObjProperty (trap, "traptype", "darkness");
+
+		3:
+			var trap := CreateItemAtLocation (seer.x, seer.y, seer.z, UOBJ_MAGICTRAP, 1, seer.realm);
+			SetObjProperty (trap, "traptype", "poisonfield_ns");
+
+		4:
+			var trap := CreateItemAtLocation (seer.x, seer.y, seer.z, UOBJ_MAGICTRAP, 1, seer.realm);
+			SetObjProperty (trap, "traptype", "poisonfield_ew");
+
+		5:
+			var trap := CreateItemAtLocation (seer.x, seer.y, seer.z, UOBJ_MAGICTRAP, 1, seer.realm);
+			SetObjProperty (trap, "traptype", "firefield_ns");
+
+		6:
+			var trap := CreateItemAtLocation (seer.x, seer.y, seer.z, UOBJ_MAGICTRAP, 1, seer.realm);
+			SetObjProperty (trap, "traptype", "firefield_ew");
+
+		7:
+			var trap := CreateItemAtLocation (seer.x, seer.y, seer.z, UOBJ_MAGICTRAP, 1, seer.realm);
+			SetObjProperty (trap, "traptype", "energyfield_ns");
+
+		8:
+			var trap := CreateItemAtLocation (seer.x, seer.y, seer.z, UOBJ_MAGICTRAP, 1, seer.realm);
+			SetObjProperty (trap, "traptype", "energyfield_ew");
+
+		9:
+			var trap := CreateItemAtLocation (seer.x, seer.y, seer.z, UOBJ_MAGICTRAP, 1, seer.realm);
+			SetObjProperty (trap, "traptype", "parafield_ns");
+
+		10:
+			var trap := CreateItemAtLocation (seer.x, seer.y, seer.z, UOBJ_MAGICTRAP, 1, seer.realm);
+			SetObjProperty (trap, "traptype", "parafield_ew");
+
+		11:
+			var trap := CreateItemAtLocation (seer.x, seer.y, seer.z, UOBJ_MAGICTRAP, 1, seer.realm);
+			SetObjProperty (trap, "traptype", "stonewall_ns");
+
+		12:
+			var trap := CreateItemAtLocation (seer.x, seer.y, seer.z, UOBJ_MAGICTRAP, 1, seer.realm);
+			SetObjProperty (trap, "traptype", "stonewall_ew");
+		13:
+			var trap := CreateItemAtLocation (seer.x, seer.y, seer.z, UOBJ_MAGICTRAP, 1, seer.realm);
+			SetObjProperty (trap, "traptype", "explosion");
+
+		default:
+			SendSysMessage (seer, "Whoops.");
+
+	endcase
+
+endprogram
+
+
+
+
+//////////////////
+//  set a trap on a chest
+///////////////////
+
+function MakeTrapOnChest (character)
+	SendSysMessage (character, "Select a chest:");
+	var chest := Target (character);
+	if (!chest)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+
+	if (!chest.isa (POLCLASS_CONTAINER) and !chest.isa (POLCLASS_DOOR))
+		SendSysMessage (character, "That's not a chest!");
+		return;
+	endif
+
+	var lvl := SendTextEntryGump (character, "Enter the lockpicking level (1-10)" ,
+			TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "(Difficulty = level*10+10)");
+	lvl := CINT (lvl);
+	if (!lvl)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+
+	var trapmenu := CreateMenu ("Select a trap type:");
+	AddMenuItem (trapmenu, 0, "Explosion (50% chance of destroying chest)");
+	AddMenuItem (trapmenu, 0, "Explosion (Doesn't destroy chest)");
+	AddMenuItem (trapmenu, 0, "Spawn NPC");
+	AddMenuItem (trapmenu, 0, "Poison");
+	AddMenuItem (trapmenu, 0, "No trap, just set lockpicking difficulty");
+	
+	var selection := SelectMenuItem2 (character, trapmenu);
+	if (!selection or !selection.index)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+
+	chest.locked := 1;
+	SetObjProperty (chest, "lockpicking", lvl);
+
+	case (selection.index)
+		1:
+			SetObjProperty (chest, "trap", "explosion");
+		2:
+			SetObjProperty (chest, "trap", "safeexplosion");
+		3:
+			var npctemplate := SendTextEntryGump (character, "Enter NPC template of the creature you wish to spawn" ,
+					TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60);
+			if (!npctemplate)
+				SendSysMessage (character, "Canceled");
+				return;
+			endif
+			SetObjProperty (chest, "trap", "npcspawn");
+			SetObjProperty (chest, "secondarytrapdata", npctemplate);
+		4:
+			SetObjProperty (chest, "trap", "poison");
+			
+	endcase
+	SendSysMessage (character, "Done!");
+endfunction

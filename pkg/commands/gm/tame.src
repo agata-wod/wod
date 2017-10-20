@@ -1,0 +1,21 @@
+use uo;
+
+program tame (character)
+
+	SendSysmessage (character, "Tame what?");
+	var npc := Target (character, TGTOPT_NOCHECK_LOS);
+	if (!npc)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	
+	if (!npc.npctemplate)
+		SendSysMessage (character, "invalid target.");
+		return;
+	endif
+
+	SetObjProperty (npc, "master", character.serial );
+	npc.setmaster (character);
+	npc.script := "::tamed";
+	RestartScript (npc);
+endprogram

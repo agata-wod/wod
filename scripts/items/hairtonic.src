@@ -1,0 +1,100 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+const LAYER_HAIR        :=  0x0b;   // Hair
+const LAYER_BEARD       :=  0x10;   // Facial hair.
+
+program growhair(me, tonic)
+
+	EraseObjProperty(me,"hairgrow" );
+
+	PrintTextAbovePrivate(me,"*splash splash splash*",me);
+	destroyitem(tonic);
+
+	sleep(2);
+
+	var hair := 0;
+	var haircolor := 0;
+
+	hair := GetEquipmentByLayer( me, LAYER_HAIR );
+   	if (!hair)
+		if (GetObjProperty(me,"haircolor"))
+			haircolor := GetObjProperty(me,"haircolor");
+		else
+			haircolor := RandomHairColor(me);
+			SetObjProperty(me,"haircolor",haircolor);
+		endif
+	else
+		haircolor := hair.color;
+	endif	
+
+	var newhair := 0;
+	case (hair.objtype)
+	0x203C:	
+	0x2049: 
+	0x203D: newhair := 0x203C;//long hair stays long
+
+	0x2045: 
+	0x2046: 
+	0x203B: 
+	0x2047: newhair := 0x203C;//medium hair becomes long
+
+	0x2048: 
+	0x2044: 
+	0x204a: newhair := 0x2047;//short hair becomes medium
+
+	default: newhair := 0x2044;//bald to short
+	endcase
+
+	DestroyItem(hair);
+	var newdoo := createitematlocation(me.x, me.y, me.z, newhair,1, me.realm);
+	EquipItem(me,newdoo);
+	newdoo.color := haircolor;
+
+	if (me.graphic != 400)
+		return;
+	endif
+
+	hair := 0;
+
+	hair := GetEquipmentByLayer( me, LAYER_BEARD );
+   	if (!hair)
+		if (GetObjProperty(me,"beardcolor"))
+			haircolor := GetObjProperty(me,"beardcolor");
+		else
+			SetObjProperty(me,"beardcolor",haircolor);
+		endif
+	else
+		haircolor := hair.color;
+	endif	
+
+	newhair := 0;
+
+	case (hair.objtype)
+	0x204C:	return;
+	0x203e:
+	0x204b:
+	0x203f: newhair := 0x204c;
+	0x2040:
+	0x204d: newhair := 0x204b;
+	0x204f:
+	0x2041: newhair := 0x204d;
+	default: newhair := 0x2041;
+	endcase
+
+	DestroyItem(hair);
+	newdoo := createitematlocation(me.x, me.y, me.z, newhair,1, me.realm);
+	EquipItem(me,newdoo);
+	newdoo.color := haircolor;
+
+endprogram
+
+function randomhaircolor (me)
+
+	me := "not used";
+
+	return RandomInt(46)+1102;
+
+endfunction

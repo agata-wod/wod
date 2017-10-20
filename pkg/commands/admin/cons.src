@@ -1,0 +1,8 @@
+use uo;
+
+program concealme (character)
+
+	character.concealed := 5;
+	SendSysMessage (character, "You are now concealed to level 5");
+	
+endprogram

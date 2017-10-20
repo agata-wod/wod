@@ -1,0 +1,25 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 5;
+
+program cast_reflect( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+
+	if ( GetObjProperty(caster, "mr") )
+		SendSysMessage(caster,"You are already protected");
+		return;
+	endif
+	PlaySoundEffect (caster, SFX_SPELL_MAGIC_REFLECTION);
+	PlayObjectCenteredEffect (caster, FX_CURSE_EFFECT, 10,10);
+	SetObjProperty (caster, "mr", "1");
+	return 1;
+endprogram

@@ -1,0 +1,22 @@
+use uo;
+use os;
+
+program changeseason (character, text)
+	case (text)
+		"summer":
+			SendPacket(character, "BC0101");
+		"fall":
+			SendPacket(character, "BC0201");
+		"winter":
+			SendPacket(character, "BC0301");
+		"felucca":
+			SendPacket(character, "BC0401");
+		"spring":
+			SendPacket(character, "BC0501");
+		"test":
+			SendPacket(character, "BC0801");
+
+
+
+	endcase
+endprogram

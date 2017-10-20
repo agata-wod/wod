@@ -1,0 +1,163 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/npcbackpacks";
+include "include/dotempmods";
+include "include/skills";
+include "include/possess";
+include "include/poison";
+include "include/wodinc";
+include "../pkg/npcs/npc_util";
+include "../pkg/character/virtue/virtue";
+include "include/spawn";
+
+program chrdeath (corpse, ghost)
+	SendInstaResDialog (ghost);
+	EraseAllSkillBonuses (ghost);
+	CurePoison (ghost);
+
+//	var newgraphic := 402 + ghost.gender;
+//	if (ghost.graphic != newgraphic)
+//		ghost.graphic := newgraphic;
+//	endif
+
+	if (ghost.cmdlevel < 1)
+		RevokePrivilege (ghost, "hearghosts");
+		RevokePrivilege (ghost, "seeghosts");
+	endif
+
+	var corpsename := ghost.name;
+	SetObjProperty (corpse, "ghost_serial", ghost.serial);
+
+	DismountGhost (ghost, corpse);
+
+	//The arena
+	if (ghost.x >= 1385 and ghost.x <= 1414 and ghost.y >= 3729 and ghost.y <= 3758 and ghost.realm == REALM_BRITANNIA)
+		AutoRes (ghost, corpse);
+		foreach reportable in (ghost.reportables)
+			ghost.RemoveReportable (reportable.serial, reportable.gameclock);
+		endforeach
+		return;
+	endif
+
+	//possess a humuc
+	foreach mob in listmobilesnearlocation(ghost.x,ghost.y,ghost.z,15, ghost.realm);
+		if (mob.npctemplate["humuc"] and GetObjProperty (mob, "master") == ghost.serial)
+			set_critical (1);
+			MoveObjectToLocation( ghost, mob.x, mob.y, mob.z, mob.realm, MOVEOBJECT_FORCELOCATION );
+			MoveObjectToLocation( mob, 5288, 1176, 0, REALM_BRITANNIA, MOVEOBJECT_FORCELOCATION );
+			Resurrect (ghost);
+
+			DoPersistedMod (ghost, "color", mob.color, ghost.color, 2400, "Humunculus");
+			DoPersistedMod (ghost, "graphic", mob.objtype, ghost.graphic, 2400, "Humunculus");
+
+			var mobpack := FindMyPack (mob.serial);
+			foreach item in ListRootItemsInContainer (mobpack)
+				MoveItemToContainer (item, ghost.backpack);
+			endforeach
+			foreach item in ListRootItemsInContainer (mob.backpack)
+				MoveItemToContainer (item, ghost.backpack);
+			endforeach
+
+			SetVital (ghost, "Life", GetVitalMaximumValue (ghost, "Life"));
+			SetVital (ghost, "Mana", GetVitalMaximumValue (ghost, "Mana"));
+			SetVital (ghost, "Stamina", GetVitalMaximumValue (ghost, "Stamina"));
+			KillNPC (mob);
+			return;
+		endif
+	endforeach
+
+	if (ghost.cmdlevel)
+		if ( GetObjProperty (ghost, "possess") )
+			unpossesscorpse (ghost, corpse);
+		endif
+		return;
+	endif
+	
+
+	SkillLoss (ghost);
+	broadcastsound();
+	broadcast(corpsename + "'s death cry is heard throughout the land!", FONT_NORMAL, 48);
+endprogram
+
+
+
+function SkillLoss ( ghost )
+	set_critical(1);
+
+	if (!GetObjProperty (ghost, "death"))
+		SetObjProperty (ghost, "death", ReadGameClock() + 3600);
+	endif
+
+	var lastdeath := GetObjProperty(ghost,"death");
+	if (lastdeath < ReadGameClock())
+		AddVirtue (ghost, RandomInt(5)+1);
+
+		SetObjProperty (ghost, "death", ReadGameClock() + 3600);
+		SetObjProperty (ghost, "skillloss",1);
+
+		for i := 0 to 57
+			if (RandomInt (2))
+				var attribute := GetAttributeIDBySkillID (i);
+				var ghostskill := GetAttributeBaseValue (ghost, attribute);
+				ghostskill := CINT (ghostskill * 0.99);
+				SetAttributeBaseValue (ghost, attribute, ghostskill);
+			endif
+		endfor
+	else
+		EraseObjProperty (ghost, "skillloss");
+	endif
+	set_critical(0);
+endfunction
+
+
+
+
+///////////////////
+//  checks the corpse for horses and dismounts them
+///////////////////
+
+function DismountGhost (ghost, corpse)
+	foreach item in EnumerateItemsInContainer (corpse)
+		if (item.objtype == UOBJ_MOUNT)
+			Dismount (ghost, item);
+		endif
+	endforeach
+endfunction
+
+
+///////////////////
+//  Used in the arena, where players automatically come back to life with no skill loss
+///////////////////
+
+function AutoRes ( ghost, corpse )
+	set_script_option (SCRIPTOPT_CAN_ACCESS_OFFLINE_MOBILES, 1);
+	sleep (5);
+	MoveObjectToLocation( ghost, 1379, 3744, 0, REALM_BRITANNIA, MOVEOBJECT_FORCELOCATION );
+	Resurrect (ghost);
+	ghost.hp := CINT (ghost.maxhp/2);
+	ghost.stamina := CINT (ghost.maxstamina/2);
+	ghost.mana := CINT (ghost.maxmana/2);
+	var robe := GetEquipmentByLayer (ghost, LAYER_ROBE);
+	if (robe)
+		DestroyItem (robe);
+	endif
+	foreach item in ListRootItemsInContainer (corpse)
+		if (!EquipItem (ghost, item))
+			MoveItemToContainer (item, ghost.backpack);
+		endif
+	endforeach
+	DestroyItem (corpse);
+endfunction
+
+
+
+function broadcastsound()
+	foreach char in enumerateonlinecharacters()
+		PlaySoundEffectPrivate( char, 0x101, char );
+	endforeach
+endfunction

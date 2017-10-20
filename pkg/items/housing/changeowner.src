@@ -1,0 +1,9 @@
+use uo;
+use os;
+
+program ChangeHouseOwner (who, title)
+	if (title)
+	endif
+	SendSysmessage (who, "You must demolish the house in order to change owners");
+
+endprogram

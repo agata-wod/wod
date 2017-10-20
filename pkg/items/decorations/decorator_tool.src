@@ -1,0 +1,496 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "../pkg/items/housing/house";
+
+var original_movable;
+
+Const OPTION_MOVE_UP		:= 1;
+Const OPTION_MOVE_DOWN		:= 2;
+Const OPTION_MOVE_NORTH		:= 3;
+Const OPTION_MOVE_SOUTH		:= 4;
+Const OPTION_MOVE_EAST		:= 5;
+Const OPTION_MOVE_WEST		:= 6;
+Const OPTION_ROTATE			:= 7;
+Const OPTION_LOCK_UNLOCK		:= 8;
+Const OPTION_SECURE_UNSECURE	:= 9;
+
+program decorators_tool (character, tool)
+	if (!ReserveItem (tool))
+		SendSysMessage (character, "Someone else is using that.");
+		return;
+	endif
+
+	//Make sure we're inside of our house
+	var housesign := FindHouseSign (character);
+	if (!housesign)
+		SendSysMessage (character, "You must be inside of your house to use this tool!");
+		SendSysMessage (character, "But you can rotate some items...");
+		var item := Target (character);
+		if (!item)
+			SendSysMessage (character, "Canceled.");
+			return;
+		elseif (!item.movable)
+			SendSysMessage (character, "You can't rotate that!");
+			return;
+		elseif (!ReserveItem (item))
+			SendSysMessage (character, "That is already in use.");
+			return;
+		elseif (!item.container)
+			SendSysMessage (character, "You can only rotate items in your backpack!");
+			return;
+		else
+			var tempitem := item;
+			repeat
+				if (tempitem.container == character.backpack)
+					RotateItem (item);
+					return;
+				else
+					tempitem := tempitem.container;
+					if (!tempitem)
+						SendSysMessage (character, "That item is not in your backpack.");
+						return;
+					endif
+				endif
+			until (!character or !item);
+		endif
+		
+		
+		return;
+	endif
+
+	SendSysMessage (character, "Select an item to move:");
+	var item := Target (character, TGTOPT_NOCHECK_LOS);
+	if (!item or item.npctemplate or item.acctname)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	//make sure its in their house, or, if its in their backpack, put it down where they're standing
+	if (!IsLocationWithinHouseSign (housesign, item.x, item.y, item.realm))
+		if (item.container)
+			var tempitem := item;
+			var move_success := 0;
+			repeat
+				if (tempitem.container == character.backpack)
+					housesign := FindHouseSign (character);
+					if (!housesign)
+						SendSysMessage (character, "You must be inside of your house to use this tool!");
+						return;
+					endif
+
+					item.movable := 1;
+					MoveObjectToLocation( item,character.x,character.y,character.z, character.realm, MOVEOBJECT_FORCELOCATION );
+					move_success := 1;
+				else
+					tempitem := tempitem.container;
+					if (!tempitem)
+						SendSysMessage (character, "That item is not in your backpack.");
+						return;
+					endif
+				endif
+			until (!character or !item or move_success == 1);
+			
+			if (!move_success)
+				SendSysMessage (character, "That item is not within your house!");
+				return;
+			endif
+		else
+			SendSysMessage (character, "That item is not within your house!");
+			return;
+		endif
+	endif
+
+	if (!item.movable)
+		if (!IsLockedDownMovableItem (item, housesign))
+			SendSysMessage (character, "You can't move that.");
+			SendSysMessage (character, "Try releasing it first.");
+			return;
+		endif
+	endif
+	
+	if (!ReserveItem (item))
+		SendSysMessage (character, "You cannot adjust that item right now.");
+		return;
+	endif
+	original_movable := item.movable;
+	
+	repeat
+		var option := DisplayGumpOptions (character, item);
+		if (!option)
+			return;
+		endif
+		
+		case (option)
+			OPTION_MOVE_NORTH:
+				if (!IsLocationWithinHouseSign (housesign, item.x, item.y - 1, item.realm))
+					SendSysMessage (character, "That would put the item outside of your house!");
+				elseif (GetObjProperty (item, "otheritems"))
+					set_critical (1);
+					foreach serialnum in GetObjProperty (item, "otheritems")
+						var theitem := SystemFindObjectBySerial (serialnum);
+						if (theitem)
+							theitem.movable := 1;
+							MoveObjectToLocation( theitem,theitem.x,theitem.y - 1,theitem.z, theitem.realm, MOVEOBJECT_FORCELOCATION );
+							theitem.movable := 0;
+						endif
+					endforeach
+					set_critical (0);
+				else
+					item.movable := 1;
+					MoveObjectToLocation( item,item.x,item.y - 1, item.z, item.realm, MOVEOBJECT_FORCELOCATION );
+					item.movable := original_movable;
+				endif
+
+			OPTION_MOVE_SOUTH:
+				if (!IsLocationWithinHouseSign (housesign, item.x, item.y + 1, item.realm))
+					SendSysMessage (character, "That would put the item outside of your house!");
+				elseif (GetObjProperty (item, "otheritems"))
+					set_critical (1);
+					foreach serialnum in GetObjProperty (item, "otheritems")
+						var theitem := SystemFindObjectBySerial (serialnum);
+						if (theitem)
+							theitem.movable := 1;
+							MoveObjectToLocation( theitem,theitem.x,theitem.y + 1,theitem.z, theitem.realm, MOVEOBJECT_FORCELOCATION );
+							theitem.movable := 0;
+						endif
+					endforeach
+					set_critical (0);
+				else
+					item.movable := 1;
+					MoveObjectToLocation( item,item.x,item.y + 1,item.z, item.realm, MOVEOBJECT_FORCELOCATION );
+					item.movable := original_movable;
+				endif
+
+			OPTION_MOVE_EAST:
+				if (!IsLocationWithinHouseSign (housesign, item.x + 1, item.y, item.realm))
+					SendSysMessage (character, "That would put the item outside of your house!");
+				elseif (GetObjProperty (item, "otheritems"))
+					set_critical (1);
+					foreach serialnum in GetObjProperty (item, "otheritems")
+						var theitem := SystemFindObjectBySerial (serialnum);
+						if (theitem)
+							theitem.movable := 1;
+							MoveObjectToLocation( theitem,theitem.x + 1,theitem.y,theitem.z, theitem.realm, MOVEOBJECT_FORCELOCATION );
+							theitem.movable := 0;
+						endif
+					endforeach
+					set_critical (0);
+				else
+					item.movable := 1;
+					MoveObjectToLocation( item,item.x + 1,item.y,item.z, item.realm, MOVEOBJECT_FORCELOCATION );
+					item.movable := original_movable;
+				endif
+
+			OPTION_MOVE_WEST:
+				if (!IsLocationWithinHouseSign (housesign, item.x - 1, item.y, item.realm))
+					SendSysMessage (character, "That would put the item outside of your house!");
+				elseif (GetObjProperty (item, "otheritems"))
+					set_critical (1);
+					foreach serialnum in GetObjProperty (item, "otheritems")
+						var theitem := SystemFindObjectBySerial (serialnum);
+						if (theitem)
+							theitem.movable := 1;
+							MoveObjectToLocation( theitem,theitem.x - 1,theitem.y,theitem.z, theitem.realm, MOVEOBJECT_FORCELOCATION );
+							theitem.movable := 0;
+						endif
+					endforeach
+					set_critical (0);
+				else
+					item.movable := 1;
+					MoveObjectToLocation( item,item.x - 1,item.y,item.z, item.realm, MOVEOBJECT_FORCELOCATION );
+					item.movable := original_movable;
+				endif
+
+			OPTION_MOVE_UP:
+				if (item.z >= character.z + 19)
+					SendSysMessage (character, "You can't raise that any higher.");
+				elseif (GetObjProperty (item, "otheritems"))
+					set_critical (1);
+					foreach serialnum in GetObjProperty (item, "otheritems")
+						var theitem := SystemFindObjectBySerial (serialnum);
+						if (theitem)
+							theitem.movable := 1;
+							MoveObjectToLocation( theitem,theitem.x,theitem.y,theitem.z + 1, theitem.realm, MOVEOBJECT_FORCELOCATION );
+
+							theitem.movable := 0;
+						endif
+					endforeach
+					set_critical (0);
+				else
+					item.movable := 1;
+					MoveObjectToLocation( item,item.x,item.y,item.z + 1, item.realm, MOVEOBJECT_FORCELOCATION );
+					item.movable := original_movable;
+				endif
+
+			OPTION_MOVE_DOWN:
+				if (item.z <= character.z)
+					SendSysMessage (character, "You can't lower that any further");
+				elseif (GetObjProperty (item, "otheritems"))
+					set_critical (1);
+					foreach serialnum in GetObjProperty (item, "otheritems")
+						var theitem := SystemFindObjectBySerial (serialnum);
+						if (theitem)
+							theitem.movable := 1;
+							MoveObjectToLocation( theitem,theitem.x,theitem.y,theitem.z - 1, theitem.realm, MOVEOBJECT_FORCELOCATION );
+							theitem.movable := 0;
+						endif
+					endforeach
+					set_critical (0);
+				else
+					item.movable := 1;
+					MoveObjectToLocation( item,item.x,item.y,item.z - 1, item.realm, MOVEOBJECT_FORCELOCATION );
+					item.movable := original_movable;
+				endif
+
+			OPTION_ROTATE:
+				if (GetObjProperty (item, "otheritems"))
+					SendSysMessage (character, "Can't do that.");
+				else
+					RotateItem (item);
+				endif
+				
+			OPTION_LOCK_UNLOCK:
+				ReleaseItem (item);
+				var parms := array{};
+				parms[1] := housesign;
+				parms[2] := character;
+				parms[3] := item;
+				parms[4] := HOUSE_LOCKDOWN_ITEM;
+				run_script_to_completion (":housing:lockunlock", parms);
+				original_movable := item.movable;
+				ReserveItem (item);
+
+			OPTION_SECURE_UNSECURE:
+				ReleaseItem (item);
+				var parms := array{};
+				parms[1] := housesign;
+				parms[2] := character;
+				parms[3] := item;
+				parms[4] := HOUSE_SECURE_CONTAINER;
+				run_script_to_completion (":housing:lockunlock", parms);
+				original_movable := item.movable;
+				ReserveItem (item);
+
+			default:
+				SendSysMessage (character, "That isn't supposed to happen!  Whaaa!");
+				return;
+		endcase
+	until (!character or !item);
+endprogram
+
+
+
+
+///////////////////
+//  Display the gump and let the player select what to do
+///////////////////
+
+function DisplayGumpOptions (character, item)
+	var gump_layout := array {
+		"page 0",
+		"nodispose",
+		"resizepic 20 20 3500 200 320",
+		"text 65 40 0 0",
+		"button 120 70 4501 4501 1 0 " + OPTION_MOVE_NORTH,
+		"text 165 85 0 1",
+		"button 120 130 4503 4503 1 0 " + OPTION_MOVE_EAST,
+		"text 165 140 0 2",
+		"button 60 130 4505 4505 1 0 " + OPTION_MOVE_SOUTH,
+		"text 50 140 0 3",
+		"button 60 70 4507 4507 1 0 " + OPTION_MOVE_WEST,
+		"text 48 85 0 4",
+		"button 50 200 5600 5604 1 0 " + OPTION_MOVE_UP,
+		"text 75 197 0 5",
+		"button 50 230 5602 5606 1 0 " + OPTION_MOVE_DOWN,
+		"text 75 227 0 6"
+	};
+	
+	var gump_data := array {
+		"Decorator's Tool",
+		"N",
+		"E",
+		"S",
+		"W",
+		"Raise item",
+		"Lower item",
+		"Rotate",
+		"Lock/Unlock",
+		"Secure/unsecure item"
+	};
+	
+	if (item.movable)
+		gump_data[9] := "Lock-down Item";
+		gump_layout.append ("button 50 280 2103 2104 1 0 " + OPTION_LOCK_UNLOCK);
+		gump_layout.append ("text 75 277 0 8");
+
+		gump_data[10] := "Secure Item";
+		gump_layout.append ("button 50 300 2103 2104 1 0 " + OPTION_SECURE_UNSECURE);
+		gump_layout.append ("text 75 297 0 9");
+	elseif (GetObjProperty (item, "secured"))
+		gump_data[10] := "Unsecure Item";
+		gump_layout.append ("button 50 300 2103 2104 1 0 " + OPTION_SECURE_UNSECURE);
+		gump_layout.append ("text 75 297 0 9");
+	else
+		gump_data[9] := "Unlock Item";
+		gump_layout.append ("button 50 280 2103 2104 1 0 " + OPTION_LOCK_UNLOCK);
+		gump_layout.append ("text 75 277 0 8");
+	endif
+
+	//Only some items are rotatable
+	var rotatecfg := ReadConfigFile (":decorations:rotate");
+	var elem := rotatecfg[item.graphic];
+	if (elem)
+		gump_layout.append ("button 50 260 2103 2104 1 0 " + OPTION_ROTATE);
+		gump_layout.append ("text 75 257 0 7");
+	endif
+
+	var gump_return := SendDialogGump (character, gump_layout, gump_data);
+	if (!gump_return[0])
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	return gump_return[0];
+endfunction
+
+
+
+
+///////////////////
+//  Determines if its an item that can be raised or lowered even though its locked down
+///////////////////
+
+function IsLockedDownMovableItem (byref item, byref housesign)
+	if (item.movable)
+		return 1;
+	endif
+
+	if (GetObjProperty (item, "lockeddown"))
+		if (GetObjProperty (item, "lockeddown") == housesign.serial)
+			if (GetObjProperty (item, "otheritems"))
+				return 1;
+			endif
+
+			case (item.objtype)
+				0x0A70:	//
+				0x0A71:	//
+				0x0A72:	//
+				0x0A73:	//
+				0x0A74:	//
+				0x0A75:	//	Lots of beds
+				0x0A76:	//
+				0x0A77:	//
+				0x0A60:	//
+				0x0A61:	//
+				0x0A5E:	//
+				0x0A5F:	//
+				0x105F:	//
+				0x1060:	//	Looms
+				0x1061:	//
+				0x1062:	//
+				0x1920:	//
+				0x1922:	//	Mills
+				0x192C:	//
+				0x192E:	//
+				0x0FE6:	//
+				0x0FE7:	//
+				0x0FE8:	//
+				0x0FE9:	//
+				0x0FEA:	//	Pentagrams
+				0x0FEB:	//
+				0x0FEC:	//
+				0x0FED:	//
+				0x0FEE:	//
+				0x1E36:	//
+				0x1E37:	//
+				0x1E38:	//
+				0x1E39:	//
+				0x1E3A:	//	Brown Bearskin Rug
+				0x1E3B:	//
+				0x1E3C:	//
+				0x1E3D:	//
+				0x1E3E:	//
+				0x1E40:	//
+				0x1E41:	//
+				0x1E42:	//
+				0x1E43:	//
+				0x1E44:	//
+				0x1E45:	//
+				0x1E46:	//
+				0x1E47:	//
+				0x1E48:	//			
+				0x1E49:	//
+				0x1E4A:	//
+				0x1E4B:	//
+				0x1E4C:	//
+				0x1E4D:	//	White Bearskin Rug
+				0x1E4E:	//
+				0x1E4F:	//
+				0x1E50:	//
+				0x1E51:	//
+				0x1E53:	//
+				0x1E54:	//
+				0x1E55:	//
+				0x1E56:	//
+				0x1E57:	//
+				0x1E58:	//
+				0x1E59:	//
+				0x1E5A:	//
+				0x1E5B:	//
+				0x0953:	//
+				0x0959:	//
+				0x0937:	//
+				0x093D:	//
+				0x0475:	//	Fireplaces
+				0x0489:	//
+				0x0482:	//
+				0x047B:	//
+				0x094B:	//
+				0x0945:	//
+				0x0967:	//
+				0x0961:	//
+				0x092B:	//
+				0x092C:	//	ovens
+				0x0931:	//
+				0x0930:	//
+						return 0;
+			default:
+				return 1;
+			endcase;
+			return 1;
+		endif
+	endif
+
+	if (GetObjProperty (item, "secured"))
+		if (GetObjProperty (item, "secured") == housesign.serial)
+			return 1;
+		endif
+	endif
+
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Rotates the item, if possible
+///////////////////
+
+function RotateItem (item)
+	var rotatecfg := ReadConfigFile (":decorations:rotate");
+	var elem := rotatecfg[item.graphic];
+	if (elem)
+		if (elem.newgraphic)
+			item.graphic := elem.newgraphic;
+		endif
+	endif
+endfunction
+
+
+
+
+

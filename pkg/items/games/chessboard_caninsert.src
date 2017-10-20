@@ -1,0 +1,22 @@
+use os;
+use uo;
+
+program caninsert_container (character, container, movetype, inserttype, item, existing_stack, amt_to_add)
+	if (amt_to_add and existing_stack and inserttype and movetype and character)
+	endif
+	if (GetObjProperty (container, "#creating_gameboard"))
+		if (item.objtype == 0x170b3)
+			return 1;
+		endif
+	endif
+
+	if (!GetObjProperty (item, "sole_container_serial"))
+		return 0;
+	endif
+	
+	if (GetObjProperty (item, "sole_container_serial") != container.serial)
+		return 0;
+	endif
+	
+	return 1;
+endprogram

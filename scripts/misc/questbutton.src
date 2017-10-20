@@ -1,0 +1,9 @@
+use os;
+use uo;
+
+program QuestButton( character )
+	var result := start_script (":guilds:textcmd/player/guild", character);
+	if (!result)
+		SendSysMessage (character, "Error: " + result);
+	endif
+endprogram

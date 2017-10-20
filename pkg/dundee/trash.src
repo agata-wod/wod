@@ -1,0 +1,77 @@
+use uo;
+use os;
+
+include "include/objtype";
+
+program trash (parms)
+	var trashcan := parms[1];
+	var who := parms[2];
+	var trashitems := EnumerateItemsInContainer(trashcan);
+	if (len(trashitems))
+
+		DoMsg(who,trashcan,"A penny for your thoughts! Actually...", 0x036);
+
+		sleep(2);
+
+		foreach item in TrashItems
+			if (item)
+				if (item.container == trashcan)
+					if (who)
+						if ( item.objtype == UOBJ_HEAD )
+							CreateItemInContainer( who.backpack, "goldcoin", amount := item.amount * 5 );
+						elseif ( item.objtype == UOBJ_TRUNK )
+							CreateItemInContainer( who.backpack, "goldcoin", amount := item.amount * 10 );
+						elseif ( item.objtype == UOBJ_HEART )
+							CreateItemInContainer( who.backpack, "goldcoin", amount := item.amount * 5 );
+						elseif ( item.objtype == UOBJ_LIVER )
+							CreateItemInContainer( who.backpack, "goldcoin", amount := item.amount * 3 );
+						elseif ( item.objtype == UOBJ_ENTRAILS )
+							CreateItemInContainer( who.backpack, "goldcoin", amount := item.amount * 3 );
+						elseif ( item.objtype == UOBJ_BRAIN )
+							CreateItemInContainer( who.backpack, "goldcoin", amount := item.amount * 3 );
+						elseif ( item.objtype == UOBJ_LEFTARM )
+							CreateItemInContainer( who.backpack, "goldcoin", amount := item.amount * 3 );
+						elseif ( item.objtype == UOBJ_RIGHTARM )
+							CreateItemInContainer( who.backpack, "goldcoin", amount := item.amount * 3 );
+						elseif ( item.objtype == UOBJ_LEFTLEG )
+							CreateItemInContainer( who.backpack, "goldcoin", amount := item.amount * 3 );
+						elseif ( item.objtype == UOBJ_RIGHTLEG )
+							CreateItemInContainer( who.backpack, "goldcoin", amount := item.amount * 3 );
+						else
+							CreateItemInContainer( who.backpack, "goldcoin", amount := item.amount );
+						endif
+					endif
+					destroyitem (item);
+					sleepms(500);
+				endif
+			endif
+		endforeach
+		PlaySoundEffect (trashcan, 0x226);
+		DoMsg(who, who, "*the gods smile*", 0);
+	else
+		DoMsg(who,trashcan," This trash barrel is empty",0);
+	endif
+	trashcan.name := trashcan.desc;
+
+endprogram
+
+function DoMsg(who, what, msg, sound)
+	if (!who)
+		return;
+	endif
+	if (who.concealed or what.container)
+		if (msg)
+			PrintTextAbovePrivate(what, msg, who);
+		endif
+		if (sound)
+			PlaySoundEffectPrivate(who , sound, who );
+		endif
+	else
+		if (msg)
+			PrintTextAbove(what, msg);
+		endif
+		if (sound)
+			PlaySoundEffect(who , sound );
+		endif
+	endif
+endfunction

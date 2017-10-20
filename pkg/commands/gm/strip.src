@@ -1,0 +1,30 @@
+use uo;
+use npc;
+
+include "include/client";
+
+Const STARTHAIR := 0x2030;
+Const ENDHAIR := 0x2060;
+
+program Stip (mstr)
+
+	var me := Target( mstr, TGTOPT_NOCHECK_LOS ); 
+
+	if (! me)
+		return;
+	endif
+
+	var beard := GetEquipmentByLayer( me, LAYER_BEARD );
+	DestroyItem( beard );
+	var hair := GetEquipmentByLayer( me, LAYER_HAIR );
+	DestroyItem( hair );
+
+	var mypack := me.backpack;
+
+	foreach thing in listequippeditems(me)
+		if ( thing.serial != mypack.serial )
+			moveitemtocontainer(thing, mstr.backpack);
+		endif
+	endforeach
+
+endprogram

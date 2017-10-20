@@ -1,0 +1,7 @@
+use uo;
+
+program itemcount( cmd )
+    if (cmd)
+    endif
+    print( "System Message: Current # of Toplevel Items - " + polcore().itemcount );
+endprogram

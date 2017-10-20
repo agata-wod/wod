@@ -1,0 +1,14 @@
+use uo;
+use os;
+include "include/packets";
+
+program changeseason (character, text)
+	case (text)
+		"a":
+			SendPacket(character, "BF0006000801");
+		"b":
+			SendPacket(character, "BF0006000800");
+		default:
+			SendSysMessage (character, "Unknown option.");
+	endcase
+endprogram

@@ -1,0 +1,54 @@
+use uo;
+use os;
+
+program christmasgift (character, giftbox)
+	if (!ReserveItem (giftbox) )
+		return;
+	endif
+
+	SendSysMessage (character, "What do you want for Christmas?");
+	var select_menu := CreateMenu ("Pick a gift:");
+	AddMenuItem (select_menu, 0x7090, "A furniture dye tub");
+	AddMenuItem (select_menu, 0x7088, "3 laminating kit");
+	AddMenuItem (select_menu, 0x7089, "3 Leather dyes");
+	AddMenuItem (select_menu, 0x1C12, "A decorative bell");
+	AddMenuItem (select_menu, 0x2118, "A teddy bear");
+	AddMenuItem (select_menu, 0x20d6, "A stuffed dragon");
+	AddMenuItem (select_menu, 0x20fa, "A bonsai tree");
+	AddMenuItem (select_menu, 0x2133, "An ophidian action figure");
+	AddMenuItem (select_menu, 0xB014, "An ankh deed");
+	AddMenuItem (select_menu, 0x10FC, "A stone face");
+	var selected_item := SelectMenuItem2 (character, select_menu);
+	if (!selected_item)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	var gift := CreateItemInBackpack (character, selected_item.objtype);
+	if (!gift)
+		SendSysMessage (character, "Your backpack is full!");
+		return;
+	endif
+	DestroyItem (giftbox);
+	
+	if (gift.objtype == 0x2118)
+		gift.name := "a teddy bear";
+	elseif (gift.objtype == 0x20d6)
+		gift.name := "a stuffed dragon";
+	elseif (gift.objtype == 0x20fa)
+		gift.name := "a bonsai tree;";
+	elseif (gift.objtype == 0x2133)
+		gift.name := "an ophidian action figure";
+	elseif (gift.objtype == 0x1C12)
+		gift.name := "a decorative bell";
+	elseif (gift.objtype == 0x7088)
+		//make 2 more
+		CreateItemInBackpack (character, selected_item.objtype);
+		CreateItemInBackpack (character, selected_item.objtype);
+	elseif (gift.objtype == 0x7089)
+		//make 2 more
+		CreateItemInBackpack (character, selected_item.objtype);
+		CreateItemInBackpack (character, selected_item.objtype);
+	endif
+	SendSysMessage (character, "Merry Christmas!");
+endprogram

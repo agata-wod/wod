@@ -1,0 +1,144 @@
+use uo;
+use cfgfile;
+use os;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/crafting";
+
+program use_flax (character, raw_material)
+
+	if (!accessible (character, raw_material))
+		SendSysMessage (character, "You can't reach that.");
+		return;
+	endif
+
+	if (!ReserveItem (raw_material))
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+
+	if (raw_material.amount < 5)
+		SendSysMessage (character, "You need 5 of those to make anything.");
+		return;
+	endif
+
+	if ( raw_material.objtype == UOBJ_THREAD1 or raw_material.objtype == UOBJ_THREAD2 or raw_material.objtype == UOBJ_YARN)
+		WeaveOnLoom (character, raw_material);
+	else
+		SpinYarn (character, raw_material);
+	endif
+endprogram
+
+
+
+
+///////////////////
+//  weaves thead or yarn into cloth
+///////////////////
+
+function WeaveOnLoom (character, raw_material)
+	if (!SearchForLoomNear (character))
+		SendSysMessage (character, "You must be closer to a loom.");
+		return;
+	endif
+
+	var produce_amount := cint (raw_material.amount/5);
+
+	var craftingbag := FindCraftingBag (character);
+	if (raw_material.objtype == UOBJ_YARN)
+		CreateItemInContainer (craftingbag, UOBJ_BOLT_OF_CLOTH, 2*produce_amount);
+	else
+		CreateItemInContainer (craftingbag, UOBJ_BOLT_OF_CLOTH, 1*produce_amount);
+	endif
+
+	SubtractAmount (raw_material, produce_amount*5);
+
+endfunction
+
+
+
+///////////////////
+//  turns raw material into yarn
+///////////////////
+
+function SpinYarn (character, raw_material)
+	var spinning_wheel := FindASpinningWheelNear (character);
+
+	if (!spinning_wheel)
+		SendSysMessage (character, "You must be closer to a spinning wheel.");
+		return;
+	endif
+	
+	case (spinning_wheel.graphic)
+		0x2dd9:
+			spinning_wheel.graphic := 0x2e3c;
+		0x2dda:
+			spinning_wheel.graphic := 0x2e3e;
+		default: 
+			spinning_wheel.graphic := spinning_wheel.objtype + 1;
+	endcase
+
+	
+	sleep(2);
+	spinning_wheel.graphic := spinning_wheel.objtype;
+
+
+	var produce_amount := cint (raw_material.amount/5);
+	var craftingbag := FindCraftingBag (character);
+	CreateItemInContainer (craftingbag, UOBJ_YARN, 2*produce_amount);
+	SubtractAmount (raw_material, 5*produce_amount);
+
+endfunction
+
+
+
+
+///////////////////
+//  searches the area around the character for a spinning wheel
+///////////////////
+
+function FindASpinningWheelNear (character)
+
+	foreach item in ListItemsNearLocation (character.x, character.y, character.z, 2, character.realm)
+		if (item.objtype == 0x1015)
+			return item;
+		elseif (item.objtype == 0x1019)
+			return item;
+		elseif (item.objtype == 0x101C)
+			return item;
+		elseif (item.objtype == 0x10A4)
+			return item;
+		elseif (item.objtype == 0x101E)
+			return item;
+		elseif (item.objtype == 0x2dd9)
+			return item;
+		elseif (item.objtype == 0x2dda)
+			return item;
+		endif
+	endforeach
+
+	return 0;
+
+endfunction
+
+
+
+
+///////////////////
+//  checks the area around the player for a loom
+///////////////////
+
+function SearchForLoomNear (character)
+
+	foreach item in ListItemsNearLocation (character.x, character.y, character.z, 2, character.realm)
+		if (item.objtype >= 0x105F and item.objtype <= 0x1066)
+			return 1;
+		endif
+	endforeach
+
+	return 0;
+
+endfunction

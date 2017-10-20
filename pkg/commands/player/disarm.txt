@@ -1,0 +1,1 @@
+.disarm will remove your weapon/shield.  .disarm [1 2 or 3] will assign what was disarmed to the number (see .arm).  ".disarm bag" will allow you to designate a container.

@@ -1,0 +1,49 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 4;
+
+program cast_darkness (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	cast_on := CheckMagicReflection (caster, cast_on);
+	if (!cast_on)
+		return;
+	endif
+	
+	PlaySoundEffect (caster, SFX_SPELL_NIGHT_SIGHT );
+	PlayObjectCenteredEffect (cast_on, FX_BLESS_EFFECT, 10, 10);
+
+	var caster_skill := GetAttribute (caster, ATTRIBUTEID_MAGERY) + GetAttribute(caster, ATTRIBUTEID_NECROMANCY);
+
+	var ev := struct;
+	ev.+ type;
+	ev.type := EVID_PEACEMADE;
+	sendevent (cast_on, ev);
+	PrintTextAbove (cast_on, cast_on.name + " is blinded!");
+	cast_on.setlightlevel ( 30, caster_skill );
+
+	detach();
+	var i;
+	for (i := 1; i <= 4; i := i + 1 )
+		sleep (9);
+		sendevent(cast_on, ev);
+	endfor
+	if (cast_on.race == RACE_ELF)
+		sleep (caster_skill);
+		cast_on.setlightlevel ( 0, -1);
+	endif
+	return 1;
+endprogram

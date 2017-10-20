@@ -1,0 +1,208 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/itemtypes";
+include "include/utility";
+
+var allmyjunk := array{};
+var stackstuff := 0;
+var recurse := 0;
+
+program textcmd_dump (character, textline)
+	if (Lower (textline) ["help"])
+		SendSysMessage (character, "DUMP: moves items from first targetted container to second.");
+		SendSysMessage (character, "Options are:");
+		SendSysMessage (character, "Sort - Stackable items are stacked with others you have, even if not in the chosen container");
+		SendSysMessage (character, "Recurse - dumps containers withing the dumped containrs, but not the container itself");
+		return;
+	endif
+	if (textline["sort"])
+		stackstuff := 1;
+	endif
+	if (textline["recurse"])
+		recurse := 1;
+	endif	
+
+	SendSysMessage (character, "Dump what?");
+	var oldcontainer := Target (character);
+	if (!oldcontainer)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (oldcontainer.objtype == UOBJ_SPELLBOOK)
+		SendSysMessage (character, "You wish.");
+		return;
+	endif
+	
+	//special for garbage cans
+	if (oldcontainer.objtype == UOBJ_TRASHBARREL)
+		if (distance (character, oldcontainer) > 3)
+			SendSysMessage (character, "That's too far away!");
+			return;
+		endif
+
+		var trashcanitems := ListRootItemsInContainer (oldcontainer);
+		if (!trashcanitems.size())
+			SendSysmessage (character, "The trash barrel is empty.");
+			return;
+		endif
+
+		SendSysMessage (character, "You remove all the items from the trash and put them in your backpack.  Eww...");
+		foreach item in trashcanitems
+			MoveItemToContainer (item, character.backpack);
+		endforeach
+		return;
+	endif
+
+	if (oldcontainer == character or oldcontainer == character.backpack)
+		oldcontainer := character.backpack;
+	elseif (!InInventory (character.backpack, oldcontainer))
+		SendSysMessage(character, "You must have that in your pack to dump it.");
+		return;
+	endif
+
+	if (oldcontainer.locked)
+		SendSysMessage (character, "It's locked.");
+		return;
+	endif
+
+	SendSysMessage (character, "Dump it into what?");
+	var newcontainer := Target (character);
+	if (!newcontainer)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (newcontainer.locked)
+		SendSysMessage (character, "It's locked.");
+		return;
+	endif
+
+	if (newcontainer == oldcontainer and !recurse)
+		SendSysMessage (character, "Done!");
+		return;
+	endif
+
+	if (newcontainer == character or newcontainer == character.backpack)
+		newcontainer := character.backpack;
+	elseif (!InInventory (character.backpack, newcontainer))
+		if (!Accessible (newcontainer, character) or Distance (newcontainer, character) > 2)
+			SendSysMessage (character, "Can't reach it.");
+			return;
+		endif
+	endif
+	
+	var num := 0;
+	ListMyStuff (character);
+	if (recurse)
+		foreach subcontainer in ListRootItemsInContainer (oldcontainer)
+			if (subcontainer.isa (POLCLASS_CONTAINER) and subcontainer.objtype != UOBJ_SPELLBOOK)
+				foreach item in ListRootItemsInContainer (subcontainer)
+					num := num + 1;
+					if (!MoveTheItem (character, item, oldcontainer, newcontainer))
+						return;
+					endif
+				endforeach
+			endif
+		endforeach
+	else
+		foreach item in ListRootItemsInContainer (oldcontainer)
+			if (item != newcontainer and !item.newbie)
+				num := num + 1;
+				if (!MoveTheItem (character, item, oldcontainer, newcontainer))
+					return;
+				endif
+			endif
+		endforeach
+	endif
+	SendSysMessage (character, num + " items moved");
+endprogram
+
+
+
+
+///////////////////
+//  Does the actual work of moving the item
+///////////////////
+
+function MoveTheItem (character, item, oldcontainer, newcontainer)
+	if (stackstuff)
+		if (IsStackableItem (item) )
+			foreach thing in allmyjunk
+				if (item.objtype == thing.objtype and item.color == thing.color and item != thing and thing.container != oldcontainer)
+					if (!InInventory (oldcontainer, thing.container))
+						if (AddAmount (thing, item.amount) )
+							DestroyItem (item);
+							return 1;
+						else
+							PrintTextAbovePrivate (character, "*That container is full!*", character);
+							return 0;
+						endif
+					endif
+				endif
+			endforeach
+			if (CreateItemInContainer (newcontainer, item.objtype, item.amount))
+				DestroyItem (item);
+				return 1;
+			else
+				PrintTextAbovePrivate (character, "*That container is full!*", character);
+				return 0;
+			endif
+		else
+			if (!MoveItemToContainer (item, newcontainer))
+				PrintTextAbovePrivate (character, "*That container is full!*", character);
+				return 0;
+			endif
+			return 1;
+		endif
+	else
+		if (IsStackableItem (item) )
+			if (CreateItemInContainer (newcontainer, item.objtype, item.amount))
+				DestroyItem (item);
+				return 1;
+			else
+				PrintTextAbovePrivate (character, "*That container is full!*", character);
+				return 0;
+			endif
+		else
+			if (!MoveItemToContainer (item, newcontainer))
+				PrintTextAbovePrivate (character, "*That container is full!*", character);
+				return 0;
+			endif
+		endif
+	endif
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  Makes a list of all the item types in the player's inventory
+///////////////////
+
+function ListMyStuff (me)
+	foreach item in EnumerateItemsInContainer (me.backpack)
+		if (item.objtype == UOBJ_SPELLBOOK)
+			foreach scroll in ListRootItemsInContainer (item)
+				if (scroll.amount > 1)
+					CreateItemInContainer (me.backpack, scroll.objtype, (scroll.amount - 1) );
+					SubtractAmount( scroll, (scroll.amount - 1) );
+				endif
+			endforeach
+		elseif (item.container.objtype != UOBJ_SPELLBOOK and item.container.objtype != UOBJ_TRASHBARREL)
+			if (!item.container.locked)
+				if (IsStackableItem (item) and item.objtype != UOBJ_GOLD_COIN)
+					allmyjunk.append (item);
+				endif
+			endif
+		endif
+	endforeach
+endfunction
+
+
+
+

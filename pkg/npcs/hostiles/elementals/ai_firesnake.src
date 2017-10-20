@@ -1,0 +1,73 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+
+const HALT_THRESHOLD := 8; // how close before he attacks?
+drop_anchor();
+
+program KillPlayers()
+
+	if (!me.backpack)
+		DoOnCreationSetup ();
+	endif
+	if (getobjproperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+	
+	PlayObjectCenteredEffect (me, 0x3709, 0x0a, 0x1e);
+	PlaySoundEffect (me, SFX_SPELL_FLAME_STRIKE);
+	sleep (2);
+
+	for i := 8 to 10
+		foreach mobile in ListMobilesInLineOfSight (me, i)
+			if (mobile.script != "humuc" and !mobile.script["merchant"])
+				if (!mobile.cmdlevel or GetObjProperty (mobile, "attackable") )
+					if (me.z < (mobile.z + 10) and me.z > (mobile.z - 10) )
+						Fight (mobile);
+						BlowUp ();
+						return;
+					endif
+				endif
+			endif
+		endforeach
+	endfor
+	
+	BlowUp ();
+endprogram
+
+
+
+function Fight (opponent)
+	var steps := 0;
+	var ev;
+	while (distance (me, opponent) > 1 and distance (me, opponent) < 20 and steps < 20 and me
+			and !opponent.dead and !opponent.hidden and !opponent.concealed)
+		RunToward (opponent);
+		steps := steps + 1;
+		ev := wait_for_event (0);
+		if (ev and ev.type == EVID_DAMAGED)
+			BlowUp ();
+			return;
+		endif
+	endwhile
+endfunction
+
+
+function BlowUp ()
+	var casterskill := GetObjProperty (me, "casterskill");
+	if (!casterskill)
+		casterskill := 100;
+	endif
+	foreach mobile in ListMobilesNearLocationEx (me.x, me.y, me.z, 2, LISTEX_FLAG_NORMAL+LISTEX_FLAG_HIDDEN, me.realm)
+		var dmg := RandomInt (CINT (casterskill/10) ) + 10;
+		DoDamageByType (me, mobile, dmg, DAMAGETYPE_FIRE);
+		PlaySoundEffect (mobile, SFX_SPELL_EXPLOSION);
+		PlayObjectCenteredEffect (mobile, FX_EXPLODE_3, 7, 0x10);
+	endforeach
+	sleepms (500);
+	KillMe();
+endfunction

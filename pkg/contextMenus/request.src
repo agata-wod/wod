@@ -1,0 +1,161 @@
+use uo;
+use os;
+use uo;
+use polsys;  
+
+include "include/objtype";
+include ":contextMenus:contextMenus";
+
+
+program Request(parms)
+	var who := parms[1];
+	var packet := parms[2];
+	var serial := packet.GetInt32(5);
+	var object := SystemFindobjectBySerial(serial, SYSFIND_SEARCH_OFFLINE_MOBILES);
+	// Define the target for the context menu
+	if(who == object)
+//		ShowMenuSelf(who, packet, serial);
+	elseif(!object.isa(POLCLASS_MOBILE) || object.isa(POLCLASS_NPC))
+		var menu := CreateContextMenu(object, who);
+		if(menu)
+			SendContextMenu(who, menu, serial, packet);
+		endif
+	endif
+	return 1;
+endprogram
+
+function CreateContextMenu(object, forChar)
+
+	var menu := CreateNewContextMenu();
+	
+	// NPCs
+	if(object.isa(POLCLASS_NPC))
+		var template := lower(object.npctemplate);
+		template[":merchants:"] := "";
+		template[":guards:"] := "";
+		template[":guardspawner:"] := "";
+		if (template != "banker")
+			if (!CheckLosAt(forChar, object.x, object.y, object.z) and !CheckLosAt(forChar, object.x, object.y, object.z + object.height) )
+				return 0;
+			endif
+		endif
+		case(template)
+			"banker":
+				ContextMenuAddItem(menu, eCMR_Bank, eCMT_Bank);
+				ContextMenuAddItem(menu, eCMR_CheckBalance, eCMT_CheckBalance);
+			"stablemaster":
+				ContextMenuAddItem(menu, eCMR_StablePet, eCMT_StablePet);
+			"ranger":
+			"weaponsmith":
+			"fisherman":
+			"shipwright":
+			"farmer":
+			"armorer":
+			"barkeep":
+			"beekeep":
+			"baker":
+			"tinker":
+			"bard":
+			"butcher":
+			"cobbler":
+			"jewler":
+			"apothecary":
+			"tailor":
+			"leatherworker":
+			"provisioner":
+			"carpenter":
+			"bowyer":
+			"architect":
+			"decorator":
+				ContextMenuAddItem(menu, eCMR_Buy, eCMT_Buy);
+				ContextMenuAddItem(menu, eCMR_Sell, eCMT_Sell);
+				ContextMenuAddItem(menu, eCMR_Train, eCMT_Train);
+				ContextMenuAddItem(menu, eCMR_CraftItem, eCMT_CraftItem);
+				ContextMenuAddItem(menu, eCMR_Quest, eCMT_Quest);
+			"mage":
+			"alchemist":
+			"scribe":
+				ContextMenuAddItem(menu, eCMR_Buy, eCMT_Buy);
+				ContextMenuAddItem(menu, eCMR_Sell, eCMT_Sell);
+				ContextMenuAddItem(menu, eCMR_Train, eCMT_Train);
+				ContextMenuAddItem(menu, eCMR_CraftItem, eCMT_CraftItem);
+				ContextMenuAddItem(menu, eCMR_Quest, eCMT_Quest);
+				ContextMenuAddItem(menu, eCMR_GateTravel, eCMT_GateTravel);
+			"castleguard":
+			"townguard":
+			"guardspawner_townguard":
+			"guardspawner_post_guard":
+				ContextMenuAddItem(menu, eCMR_Quest, eCMT_Quest);
+				ContextMenuAddItem(menu, eCMR_SummonPet, eCMT_SummonPet);
+				ContextMenuAddItem(menu, eCMR_Join, eCMT_Join);
+			"orderguard":
+			"chaosguard":
+				ContextMenuAddItem(menu, eCMR_Quest, eCMT_Quest);
+				ContextMenuAddItem(menu, eCMR_SummonPet, eCMT_SummonPet);
+				ContextMenuAddItem(menu, eCMR_Join, eCMT_Join);
+				if (GetObjProperty (forChar, "guardtype"))
+					ContextMenuAddItem(menu, eCMR_Resign, eCMT_Resign);
+				endif
+			
+			"warrior":
+				if (GetObjProperty (object, "master"))
+					if (GetObjProperty (object, "master") == forChar.serial)
+						ContextMenuAddItem(menu, eCMR_CommKill, eCMT_CommKill);
+						ContextMenuAddItem(menu, eCMR_CommFollow, eCMT_CommFollow);
+						ContextMenuAddItem(menu, eCMR_CommGuard, eCMT_CommGuard);
+						ContextMenuAddItem(menu, eCMR_CommStop, eCMT_CommStop);
+						ContextMenuAddItem(menu, eCMR_Status, eCMT_Status);
+						ContextMenuAddItem(menu, eCMR_Dismiss, eCMT_Dismiss);
+					endif
+				else
+					ContextMenuAddItem(menu, eCMR_Hire, eCMT_Hire);
+				endif
+		endcase
+	elseif (object.objtype == UOBJ_TRASHBARREL)
+		ContextMenuAddItem (menu, eCMR_Clear, eCMT_Clear);
+	endif
+	
+	if(Len(menu) > 0)
+		return menu;
+	endif
+	
+	return error;
+endfunction
+
+function ShowMenuSelf(who, byref packet, aboveObjectSerial)
+	var menu := CreateNewContextMenu();
+	ContextMenuAddItem(menu, 0x0001, 6123);
+	SendContextMenu(who, menu, aboveObjectSerial, packet);
+endfunction
+
+function ReceiveMenuSelf(who, object, result)
+	case(result)
+		0x01: OpenPaperdoll(who, who);
+	endcase
+	CInt(object);
+endfunction
+
+function SendContextMenu(who, byref menu, aboveObjectSerial, byref packet)
+	if(!Len(menu))
+		return;
+	endif
+	packet.SetSize(12 + (Len(menu) * 8));
+	packet.SetInt16(03, 0x14);
+	packet.SetInt8(05, 0x00);
+	packet.SetInt8(06, 0x01);
+	packet.SetInt32(07, aboveObjectSerial);
+	packet.SetInt8(11, Len(menu));
+	var index := 12;
+	foreach item in menu                                   
+		packet.SetInt16(index, item[1]);
+		index += 2;
+		packet.SetInt16(index, item[2]);
+		index += 2;
+		packet.SetInt16(index, item[3]);
+		index += 2;
+		packet.SetInt16(index, item[4]);
+		index += 2;
+	endforeach
+	packet.SendPacket(who);
+endfunction
+

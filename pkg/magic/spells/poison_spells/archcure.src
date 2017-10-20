@@ -1,0 +1,44 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 4;
+
+program cast_archcure( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_loc := GetSpellCastOn (caster, parms);
+	if (!cast_loc)
+		return 0;
+	endif
+
+	var range := CINT (caster_magery/15);
+	foreach mobile in ListMobilesNearLocation (cast_loc.x, cast_loc.y, cast_loc.z, range, cast_loc.realm)
+		if (mobile.poisoned)
+			var diffi := (GetPoisonLevel(mobile) * 5)+50;
+			PlayObjectCenteredEffect(mobile, FX_BLESS_EFFECT, 5, 5);
+			if ( CheckSkill(caster, SKILLID_MAGERY, diffi, 0) )
+				CurePoison (mobile, SFX_SPELL_CURE, caster.name+ " has CURED you!");
+				if ( caster != mobile )
+					SendSysMessage( caster, "You have CURED " + mobile.name );
+				endif
+			else
+				if (mobile == caster)
+					SendSysMessage (caster, "You have FAILED to cure yourself!");
+				else
+					SendSysMessage (mobile, caster.name+ " has FAILED to cure you!");
+					SendSysMessage (caster, "You have FAILED to cure " + mobile.name);
+				endif
+			endif
+		else
+			CurePoison (mobile, SFX_SPELL_CURE, caster.name+ " has CURED you!");
+		endif
+	endforeach
+	return 1;
+endprogram

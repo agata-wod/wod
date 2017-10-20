@@ -1,0 +1,66 @@
+use os;
+use uo;
+use util;
+
+include "include/client";
+include "include/poison";
+include "include/dotempmods";
+include "../pkg/character/virtue/virtue";
+
+Const EFFECT_SPARKLE := 0x373a;
+Const SOUND_EFFECT_RES := 0x215;
+
+program shrinewalkon( parms );
+
+	var who := parms[1];
+	var item := parms[2];
+
+	if (who.npctemplate) return; endif
+
+	if (who.poisoned)
+		CurePoison(who,0,"Cured!");
+	endif
+
+	set_critical( 1 );
+	if( who.dead )
+		PlaySoundEffect( who, SOUND_EFFECT_RES );
+		Resurrect( who );
+		PlayObjectCenteredEffect( who, EFFECT_SPARKLE, 10,10);
+		who.graphic := 400+who.gender;
+		who.color := who.truecolor;
+		return;
+	endif
+
+	var shrine:= getobjproperty(item,"shrine");
+	if ( shrine )
+		var shrineflag := getobjproperty(who,"shrines");
+		if (!shrineflag) shrineflag := 0; endif
+		if (!FlagCheck(shrineflag, shrine))
+			shrineflag := FlagSet(shrineflag, shrine);
+
+			PlaySoundEffect( who, SFX_1F3 );
+			PlayObjectCenteredEffect( who, EFFECT_SPARKLE, 10,10);
+
+			SetObjProperty(who,"shrines",shrineflag);
+			PrintTextAbovePrivate(who,"You meditate at the shrine of " + 
+				ShrineName(shrine), who);
+			AddVirtue(who, 5);
+		endif
+	endif
+
+endprogram
+
+function ShrineName(shrine)
+
+	case (shrine)
+	1: return "Sacrifice";
+	2: return "Spirituality";
+	3: return "Justice";
+	4: return "Humility";
+	5: return "Honor";
+	6: return "Honesty";
+	7: return "Compassion";
+	8: return "Valor";
+	endcase
+
+endfunction

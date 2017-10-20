@@ -1,0 +1,97 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+include "include/skills";
+include "include/effects";
+var spell_circle := 8;
+
+
+program enduring_renewal (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+
+	if (caster != "nocaster")
+		if (!CheckSkill (caster, SKILLID_ANIMALLORE, 80, 0))
+			SendSysMessage (caster, "The elements do not heed your call");
+			EraseObjProperty (caster, "#castingdruidspell");
+			Fizzle (caster);
+			return 0;
+		endif
+	endif
+	
+	var cast_on := GetSpellCastOn (caster, parms);
+	if (!cast_on)
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+	
+	//allow them to cast another spell now
+	EraseObjProperty (caster, "#castingdruidspell");
+	detach ();
+
+	var caster_animallore := GetAttribute (caster, ATTRIBUTEID_ANIMALLORE);
+	if (caster == "nocaster")
+		caster_animallore := 100;	
+	endif
+	
+	var range := CINT (caster_magery/15);
+	if (!range or range < 3)
+		range := 3;
+	endif
+	var duration := CINT (caster_animallore/4);
+	if (duration < 10)
+		duration := 10;
+	endif
+	var health_per_tick := CINT ((caster_animallore - 45) / 10);
+	if (health_per_tick < 3)
+		health_per_tick := 3;
+	endif
+	
+	//Figure out what mobs were affected, and if the spell affects good or evil
+	var affected_mobs := array{};
+	if (IsGood (caster))
+		foreach mobile in ListMobilesNearLocation (cast_on.x, cast_on.y, cast_on.z, range, cast_on.realm)
+			if (IsGood (mobile))
+				affected_mobs.append (mobile);
+				PlayObjectCenteredEffect (mobile, FX_SPARK_EFFECT, 7, 0x10);
+			endif
+		endforeach
+	else
+		foreach mobile in ListMobilesNearLocation (cast_on.x, cast_on.y, cast_on.z, range, cast_on.realm)
+			if (IsHostile (mobile))
+				affected_mobs.append (mobile);
+				PlayObjectCenteredEffect (mobile, FX_SPARK_EFFECT, 7, 0x10);
+			endif
+		endforeach
+	endif
+	
+	for i := 1 to duration
+		foreach mobile in affected_mobs
+			if (mobile and !mobile.dead)
+				HealDamage (mobile, health_per_tick);
+				if (mobile.poisoned)
+					CurePoison (mobile, SFX_SPELL_CURE, caster.name+ " has CURED you!");
+				endif
+//				//occasionally play special effects...
+//				if ((duration%3) == 0)
+//					PlayObjectCenteredEffect (mobile, FX_SPARK_EFFECT, 7, 0x10);
+//				endif
+			endif
+		endforeach
+		sleep (2);
+	endfor
+	return 1;
+endprogram
+
+
+
+
+

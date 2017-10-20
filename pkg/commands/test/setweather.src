@@ -1,0 +1,9 @@
+use uo;
+
+program setweather( who )
+
+	SendSysMessage(who,"Starting weather system");
+	var res := SetRegionWeatherLevel( "IceIsland", 2, 50, 20, 1);
+	sendsysmessage(who,res.errortext);
+
+endprogram

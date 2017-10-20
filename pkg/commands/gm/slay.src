@@ -1,0 +1,33 @@
+use os;
+use uo;
+use cfgfile;
+
+include "include/wodinc";
+include "../pkg/npcs/npc_util";
+
+program textcmd_kill (character)
+	var targetted := Target (character, TGTOPT_NOCHECK_LOS);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (targetted.dead or !GetVital (targetted, "Life"))
+		SendSysMessage (character, "Invalid Target." );
+		return;
+	endif
+
+	if (targetted.acctname)
+		var prop := struct {};
+		var thelog := array{ };
+		prop .+ name := character.acctname + " " + character.name + " used the kill command!";
+		prop .+ value := "and " + targetted.acctname + " " + targetted.name + " got killed!";
+		var elemkey := character.name + "(" + character.acctname + ")";
+		thelog[1] := prop;
+		AppendConfigFileElem ( "helppages", "KILLED BY: ", elemkey, thelog );
+		UnloadConfigFile ("helppages");
+	endif
+
+	RevokePrivilege (targetted, "invul" );
+	DoDamageByType (0, targetted, CINT (GetVital (targetted, "Life")/100) + 3, DAMAGETYPE_PHYSICAL);
+endprogram

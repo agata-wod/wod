@@ -1,0 +1,84 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+include "../pkg/items/housing/house";
+include "../pkg/world/weather/weather";
+var spell_circle := 3;
+
+program cast_teleport( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_loc := GetSpellCastOn (caster, parms);
+	if (!cast_loc)
+		return 0;
+	endif
+
+	//blocks off green acres so no one can teleport in there from a dungeon
+	if (cast_loc.realm == REALM_BRITANNIA)
+		if (cast_loc.x > 5120 and cast_loc.x < 6140 and cast_loc.y > 2048 and cast_loc.y < 2312)
+			SendSysmessage( caster, "You cannot teleport there." );
+			return 0;
+		//compassion shrine
+		elseif (cast_loc.x > 1848 and cast_loc.x < 1867 and cast_loc.y > 868 and cast_loc.y < 882)
+			SendSysmessage( caster, "You cannot teleport there." );
+			return 0;
+		endif
+	endif
+	var sign := FindHouseSignAtLocation (cast_loc.x, cast_loc.y, cast_loc.realm);
+	if (sign)
+		if (!IsAFriend (sign, caster))
+			SendSysMessage (caster, "You cannot teleport near other player's houses.");
+			return;
+		endif
+	endif
+
+	var sh := GetStandingHeight (cast_loc.x, cast_loc.y, cast_loc.z, cast_loc.realm );
+	if (sh.multi or sh.multi.serial)
+		SendSysmessage( caster, "You cannot teleport there." );
+		return 0;
+	endif
+
+	var water := array{ 0xA8, 0xA9, 0x64, 0xAA, 0xAB };
+
+	foreach item in ListItemsNearLocation (cast_loc.x, cast_loc.y, cast_loc.z, 4, cast_loc.realm)
+		if( (item.objtype == 61457 or item.objtype == 61458) and (GetMapInfo (cast_loc.x, cast_loc.y, cast_loc.realm).landtile in water) )
+			SendSysmessage( caster, "You cannot teleport there." );
+			return 0;
+		endif
+	endforeach
+
+	var sx := caster.x;
+	var sy := caster.y;
+	var sz := caster.z;
+	var sr := caster.realm;
+
+	MoveObjectToLocation( caster, cast_loc.x,cast_loc.y, cast_loc.z, cast_loc.realm, MOVEOBJECT_NORMAL );
+	SetWeatherForPlayer (caster);
+
+	PlayStationaryEffect (sx, sy, sz, FX_SMOKE, 0xA, 0xA, 0, sr);
+	PlayStationaryEffect (caster.x, caster.y, caster.z, FX_SMOKE, 0xA, 0xA, 0, caster.realm);
+	PlaySoundEffect (caster, SFX_SPELL_TELEPORT);
+	return 1;
+endprogram
+
+
+
+function IsInsideStatic(destx, desty, sign)
+
+	local homeinfo := GetObjProperty(sign,"homeinfo");
+	if (!homeinfo) return; endif
+	if ( (destx >= homeinfo[2] and destx <= homeinfo[4]) and
+	     (desty >= homeinfo[3] and desty <= homeinfo[5]) )
+		return 1;
+	else
+		return 0;
+	endif
+
+endfunction

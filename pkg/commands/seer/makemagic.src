@@ -1,0 +1,799 @@
+use uo;
+use os;
+use cfgfile;
+use util;
+
+include "include/string";
+include "include/skills";
+include "include/magicitems";
+
+var blank_gump_layout := array {
+	"nodispose",
+	"page 0",
+	"resizepic 0 0 2600 500 600"
+};
+
+var blank_gump_data := array {
+	"filler"
+};
+
+var gump_layout := blank_gump_layout;
+
+var gump_data := blank_gump_data;
+
+var string_counter := 1;
+
+var item_type := 0;
+
+Const BUTTONID_OK := 1;
+
+Const CHECKBOX_1 := 51;
+Const CHECKBOX_2 := 52;
+Const CHECKBOX_3 := 53;
+
+
+program makemagicitems (speaker, text)
+	text := lower (text);
+	if (text["random"])
+		var splittext := SplitWords (text);
+		var quality := CINT (splittext[2]);
+		if (!quality)
+			quality := RandomInt (10) + 1;
+		endif
+		if (quality > 10)
+			quality := 10;
+		endif
+		if (quality < 1)
+			quality := 1;
+		endif
+		MakeRandomMagic (speaker, quality);
+		return;
+	elseif (text == "special")
+		AddSpecialAbilities (speaker);
+		return;
+	endif
+
+	SendSysMessage (speaker, "Target an item:");
+	var item := Target (speaker);
+	if (!item)
+		SendSysMessage (speaker, "Canceled.");
+		return;
+	endif
+
+	var itemdesccfg := ReadConfigFile (":*:itemdesc");
+	var item_name := itemdesccfg[item.objtype].name;
+	if (!item_name)
+		SendSysMessage (speaker, "You cannot make that item magical.");
+		return;
+	endif
+
+	item_type := GetItemtype (item);
+
+	case (item_type)
+		ITEMTYPE_WEAPON:
+			SetupMagicalWeaponGump (speaker, item);
+		ITEMTYPE_ARMOR:
+			SetupMagicalArmorGump (speaker, item);
+		ITEMTYPE_SHIELD:
+			SetupMagicalShieldGump (speaker, item);
+		ITEMTYPE_MUSICAL:
+			SetupMagicalInstrumentGump (speaker, item);
+		ITEMTYPE_WAND:
+			SetupMagicalWandGump (speaker, item);
+		ITEMTYPE_JEWELRY:
+			SetupMagicalJewelryGump (speaker, item);
+		default:
+			SendSysMessage (speaker, "You cannot make that item magical.");
+			return;
+	endcase;
+endprogram
+
+function SetupMagicalWeaponGump (speaker, item)
+	gump_layout := blank_gump_layout;
+	gump_data := blank_gump_data;
+	string_counter := 1;
+
+	AddPrefixOptions ("Fine", "Durable", "Rugged", "Tempered", "Indestructable");
+	AddSuffixOptions ("of Quality", "of Might", "of Maiming", "of Power", "of Destruction");
+	AddCheckButtons ("Silver", "SkillBonus");
+	AddWeaponSpells ();
+	AddEndButtons ();
+
+	var gump_return := SendDialogGump (speaker, gump_layout, gump_data);
+
+	if (!gump_return[BUTTONID_OK])
+		SendSysMessage (speaker, "Canceled.");
+		return;
+	else
+		DoPrefixProcessing (speaker, item, gump_return);
+		DoSuffixProcessing (speaker, item, gump_return);
+		if (!item.name["a magic "])
+			item.name := "a magic " + TruncateArticle (item.desc);
+		endif
+		item.quality := 1.2;
+		item.hp := item.maxhp;
+		SetObjProperty (item, "unidentified", 1);
+		SendSysMessage (speaker, "Done.");
+	endif
+
+endfunction
+
+function SetupMagicalShieldGump (speaker, item)
+	gump_layout := blank_gump_layout;
+	gump_data := blank_gump_data;
+	string_counter := 1;
+
+	AddPrefixOptions ("Fine", "Durable", "Rugged", "Tempered", "Indestructable");
+	AddSuffixOptions ("of Defense", "of Guarding", "of Protection", "of Fortification", "of Invulnerability");
+	AddCheckButtons ("SkillBonus");
+	AddEndButtons ();
+
+	var gump_return := SendDialogGump (speaker, gump_layout, gump_data);
+
+	if (!gump_return[BUTTONID_OK])
+		SendSysMessage (speaker, "Canceled.");
+		return;
+	else
+		DoPrefixProcessing (speaker, item, gump_return);
+		DoSuffixProcessing (speaker, item, gump_return);
+		if (!item.name["a magic "])
+			item.name := "a magic " + TruncateArticle (item.desc);
+		endif
+		item.quality := 1.2;
+		item.hp := item.maxhp;
+		SetObjProperty (item, "unidentified", 1);
+		SendSysMessage (speaker, "Done.");
+	endif
+
+endfunction
+
+
+function SetupMagicalArmorGump (speaker, item)
+	gump_layout := blank_gump_layout;
+	gump_data := blank_gump_data;
+	string_counter := 1;
+
+	AddPrefixOptions ("Fine", "Durable", "Rugged", "Tempered", "Indestructable");
+	AddSuffixOptions ("of Defense", "of Guarding", "of Protection", "of Fortification", "of Invulnerability");
+	AddArmorSkillBonus ();
+	AddArmorSpells ();
+	AddEndButtons ();
+
+	var gump_return := SendDialogGump (speaker, gump_layout, gump_data);
+
+	if (!gump_return[BUTTONID_OK])
+		SendSysMessage (speaker, "Canceled.");
+		return;
+	else
+		DoPrefixProcessing (speaker, item, gump_return);
+		DoSuffixProcessing (speaker, item, gump_return);
+		if (!item.name["a magic "])
+			item.name := "a magic " + TruncateArticle (item.desc);
+		endif
+		item.quality := 1.2;
+		item.hp := item.maxhp;
+		SetObjProperty (item, "unidentified", 1);
+		SendSysMessage (speaker, "Done.");
+	endif
+
+endfunction
+
+function SetupMagicalInstrumentGump (speaker, item)
+	gump_layout := blank_gump_layout;
+	gump_data := blank_gump_data;
+	string_counter := 1;
+
+	AddPrefixOptions ("Musicianship", "Provoke", "Peacemaking");
+	AddSuffixOptions ("of Sonority", "of Accord", "of Melody", "of Harmony", "of Consonance");
+	AddEndButtons ();
+
+	var gump_return := SendDialogGump (speaker, gump_layout, gump_data);
+
+	if (!gump_return[BUTTONID_OK])
+		SendSysMessage (speaker, "Canceled.");
+		return;
+	else
+		DoMusicProcessing (speaker, item, gump_return);
+		if (!item.name["a magic "])
+			item.name := "a magic " + TruncateArticle (item.desc);
+		endif
+		SetObjProperty (item, "unidentified", 1);
+		SendSysMessage (speaker, "Done.");
+	endif
+
+endfunction
+
+function SetupMagicalWandGump (speaker, item)
+	if (speaker and item)
+	endif
+	gump_layout := blank_gump_layout;
+	gump_data := blank_gump_data;
+	string_counter := 1;
+endfunction
+
+function SetupMagicalJewelryGump (speaker, item)
+	if (speaker and item)
+	endif
+	gump_layout := blank_gump_layout;
+	gump_data := blank_gump_data;
+	string_counter := 1;
+endfunction
+
+
+
+
+function AddPrefixOptions (option1, option2 := 0, option3 := 0, option4 := 0, option5 := 0, option6 := 0)
+	gump_data.append ("Prefix:");
+	gump_layout.append ("text 40 40 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("group 1");
+	gump_layout.append ("radio 45 60 208 209 1 " + 100);
+	gump_data.append ("none");
+	gump_layout.append ("text 65 60 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("radio 45 80 208 209 0 " + 101);
+	gump_data.append (option1);
+	gump_layout.append ("text 65 80 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	if (option2)
+		gump_layout.append ("radio 45 100 208 209 0 " + 102);
+		gump_data.append (option2);
+		gump_layout.append ("text 65 100 0 " + string_counter);
+		string_counter := string_counter + 1;
+	endif
+
+	if (option3)
+		gump_layout.append ("radio 45 120 208 209 0 " + 103);
+		gump_data.append (option3);
+		gump_layout.append ("text 65 120 0 " + string_counter);
+		string_counter := string_counter + 1;
+	endif
+
+	if (option4)
+		gump_layout.append ("radio 45 140 208 209 0 " + 104);
+		gump_data.append (option4);
+		gump_layout.append ("text 65 140 0 " + string_counter);
+		string_counter := string_counter + 1;
+	endif
+
+	if (option5)
+		gump_layout.append ("radio 45 160 208 209 0 " + 105);
+		gump_data.append (option5);
+		gump_layout.append ("text 65 160 0 " + string_counter);
+		string_counter := string_counter + 1;
+	endif
+
+	if (option6)
+		gump_layout.append ("radio 45 180 208 209 0 " + 106);
+		gump_data.append (option6);
+		gump_layout.append ("text 65 180 0 " + string_counter);
+		string_counter := string_counter + 1;
+	endif
+endfunction
+
+
+
+
+function AddSuffixOptions (option1, option2 := 0, option3 := 0, option4 := 0, option5 := 0, option6 := 0)
+	gump_data.append ("Suffix:");
+	gump_layout.append ("text 250 40 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("group 2");
+	gump_layout.append ("radio 255 60 208 209 1 " + 200);
+	gump_data.append ("none");
+	gump_layout.append ("text 275 60 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("radio 255 80 208 209 0 " + 201);
+	gump_data.append (option1);
+	gump_layout.append ("text 275 80 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	if (option2)
+		gump_layout.append ("radio 255 100 208 209 0 " + 202);
+		gump_data.append (option2);
+		gump_layout.append ("text 275 100 0 " + string_counter);
+		string_counter := string_counter + 1;
+	endif
+
+	if (option3)
+		gump_layout.append ("radio 255 120 208 209 0 " + 203);
+		gump_data.append (option3);
+		gump_layout.append ("text 275 120 0 " + string_counter);
+		string_counter := string_counter + 1;
+	endif
+
+	if (option4)
+		gump_layout.append ("radio 255 140 208 209 0 " + 204);
+		gump_data.append (option4);
+		gump_layout.append ("text 275 140 0 " + string_counter);
+		string_counter := string_counter + 1;
+	endif
+
+	if (option5)
+		gump_layout.append ("radio 255 160 208 209 0 " + 205);
+		gump_data.append (option5);
+		gump_layout.append ("text 275 160 0 " + string_counter);
+		string_counter := string_counter + 1;
+	endif
+
+	if (option6)
+		gump_layout.append ("radio 255 180 208 209 0 " + 206);
+		gump_data.append (option6);
+		gump_layout.append ("text 275 180 0 " + string_counter);
+		string_counter := string_counter + 1;
+
+		if (option6["Skill Bonus:"])
+			gump_layout.append("gumppic 392 180 2444");
+
+			gump_data.append ("0");
+			gump_layout.append ("textentry 400 182 50 20 0 70 " + string_counter);
+			string_counter := string_counter + 1;
+		endif
+	endif
+endfunction
+
+
+
+
+function AddWeaponSpells ()
+	gump_data.append ("Hit Spells:");
+	gump_layout.append ("text 40 250 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("group 3");
+	gump_layout.append ("radio 45 270 208 209 1 " + 300);
+	gump_data.append ("none");
+	gump_layout.append ("text 65 270 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("radio 45 290 208 209 0 " + 301);
+	gump_data.append ("Feeblemind");
+	gump_layout.append ("text 65 290 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("radio 45 310 208 209 0 " + 302);
+	gump_data.append ("Clumsy");
+	gump_layout.append ("text 65 310 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("radio 45 330 208 209 0 " + 303);
+	gump_data.append ("Weakness");
+	gump_layout.append ("text 65 330 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("radio 45 350 208 209 0 " + 304);
+	gump_data.append ("Harm");
+	gump_layout.append ("text 65 350 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("radio 45 370 208 209 0 " + 305);
+	gump_data.append ("Fireball");
+	gump_layout.append ("text 65 370 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("radio 45 390 208 209 0 " + 306);
+	gump_data.append ("Curse");
+	gump_layout.append ("text 65 390 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("radio 45 410 208 209 0 " + 307);
+	gump_data.append ("Lightning");
+	gump_layout.append ("text 65 410 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("radio 45 430 208 209 0 " + 308);
+	gump_data.append ("Paralyze");
+	gump_layout.append ("text 65 430 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("radio 45 450 208 209 0 " + 309);
+	gump_data.append ("Dispel");
+	gump_layout.append ("text 65 450 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("radio 45 470 208 209 0 " + 310);
+	gump_data.append ("Manadrain");
+	gump_layout.append ("text 65 470 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_data.append ("Charges");
+	gump_layout.append ("text 65 510 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append("gumppic 122 510 2444");
+
+	gump_data.append ("0");
+	gump_layout.append ("textentry 130 512 50 20 0 60 " + string_counter);
+	string_counter := string_counter + 1;
+
+endfunction
+
+
+
+
+function AddArmorSpells ()
+	gump_data.append ("Equip Spells:");
+	gump_layout.append ("text 40 250 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("group 3");
+	gump_layout.append ("radio 45 270 208 209 1 " + 300);
+	gump_data.append ("none");
+	gump_layout.append ("text 65 270 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("radio 45 290 208 209 0 " + 301);
+	gump_data.append ("Magic Reflection");
+	gump_layout.append ("text 65 290 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("radio 45 310 208 209 0 " + 302);
+	gump_data.append ("Sneaking");
+	gump_layout.append ("text 65 310 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("radio 45 330 208 209 0 " + 303);
+	gump_data.append ("Regeneration");
+	gump_layout.append ("text 65 330 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append ("radio 45 350 208 209 0 " + 304);
+	gump_data.append ("Poison Protection");
+	gump_layout.append ("text 65 350 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_data.append ("Charges");
+	gump_layout.append ("text 65 510 0 " + string_counter);
+	string_counter := string_counter + 1;
+
+	gump_layout.append("gumppic 122 510 2444");
+
+	gump_data.append ("0");
+	gump_layout.append ("textentry 130 512 50 20 0 60 " + string_counter);
+	string_counter := string_counter + 1;
+
+endfunction
+
+
+
+
+function AddCheckButtons (option1, option2 := 0)
+	gump_layout.append ("checkbox 40 210 210 211 0 " + CHECKBOX_1);
+	gump_data.append (option1);
+	gump_layout.append ("text 65 210 0 " + string_counter);
+	string_counter := string_counter + 1;
+	
+	if (option2 or len (option2))
+		gump_layout.append ("checkbox 240 210 210 211 0 " + CHECKBOX_2);
+		gump_data.append (option2);
+		gump_layout.append ("text 265 210 0 " + string_counter);
+		string_counter := string_counter + 1;
+	endif
+endfunction
+
+
+
+
+function AddArmorSkillBonus ()
+	gump_layout.append ("checkbox 40 210 210 211 0 " + CHECKBOX_1);
+	gump_data.append ("Skill bonus ID");
+	gump_layout.append ("text 65 210 0 " + string_counter);
+	string_counter := string_counter + 1;
+	
+	gump_layout.append ("gumppic 172 210 2444");
+	gump_data.append ("0");
+	gump_layout.append ("textentry 180 212 50 20 0 61 " + string_counter);
+	string_counter := string_counter + 1;
+endfunction
+
+
+
+
+function AddEndButtons ()
+	gump_layout.append ("button 250 550 243 241 1 0 0");
+	gump_layout.append ("button 350 550 249 247 1 0 " + BUTTONID_OK);
+endfunction
+
+
+
+
+function DoPrefixProcessing (speaker, item, gump_return)
+	if (speaker and item)
+	endif
+	var prefix_type := 0;
+	for i := 100 to 106;
+		if (gump_return [i])
+			prefix_type := CInt(i);
+		endif
+	endfor
+
+	if (item_type == ITEMTYPE_WEAPON or item_type == ITEMTYPE_ARMOR or item_type == ITEMTYPE_SHIELD)
+		var item_hp_mod := prefix_type-100;
+		DoHPModifier (item, item_hp_mod);
+		if (gump_return[CHECKBOX_1] and item_type == ITEMTYPE_WEAPON)
+			MakeWeaponSilver (item);
+		else
+			EraseObjProperty (item, "silver");
+		endif
+		if (gump_return[CHECKBOX_2] and item_type == ITEMTYPE_WEAPON)
+			DoWeaponSkillModifier (item, item_hp_mod);
+		endif
+		if (gump_return[CHECKBOX_1] and item_type == ITEMTYPE_SHIELD)
+			DoShieldSkillModifier (item, item_hp_mod);
+		endif
+
+		if (gump_return[CHECKBOX_1] and item_type == ITEMTYPE_ARMOR)
+			var skillid := CSTR (gump_return[61]);
+			skillid := CINT (skillid[(find(skillid, " ", 1)+1), len(skillid)]);
+			if (skillid > 57)
+				skillid := 57;
+			endif
+			SetObjProperty (item, "skilladv", skillid);
+			SetObjProperty (item, "skill"+skillid, (item_hp_mod*SKILLBONUS_LEVEL));
+			AddToItemSuffix (item, Lower (GetSkillName (skillid)));
+		endif
+	endif
+endfunction
+
+
+
+
+function DoSuffixProcessing (speaker, item, gump_return)
+	if (speaker)
+	endif
+	var suffix_type := 0;
+	var suffix_type2 := 0;
+	for i := 200 to 206;
+		if (gump_return [i])
+			suffix_type := CInt(i);
+		endif
+	endfor
+
+	for i := 300 to 310
+		if (gump_return [i])
+			suffix_type2 := CInt (i);
+		endif
+	endfor
+
+	if (item_type == ITEMTYPE_WEAPON)
+		var item_dmg_mod := suffix_type-200;
+		DoDmgModifier (item, item_dmg_mod);
+
+		//now the magic spells
+		var numcharges := CSTR (gump_return[60]);
+		numcharges := CINT (numcharges[(find(numcharges, " ", 1)+1), len(numcharges)]);
+		if (numcharges)
+			case (suffix_type2)
+				301:
+					AddToItemSuffix (item, "Feeblemindedness");
+					SetObjProperty (item, "itemspellname", "Feeblemindedness");
+					SetObjProperty (item, "hitspell", ":statmod_spells:feeblemind");
+				302:
+					AddToItemSuffix (item, "Clumsiness");
+					SetObjProperty (item, "itemspellname", "Clumsiness");
+					SetObjProperty (item, "hitspell", ":statmod_spells:clumsy");
+				303:
+					AddToItemSuffix (item, "Weakness");
+					SetObjProperty (item, "itemspellname", "Weakness");
+					SetObjProperty (item, "hitspell", ":statmod_spells:weakness");
+				304:
+					AddToItemSuffix (item, "Harming");
+					SetObjProperty (item, "itemspellname", "Harming");
+					SetObjProperty (item, "hitspell", ":damage_spells:harm");
+				305:
+					AddToItemSuffix (item, "Flametongue");
+					SetObjProperty (item, "itemspellname", "Flametongue");
+					SetObjProperty (item, "hitspell", ":damage_spells:fireball");
+				306:
+					AddToItemSuffix (item, "Cursing");
+					SetObjProperty (item, "itemspellname", "Cursing");
+					SetObjProperty (item, "hitspell", ":statmod_spells:curse");
+				307:
+					AddToItemSuffix (item, "Lightning");
+					SetObjProperty (item, "itemspellname", "Lightning");
+					SetObjProperty (item, "hitspell", ":damage_spells:lightning");
+				308:
+					AddToItemSuffix (item, "Paralyzation");
+					SetObjProperty (item, "itemspellname", "Paralyzation");
+					SetObjProperty (item, "hitspell", ":statmod_spells:paralyze");
+				309:
+					AddToItemSuffix (item, "Dispelling");
+					SetObjProperty (item, "itemspellname", "Dispelling");
+					SetObjProperty (item, "hitspell", ":summoning_spells:massdispel");
+				310:
+					AddToItemSuffix (item, "Draining");
+					SetObjProperty (item, "itemspellname", "Draining");
+					SetObjProperty (item, "hitspell", ":misc_spells:manadrain");
+				default:
+					numcharges := 0;
+			endcase;
+			if (numcharges)
+				SetObjProperty (item, "charges", numcharges);
+			else
+				EraseObjProperty (item, "charges");
+				EraseObjProperty (item, "hitspell");
+				EraseObjProperty (item, "itemspellname");
+			endif
+		else
+			EraseObjProperty (item, "charges");
+			EraseObjProperty (item, "hitspell");
+		endif
+
+	elseif (item_type == ITEMTYPE_ARMOR)
+		var item_ar_mod := suffix_type-200;
+		DoARModifier (item, item_ar_mod);
+
+		//now the magic spells
+		var numcharges := Cint (gump_return[60] - "60:");
+		if (numcharges)
+			case (suffix_type2)
+				301:
+					AddToItemSuffix (item, "Magic Reflection");
+					SetObjProperty (item, "equipspell", "magicreflect");
+				302:
+					AddToItemSuffix (item, "Sneaking");
+					SetObjProperty (item, "equipspell", "stealthcloak");
+				303:
+					AddToItemSuffix (item, "Regeneration");
+					SetObjProperty (item, "equipspell", "regeneration");
+				304:
+					AddToItemSuffix (item, "Poison Protection");
+					SetObjProperty (item, "protpoison", numcharges);
+					item.resist_poison_mod := numcharges;
+					numcharges := 0;
+				default:
+					numcharges := 0;
+			endcase;
+			if (numcharges)
+				SetObjProperty (item, "charges", numcharges);
+			else
+				EraseObjProperty (item, "charges");
+				EraseObjProperty (item, "equipspell");
+			endif
+		else
+			EraseObjProperty (item, "charges");
+			EraseObjProperty (item, "equipspell");
+		endif
+	elseif (item_type == ITEMTYPE_SHIELD)
+		var item_ar_mod := suffix_type-200;
+		DoARModifier (item, item_ar_mod);
+	endif
+endfunction
+
+
+
+function DoMusicProcessing (speaker, item, gump_return)
+	if (speaker and item)
+	endif
+	var skill_type := 0;
+	var suffix_type := 0;
+	for i := 100 to 104;
+		if (gump_return [i])
+			skill_type := CInt(i);
+		endif
+	endfor
+
+	for i := 200 to 205
+		if (gump_return [i])
+			suffix_type := CInt (i);
+		endif
+	endfor
+
+
+
+endfunction
+
+
+
+
+
+function AddToItemSuffix (item, added_suffix)
+	var suffix := GetObjProperty (item, "suffix");
+	if (suffix)
+		SetObjProperty (item, "suffix", suffix + " and " + added_suffix);
+	else
+		SetObjProperty (item, "suffix", "of " + added_suffix);
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Allows the speaker to target an item, which is randomly make magical
+///////////////////
+
+function MakeRandomMagic (speaker, quality)
+	SendSysMessage (speaker, "Make what magical?" );
+	var item  := Target (speaker);
+	if (!item)
+		SendSysMessage (speaker, "Canceled.");
+		return;
+	endif
+
+	var parms := array{};
+	parms[1] := item;
+	parms[2] := quality;
+	start_script (":loot:makeitemmagic", parms);
+	SendSysMessage (speaker, "Done.");
+endfunction
+
+
+
+
+///////////////////
+//  Adds special magical abilities
+///////////////////
+
+function AddSpecialAbilities (character)
+	SendSysMessage (character, "Add a special ability to what?" );
+	var item  := Target (character);
+	if (!item)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	item_type := GetItemtype (item);
+	if (item_type == ITEMTYPE_WEAPON)
+		var magicmenu := CreateMenu ("Select a special ability:");
+		AddMenuItem (magicmenu, 0, "Lightning (10% of hits)");
+		AddMenuItem (magicmenu, 0, "Vampirism (adds defender's health to wielder)");
+		AddMenuItem (magicmenu, 0, "Dragon Slaying");
+		AddMenuItem (magicmenu, 0, "Orc Slaying");
+		AddMenuItem (magicmenu, 0, "Lizardman Slaying");
+		AddMenuItem (magicmenu, 0, "Troll Slaying");
+		AddMenuItem (magicmenu, 0, "Ratman Slaying");
+		AddMenuItem (magicmenu, 0, "Ophidian Slaying");
+		AddMenuItem (magicmenu, 0, "Terathan Slaying");
+		AddMenuItem (magicmenu, 0, "Vampire Slaying");
+
+		var theability := SelectMenuItem2 (character, magicmenu);
+		if (!theability)
+			SendSysMessage (character, "Canceled");
+			return;
+		endif
+		
+		case (theability.index)
+			1:	//lightning
+				SetObjProperty (item, "specialweaponeffect", "lightning");
+				AddToItemSuffix (item, "lightning");
+			2:	//
+				SetObjProperty (item, "specialweaponeffect", "vampire");
+				AddToItemSuffix (item, "vampirism");
+			3:	//
+				SetObjProperty (item, "specialweaponeffect", "dragonslaying");
+				AddToItemSuffix (item, "dragon slaying");
+			4:	//
+				SetObjProperty (item, "specialweaponeffect", "orcslaying");
+				AddToItemSuffix (item, "orc slaying");
+			5:	//
+				SetObjProperty (item, "specialweaponeffect", "lizardmanslaying");
+				AddToItemSuffix (item, "lizardman slaying");
+			6:	//
+				SetObjProperty (item, "specialweaponeffect", "trollslaying");
+				AddToItemSuffix (item, "troll slaying");
+			7:	//
+				SetObjProperty (item, "specialweaponeffect", "ratmanslaying");
+				AddToItemSuffix (item, "ratman slaying");
+			8:	//
+				SetObjProperty (item, "specialweaponeffect", "ophidianslaying");
+				AddToItemSuffix (item, "ophidian Slaying");
+			9:	//
+				SetObjProperty (item, "specialweaponeffect", "terathanslaying");
+				AddToItemSuffix (item, "terathan slaying");
+			10:	//
+				SetObjProperty (item, "specialweaponeffect", "vampireslaying");
+				AddToItemSuffix (item, "vampire slaying");
+		endcase
+		SetObjProperty (item, "unidentified", 1);
+
+		return;
+	endif
+	SendSysMessage (character, "You can't add special abilities to that (at least not yet.");
+endfunction
+

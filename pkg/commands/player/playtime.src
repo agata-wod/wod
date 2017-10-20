@@ -1,0 +1,10 @@
+use uo;
+use os;
+use datafile;
+
+include "include/clock";
+include "include/accounts";
+
+program get_online_time_info (character)
+	SendSysMessage (character, "This dot command has been discontinued.  Please use .status instead.");
+endprogram

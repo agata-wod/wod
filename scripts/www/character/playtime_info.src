@@ -1,0 +1,148 @@
+use uo;
+use os;
+use http;
+
+include "include/clock";
+include "include/accounts";
+
+program GetPlaytimeInformation ()
+	WriteHTML ("<html><head><title>Character Playtime Information</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+	
+	var month := Lower (QueryParam ("month"));
+	var year := QueryParam ("year");
+	if (!month or !year)
+		WriteHTML ("<form method=GET action=playtime_info.ecl>");
+		WriteHTML ("Select a month and year to display information for:<p>");
+		WriteHTML ("<select name=\"month\">");
+		WriteHTML ("<option>January</option>");
+		WriteHTML ("<option>February</option>");
+		WriteHTML ("<option>March</option>");
+		WriteHTML ("<option>April</option>");
+		WriteHTML ("<option>May</option>");
+		WriteHTML ("<option>June</option>");
+		WriteHTML ("<option>July</option>");
+		WriteHTML ("<option>August</option>");
+		WriteHTML ("<option>September</option>");
+		WriteHTML ("<option>October</option>");
+		WriteHTML ("<option>November</option>");
+		WriteHTML ("<option>December</option>");
+		WriteHTML ("</select>");
+		WriteHTML ("<select name=\"year\">");
+//		WriteHTML ("<option>2002</option>");
+//		WriteHTML ("<option>2003</option>");
+//		WriteHTML ("<option>2004</option>");
+//		WriteHTML ("<option>2011</option>");
+		WriteHTML ("<option>2012</option>");
+		WriteHTML ("<option>2013</option>");
+		WriteHTML ("<option>2014</option>");
+		WriteHTML ("<option>2015</option>");
+		WriteHTML ("<option>2016</option>");
+		WriteHTML ("<option>2017</option>");
+		WriteHTML ("<option>2018</option>");
+		WriteHTML ("<option>2019</option>");
+		WriteHTML ("<option>2020</option>");
+		WriteHTML ("</select>");
+		WriteHTML ("<input id=submit1 name=submit1 type=submit value=Search>");
+		WriteHTML ("</form>");
+		WriteHTML ("</body></html>");
+		return;
+	endif
+
+	var searchstring := year + "_" + month + "_play_time";
+	
+	WriteHTML ("<h3>Playtimes for " + month +  ", " + year + "</h3>");
+	var acctinfodf := OpenDataFile (":character:character_data");
+	if (!acctinfodf)
+		acctinfodf := CreateDataFile (":character:character_data");
+		if (!acctinfodf)
+			Syslog ("Error opening character data file!");
+			WriteHTML ("Unable to open or create data file.");
+			WriteHTML ("</body></html>");
+			return;
+		endif
+	endif
+	
+	
+	
+
+	
+	var active_acct_counter := 0;
+	var total_monthly_playtime := 0;
+	var monthly_under_10_hours := 0;
+	var monthly_10_to_25_hours := 0;
+	var monthly_25_to_50_hours := 0;
+	var monthly_50_to_75_hours := 0;
+	var monthly_75_to_100_hours := 0;
+	var monthly_over_100_hours := 0;
+	
+	var acctdict := dictionary;
+	
+	foreach theacctname in ListAccounts ()
+		var tempentry := acctinfodf.FindElement (theacctname);
+		if (!tempentry)
+			acctinfodf.CreateElement (theacctname);
+			tempentry := acctinfodf.FindElement (theacctname);
+		endif
+		var monthly_online_time := CINT (tempentry.GetProp (searchstring));
+		if (monthly_online_time and monthly_online_time > 0)
+			active_acct_counter := active_acct_counter + 1;
+			total_monthly_playtime := total_monthly_playtime + monthly_online_time;
+			var hours := SecondsToHours (monthly_online_time);
+			if (hours >= 100)
+				monthly_over_100_hours := monthly_over_100_hours + 1;
+			elseif (hours >= 75)
+				monthly_75_to_100_hours := monthly_75_to_100_hours + 1;
+			elseif (hours >= 50)
+				monthly_50_to_75_hours := monthly_50_to_75_hours + 1;
+			elseif (hours >= 25)
+				monthly_25_to_50_hours := monthly_25_to_50_hours + 1;
+			elseif (hours >= 10)
+				monthly_10_to_25_hours := monthly_10_to_25_hours + 1;
+			else
+				monthly_under_10_hours := monthly_under_10_hours + 1;
+			endif
+				
+			acctdict[theacctname] := monthly_online_time;
+		endif
+	endforeach
+	
+	WriteHTML ("<p>Total active accounts this month: " + active_acct_counter);
+	WriteHTML ("<p>Total playtime this month: " + SecondsToHours (total_monthly_playtime) + " hours");
+	
+	WriteHTML ("<table border=1>");
+	WriteHTML ("<tr><td>Over 100 hours</td><td>" + monthly_over_100_hours + "</td></tr>");
+	WriteHTML ("<tr><td>75 to 100 hours</td><td>" + monthly_75_to_100_hours + "</td></tr>");
+	WriteHTML ("<tr><td>50 to 75 hours</td><td>" + monthly_50_to_75_hours + "</td></tr>");
+	WriteHTML ("<tr><td>25 to 50 hours</td><td>" + monthly_25_to_50_hours + "</td></tr>");
+	WriteHTML ("<tr><td>10 to 25 hours</td><td>" + monthly_10_to_25_hours + "</td></tr>");
+	WriteHTML ("<tr><td>Under 10 hours</td><td>" + monthly_under_10_hours + "</td></tr>");
+	WriteHTML ("</table>");
+	WriteHTML ("<br /><br /><br /><br /><br />");
+	
+	WriteHTML ("<table border=1>");
+	
+	var current_highest := 0;
+	var current_acctname := "";
+	var countto := len (acctdict.keys());
+	for i := 1 to countto
+		current_highest := 0;
+		current_acctname := "";
+		foreach key in (acctdict.keys())
+			if (acctdict[key] > current_highest)
+				current_highest := acctdict[key];
+				current_acctname := key;
+			endif
+		endforeach
+		WriteHTML ("<tr><td>" + i + "</td><td><a href=account_info.ecl?acctname=" + current_acctname + ">" + current_acctname + "</a></td><td>" + GetTimeDesc (current_highest) + "</td></tr>");
+		acctdict.erase (current_acctname);
+	endfor
+	
+	WriteHTML ("</table>");
+	
+	WriteHTML ("</body></html>");
+endprogram
+
+function SecondsToHours (amount)
+	return CINT (amount/3600);
+endfunction

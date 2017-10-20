@@ -1,0 +1,10 @@
+use uo;
+use os;
+
+program hide(me,item)
+	if (item)
+	endif
+  SendSysMessage(me,"what to hide");
+  var targ := Target(me);
+  targ.hidden := 1;
+endprogram

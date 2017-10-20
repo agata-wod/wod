@@ -1,0 +1,25 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "../pkg/items/housing/house";
+
+program canremove_chest (character, container, item, movetype)
+	if (item)
+	endif
+	if (movetype != MOVETYPE_PLAYER)
+		return 1;
+	endif
+
+	if (container.locked)
+		PrintTextAbovePrivate (container, "*Locked!*", character);
+		return 0;
+	elseif (GetObjProperty (container, "displaycontainer"))
+		return 0;
+	endif
+
+	return 1;
+endprogram

@@ -1,0 +1,11 @@
+use http;
+use uo;
+use os;
+use cfgfile;
+
+unload_scripts( "" );
+WriteHTML ("<html><head><title>Server Performance Page</title></head>");
+WriteHTML ("<body bgcolor=\"#dcdeed\">");
+WriteHTML ("This page has moved (permanently).  Please go to");
+WriteHTML ("<a href=\"/index.html\">the new page</a>");
+WriteHTML ("</body></html>");

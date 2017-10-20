@@ -1,0 +1,169 @@
+///////////////////
+//
+//  This script is called from the main townguard AI script when a player
+//  says 'status' to a guard.  It presents the player with a menu containing
+//  all the henchmen and pets that the player controls.  For a fee, the player
+//  can then have that NPC summoned to them.
+//
+///////////////////
+
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+
+CONST SUMMON_PRICE := 500;
+
+program townguard_status_command (parms)
+	var guard := parms [1];
+	var player := parms [2];
+	
+	if (!guard or !player)
+		return;
+	endif
+	
+	if (GetObjProperty (guard, "#searchpid"))
+		if (GetProcess (GetObjProperty (guard, "#searchpid")))
+			PrintTextAbovePrivate (guard, "I'm afraid I'm busy right now.", player);
+			return;
+		endif
+	endif
+	SetObjProperty (guard, "#searchpid", GetPID ());
+	
+	PrintTextAbovePrivate (guard, "One moment, please.", player);
+	var followers_found := array {};
+	var RealmMaxX := 0;
+	var RealmMaxY := 0;
+	case (guard.realm)
+		REALM_BRITANNIA:
+		REALM_BRITANNIA_ALT:
+			RealmMaxX := 7168;
+			RealmMaxY := 4096;
+		REALM_ILSHENAR:
+			RealmMaxX := 2304;
+			RealmMaxY := 1600;
+		REALM_MALAS:
+			RealmMaxX := 2560;
+			RealmMaxY := 2048;
+		REALM_TOKUNO:
+			RealmMaxX := 1448;
+			RealmMaxY := 1448;
+		REALM_TERMUR:
+			RealmMaxX := 1280;
+			RealmMaxY := 4096;
+	endcase
+	var xmid, ymid;
+	if (guard.realm == REALM_TOKUNO)
+		// Tokuno's dimensions aren't a multiple of 64, and dungeons are in Malas!!
+		for (xmid := 90; xmid < RealmMaxX; xmid := xmid + 181)
+			for (ymid := 90; ymid < RealmMaxY; ymid := ymid + 181)
+				foreach item in ListObjectsInBox (xmid-90, ymid-90, -128, xmid+90, ymid+90, +127, REALM_TOKUNO)
+					if (GetObjProperty (item, "master"))
+						if (GetObjProperty (item, "master") == player.serial)
+							followers_found.append (item);
+						endif
+					endif
+				endforeach
+			endfor
+			sleepms (10);
+		endfor
+		foreach item in ListObjectsInBox (0, 0, -128, 129, 129, +127, REALM_MALAS)
+			if (GetObjProperty (item, "master"))
+				if (GetObjProperty (item, "master") == player.serial)
+					followers_found.append (item);
+				endif
+			endif
+		endforeach
+		foreach item in ListObjectsInBox (57, 76, -128, 129, 419, +127, REALM_MALAS)
+			if (GetObjProperty (item, "master"))
+				if (GetObjProperty (item, "master") == player.serial)
+					followers_found.append (item);
+				endif
+			endif
+		endforeach
+		foreach item in ListObjectsInBox (49, 87, -128, 129, 565, +127, REALM_MALAS)
+			if (GetObjProperty (item, "master"))
+				if (GetObjProperty (item, "master") == player.serial)
+					followers_found.append (item);
+				endif
+			endif
+		endforeach
+		foreach item in ListObjectsInBox (72, 604, -128, 189, 705, +127, REALM_MALAS)
+			if (GetObjProperty (item, "master"))
+				if (GetObjProperty (item, "master") == player.serial)
+					followers_found.append (item);
+				endif
+			endif
+		endforeach
+		
+	else
+		for (xmid := 31; xmid < RealmMaxX; xmid := xmid + 64)
+			for (ymid := 31; ymid < RealmMaxY; ymid := ymid + 64)
+				foreach item in ListObjectsInBox (xmid-31, ymid-31, -128, xmid+32, ymid+32, +127, guard.realm)
+					if (GetObjProperty (item, "master"))
+						if (GetObjProperty (item, "master") == player.serial)
+							followers_found.append (item);
+						endif
+					endif
+				endforeach
+			endfor
+			sleepms (10);
+		endfor
+	endif
+	if (!len (followers_found))
+		PrintTextAbovePrivate (guard, "I'm afraid I didn't find anyone.", player);
+		return;
+	endif	
+	
+	var followermenu := CreateMenu ("Summon a follower (" + SUMMON_PRICE + " gold)");
+	foreach follower in followers_found
+		var thestring := follower.name;
+		if (follower.script ["guard"])
+			thestring := thestring + " (Henchman)";
+		elseif (follower.script ["merchant"])
+			thestring := thestring + " (Merchant)";
+		elseif (follower.script ["humuc"])
+			thestring := thestring + " (Homunculus)";
+		else
+			thestring := thestring + " (Pet)";
+		endif
+
+		AddMenuItem (followermenu, 0, thestring);
+	endforeach
+	
+	var followerselect := SelectMenuItem2 (player, followermenu);
+	if (!followerselect)
+		PrintTextAbovePrivate (guard, "Ok, have a good day!", player);
+		return;
+	endif
+
+	if (!player.spendgold (SUMMON_PRICE))
+		PrintTextAbovePrivate (guard, "You don't have enough money!", player);
+		return;
+	endif
+	
+	var follower := followers_found [followerselect.index];
+	if (!follower)
+		PrintTextAbovePrivate (guard, "Oops, now where did he go?", player);
+		return;
+	endif
+	if(!MoveObjectToLocation( follower, player.x - 1, player.y - 1, player.z, player.realm, MOVEOBJECT_FORCELOCATION ))
+		if(MoveObjectToLocation( follower, player.x + 1, player.y + 1, player.z, player.realm, MOVEOBJECT_FORCELOCATION ))
+			if(MoveObjectToLocation( follower, player.x, player.y, player.z, player.realm, MOVEOBJECT_FORCELOCATION ))
+				PrintTextAbovePrivate (guard, "Crap.  That's just not going to work!", player);
+				return;
+			endif
+		endif
+	endif
+
+	RestartScript (follower);
+	PrintTextAbovePrivate (guard, "There you go!", player);
+	return;
+	EraseObjProperty (guard, "#searchpid");
+endprogram
+
+
+
+
+

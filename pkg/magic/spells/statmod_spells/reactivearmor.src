@@ -1,0 +1,21 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 1;
+
+program reactivearmor (parms, spellid)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+
+	PlaySoundEffect (caster, SFX_SPELL_REACTIVE_ARMOR);
+	PlayObjectCenteredEffect (caster, FX_BLESS_EFFECT, 5, 5);
+	SetObjProperty (caster, "#reactive_armor", 1);
+	return 1;
+endprogram

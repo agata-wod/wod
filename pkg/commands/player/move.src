@@ -1,0 +1,88 @@
+use os;
+use uo;
+
+include "include/client";
+include "include/objtype";
+include "include/itemtypes";
+include "include/utility";
+
+program textcmd_dump (character, textline)
+	if (Lower (textline) ["help"])
+		SendSysMessage (character, "MOVE: moves all the items of the chosen type from one container into another");
+		return;
+	elseif (textline)
+		SendSysMessage (character, "Unknown .move option.  Use '.move help' for instructions on using this dot command.");
+		return;
+	endif
+	
+	SendSysMessage (character, "Move all of what?");
+	var it := Target (character);
+	if (!it or !it.movable)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	SendSysMessage (character, "Move them where?");
+	var thing := Target (character);
+	if (!thing)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (thing.locked)
+		SendSysMessage (character, "It's locked.");
+		return;
+	endif
+
+	if (!thing.isa (POLCLASS_CONTAINER) and thing.objtype != UOBJ_SPELLBOOK)
+		SendSysMessage (character, "That is not a container!");
+		return;
+	endif
+
+	if (thing == character)
+		thing := character.backpack;
+	else
+		if (thing.container != character.backpack and thing != character.backpack)
+			if (!Accessible (thing,character) or Distance (thing, character) > 2)
+				if (!InInventory (character.backpack, thing))
+					SendSysMessage (character, "Can't reach it.");
+					return;
+				endif
+			endif
+		endif
+	endif
+
+	var num := 0;
+	var theobjtype := it.objtype;
+	var thecolor := it.color;
+	var thename := it.desc;
+
+	foreach item in ListRootItemsInContainer (it.container)
+		if (item.container != thing)
+			if (item.objtype == theobjtype and item.color == thecolor and !item.newbie)
+				if (IsStackableItem (item))
+					if (CreateItemInContainer (thing, item.objtype, item.amount) )
+						DestroyItem (item);
+						num := num + 1;
+					else
+						SendSysMessage (character, "That container is full!");
+						return;
+					endif
+				else
+					if (thename == item.desc)
+						if (!ReserveItem (item))
+							return;
+						endif
+						if (MoveItemToContainer (item, thing))
+							num := num + 1;
+						else
+							SendSysMessage (character, "That container is full!");
+							return;
+						endif
+					endif
+				endif
+			endif
+		endif
+	endforeach
+	SendSysMessage (character, num + " items moved");
+endprogram

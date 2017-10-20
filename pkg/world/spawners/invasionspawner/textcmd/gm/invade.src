@@ -1,0 +1,27 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+program invasionspawner (character, text)
+	UnloadConfigFile (":invasionspawner:regions");
+	var regionscfg := ReadConfigFile (":invasionspawner:regions");
+
+	//if they supplied a regionname, make sure its correct
+	if (text)
+		var elem := FindConfigElem (regionscfg, text);
+		if (!elem)
+			SendSysMessage (character, "That doesn't appear to be a valid region");
+			return;
+		endif
+	
+		start_script (":invasionspawner:dospawn", text);
+		return;
+	endif
+	
+	var index := FindConfigElem (regionscfg, "index");
+	var baseregions := GetConfigStringArray (index, "regionname");
+	foreach region in baseregions
+		start_script (":invasionspawner:dospawn", region);
+	endforeach
+endprogram

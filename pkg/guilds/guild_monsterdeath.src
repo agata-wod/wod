@@ -1,0 +1,74 @@
+///////////////////
+//  This function is called when a monster is killed (/scripts/misc/death.src)  It checks
+//  to see if the players in the monster's hitlist have a quest to kill that monster
+//  (or one like it in general)  If so, it can adjust counters or create items
+///////////////////
+
+use uo;
+use os;
+use util;
+use cfgfile;
+
+program guild_check_monster_death (corpse)
+	var hitlist := GetObjProperty (corpse, "#hitlist");
+	if (!hitlist)
+		return;
+	endif
+
+	var player, guildquest;
+	foreach serial in hitlist
+		player := SystemFindObjectBySerial (serial);
+		if (player and player.acctname and player.ip)
+			guildquest := GetObjProperty (player, "guild_quest");
+			if (guildquest)
+				if (guildquest [1] == ":adventurers_guild:quests_items")
+					if (CheckGuildItemQuest (corpse, guildquest))
+						//We have a match.  There's a chance to spawn the item
+						if (RandomInt (10) == 1)
+							var theitem := CreateItemInContainer (corpse, guildquest[3], 1);
+							if (theitem)
+								theitem.name := guildquest[5];
+								SetObjProperty (theitem, "questitem", guildquest[5]);
+								guildquest [9] := theitem.serial;
+								SetObjProperty (player, "guild_quest", guildquest);
+							endif
+						endif
+					endif
+				endif
+			endif
+		endif
+	endforeach
+
+endprogram
+
+function CheckGuildItemQuest (corpse, guildquest)
+	//make sure it didn't already spawn first
+	if (guildquest[9])
+		var theitem := SystemFindObjectBySerial (guildquest[9]);
+		if (theitem)
+			return 0;
+		endif
+	endif
+
+	var quest_cfg_file := ReadConfigFile (":adventurers_guild:quests_items");
+	if (!quest_cfg_file)
+		Syslog ("Can't open adventurers guild items quest cfgfile!");
+		return 0;
+	endif
+
+	var chosen_quest_elem := FindConfigElem (quest_cfg_file, CINT (guildquest[2]));
+	if (!chosen_quest_elem)
+		Syslog ("error opening " + guildquest[2] + " quest in adventurers guild quest cfgfile!");
+		return 0;
+	endif
+	
+	var region := SplitWords (chosen_quest_elem.rect);
+	
+	if (corpse.x > CINT (region[1]) and corpse.x < CINT (region[3]))
+		if (corpse.y > CINT (region[2]) and corpse.y < CINT (region[4]))
+			return 1;
+		endif
+	endif
+	return 0;
+endfunction
+

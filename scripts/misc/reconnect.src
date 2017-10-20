@@ -1,0 +1,70 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/wodinc";
+include "include/accounts";
+include "include/buffdebuff";
+include "../pkg/npcs/npc_util";
+include "../pkg/world/weather/weather";
+include "../pkg/character/virtue/virtue";
+
+program reconnect (character)
+	SendPacket (character, "B9000F97DF");
+	character.setlightlevel (10, 1);
+
+	unclone (character);
+	if (character.race == RACE_ELF)
+		character.setlightlevel (0, -1);
+	endif
+	SendSysMessage (character, "Welcome back to the World of Dreams!" );
+	if (!character.concealed)
+		PrintTextAbove (character,"[ONLINE]");
+	elseif (!character.cmdlevel)
+		character.concealed := 0;
+	endif
+	SetWeatherForPlayer (character);
+	SetObjProperty (character, "#logon_noskillwin", 1);
+	ResetBuffDebuffIcons(character);
+	if ( character.cmdlevel < 1 )
+		broadcastsound();
+		broadcast(character.name + " has arrived into the World of Dreams!", FONT_NORMAL, 48);
+	else
+		broadcastsound(1);
+		gmbroadcast (character.name + " has arrived into the World of Dreams!", FONT_NORMAL, 48);
+	endif
+	
+endprogram
+
+function unclone(who)
+	set_critical(1);
+	var npc;
+	if ( getobjproperty(who,"clone") )
+		npc := SystemFindObjectBySerial(getobjproperty(who,"clone"));
+		if (npc)
+			KillNPC (npc);
+		endif
+		EraseObjProperty(who,"clone");
+	endif
+	set_critical(0);
+
+endfunction
+
+function broadcastsound(mincmdlevel := 0)
+	foreach char in enumerateonlinecharacters()
+		if (char.cmdlevel >= mincmdlevel)
+			PlaySoundEffectPrivate( char, 0x1E9, char );
+		endif
+	endforeach
+endfunction
+
+function gmbroadcast (message, font, color)
+	foreach char in enumerateonlinecharacters()
+		if (char.cmdlevel > 0)
+			SendSysMessage (char, message, font, color);
+		endif
+	endforeach
+endfunction
+
+

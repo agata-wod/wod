@@ -1,0 +1,21 @@
+use os;
+use uo;
+
+include "../pkg/character/advancement/skillcap";
+
+program do_skill_cap (who)
+	SendSysMessage (who, "Who should be skillcapped?");
+	var thetarget := Target (who);
+	if (!thetarget)
+		SendSysMessage (who, "Canceled.");
+		return;
+	endif
+
+	if (!thetarget.acctname)
+		SendSysMessage (who, "This can only be used on players");
+		return;
+	endif
+
+	SendSysMessage (who, "Doing skillcap...");
+	DoSkillCap (thetarget);
+endprogram

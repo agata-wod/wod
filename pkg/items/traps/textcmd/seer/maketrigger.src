@@ -1,0 +1,314 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/attributes";
+
+program make_lever (character, text)
+	if (text)
+		if (text == "new")
+			CreateNewTrigger (character);
+			return;
+		elseif (text == "add")
+			AddEffectToTrigger (character);
+			return;
+		endif
+		SendSysMessage (character, "Invalid Option");
+		SendSysMessage (character, "Options are:  New, Add");
+	endif
+
+	var triggermenu := CreateMenu ("Create or modify trigger?");
+	AddMenuItem (triggermenu, 0, "New");
+	AddMenuItem (triggermenu, 0, "Add");
+
+	var triggerselect := SelectMenuItem2 (character, triggermenu);
+	if (!triggerselect)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+
+	case (triggerselect.index)
+	1:
+		CreateNewTrigger (character);
+	2:
+		AddEffectToTrigger (character);
+	default:
+		SendSysMessage (character, "This shouldn't happen.");
+		return;
+	endcase
+endprogram
+
+
+
+
+///////////////////
+//  Create a new trigger item
+///////////////////
+
+function CreateNewTrigger (character)
+	var switchgraphic := SelectLeverGraphic (character);
+	if (!switchgraphic)
+		return;
+	endif
+
+	var lever := CreateItemInContainer (character.backpack, 0x108d, 1);
+	if (!lever)
+		SendSysMessage (character, "Unable to make lever");
+		return;
+	endif
+
+	lever.movable := 1;
+	lever.usescript := ":traps:lever";
+	lever.graphic := switchgraphic;
+	SetObjProperty (lever, "originalgraphic", switchgraphic);
+	
+	AddEffectToTrigger (character, lever);
+endfunction
+
+
+
+
+///////////////////
+//  Add an effect to an existing trigger item
+///////////////////
+
+function AddEffectToTrigger (character, lever := 0)
+	if (!lever)
+		SendSysMessage (character, "Select the lever to add an effect to:");
+		lever := Target (character);
+		if (!lever)
+			SendSysMessage (character, "Canceled");
+			return;
+		endif
+	endif
+
+	if (lever.usescript != ":traps:lever")
+		SendSysMessage (character, "That is not a valid lever.");
+		return;
+	endif
+
+	var triggermenu := CreateMenu ("Select a trigger effect:");
+	AddMenuItem (triggermenu, 0, "Message when switch is used");
+	AddMenuItem (triggermenu, 0, "Switch that opens a door");
+	AddMenuItem (triggermenu, 0, "Switch that unlocks a door or chest");
+	AddMenuItem (triggermenu, 0, "Switch that teleports user");
+	AddMenuItem (triggermenu, 0, "Switch that spawns creature(s)");
+
+	var triggerselect := SelectMenuItem2 (character, triggermenu);
+	if (!triggerselect)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+
+	case (triggerselect.index)
+	1:
+		var usemessage := SendTextEntryGump (character, "Message to display when used?",
+					TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 80, "(blank for none)");
+		if (!usemessage)
+			SendSysMessage (character, "Canceled.");
+			return;
+		endif
+		SetObjProperty (lever, "usemessage", usemessage);
+	2:
+		SendSysMessage (character, "What door do you want this to control?");
+		var door := Target (character);
+		if (!door)
+			SendSysMessage (character, "Canceled.");
+			return;
+		endif
+
+		if (!door.isa (POLCLASS_DOOR))
+			SendSysMessage (character, "That's not a door!");
+			return;
+		endif
+
+		var time := CINT (SendTextEntryGump (character, "How long should the door remain open?",
+					TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 10, "(in seconds, 0 to open forever)"));
+
+		SetObjProperty (lever, "doorserial", door.serial);
+		SetObjProperty (lever, "relocktime", time);
+	3:
+		SendSysMessage (character, "What door or chest do you want this to control?");
+		var item := Target (character);
+		if (!item)
+			SendSysMessage (character, "Canceled.");
+			return;
+		endif
+
+		if (!item.isa (POLCLASS_DOOR) and !item.isa (POLCLASS_CONTAINER))
+			SendSysMessage (character, "That's not a door or a container!");
+			return;
+		endif
+                    
+		var time := CINT (SendTextEntryGump (character, "How long should the item remain unlocked?",
+					TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 10, "(in seconds, 0 to unlocked permanently)"));
+					
+		SetObjProperty (lever, "unlockeditemserial", item.serial);
+		SetObjProperty (lever, "relocktime", time);
+
+	4:
+		SendSysMessage (character, "Select a marked rune to use as guide");
+		var rune := Target (character);
+		if (!rune)
+			SendSysmessage (character, "Canceled.");
+			return;
+		endif
+		if (rune.objtype != UOBJ_RECALL_RUNE)
+			SendSysmessage (character, "That's not a rune!");
+			return;
+		endif
+		
+		var destx := CINT (GetObjProperty (rune, "x"));
+		var desty := CINT (GetObjProperty (rune, "y"));
+		var destz := CINT (GetObjProperty (rune, "z"));
+		if (!destx or !desty)
+			SendSysMessage (character, "That rune is not marked!");
+			return;
+		endif
+
+		SetObjProperty (lever, "teleportx", destx);
+		SetObjProperty (lever, "teleporty", desty);
+		SetObjProperty (lever, "teleportz", destz);
+			
+	5:
+		SetNPCGuardians (character, lever);
+
+	endcase
+	AddEffectToTrigger (character, lever);
+endfunction
+
+
+
+
+///////////////////
+//  Sets NPCs that spawn when the lever is tripped
+///////////////////
+
+function SetNPCGuardians (character, lever)
+	var guardians := array{};
+	var thenpc_data := array{};
+
+	sendsysmessage (character, "Target the guardians.  Hit escape when finished.");
+	var done := 0;
+	
+	repeat
+		var thenpc := Target (character);
+		if (!thenpc)
+			SendSysMessage (character, "Done!");
+			done := 1;
+		elseif (!thenpc.npctemplate)
+			SendSysMessage (character, "That's not an NPC");
+		else
+			thenpc_data [1] := thenpc.npctemplate;
+			thenpc_data [2] := thenpc.graphic;
+			thenpc_data [3] := thenpc.color;
+			thenpc_data [4] := thenpc.name;
+			thenpc_data [5] := thenpc.script;
+			thenpc_data [6] := GetAttributeBaseValue (thenpc, "Strength");
+			thenpc_data [7] := GetAttributeBaseValue (thenpc, "Dexterity");
+			thenpc_data [8] := GetAttributeBaseValue (thenpc, "Intelligence");
+			var skills := array{};
+			for i := 0 to 57
+				skills[i] := GetAttribute (thenpc, GetAttributeIDBySkillID (i));
+			endfor
+			thenpc_data [9] := skills;
+			thenpc_data [10] := thenpc.gender;
+			guardians.append (thenpc_data);
+		endif
+	until (done);
+	
+	if (!guardians or !len(guardians))
+		SendSysMessage (character, "NPC Guardians not set.");
+		return;
+	endif
+
+	SetObjProperty (lever, "spawnNPCGuardians", guardians);
+endfunction	
+
+
+
+
+///////////////////
+//  Lets the GM select a creature to spawn when the lever is used
+///////////////////
+
+function DisplayNPCSelectionMenu (character)
+	var npcmenu := CreateMenu ("Select an NPC type:");
+	var thepackages := array{};
+
+	foreach pkgname in (polcore().packages)
+		var cfg := ReadConfigFile (":" + pkgname + ":npcdesc");
+		if (cfg)
+			var elem := FindConfigElem (cfg, "CreateNPCInfo");
+			if (elem)
+				AddMenuItem (npcmenu, elem.groupgraphic, elem.groupname);
+				thepackages.append (elem.groupname);
+			endif
+		endif
+	endforeach
+
+	var selection := SelectMenuItem2 (character, npcmenu);
+	if (!selection)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+
+	var thepkg := thepackages [selection.index];
+	SendSysMessage (character, "You chose " + thepkg);
+
+	var cfg := ReadConfigFile (":" + thepkg + ":npcdesc");
+	var elem := FindConfigElem (cfg, "CreateNPCInfo");
+	if (!elem)
+		SendSysMessage (character, "Whoops!  Big error!");
+		return;
+	endif
+
+	var thenpctypes := GetConfigStringArray (elem, "npc");
+	if (!thenpctypes or !len (thenpctypes))
+		SendSysMessage (character, "No NPCs in that group.");
+		return;
+	endif
+
+	var npcmenu2 := CreateMenu ("Select an NPC type:");
+	var thenpcs := array{};
+	foreach entry in thenpctypes
+		var template := SplitWords (entry)[1];
+		var graphic := CINT (SplitWords (entry)[2]);
+		AddMenuItem (npcmenu2, graphic, template);
+		thenpcs.append (template);
+	endforeach
+
+	var selection2 := SelectMenuItem2 (character, npcmenu2);
+	if (!selection2)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+
+	return thenpcs [selection2.index];
+endfunction
+
+
+
+
+///////////////////
+//  Lets the GM pick what kind of level he wants
+///////////////////
+
+function SelectLeverGraphic (character)
+	var triggermenu := CreateMenu ("Select a trigger type:");
+	AddMenuItem (triggermenu, 0x108d, "Lever");
+	AddMenuItem (triggermenu, 0x1094, "Lever");
+	AddMenuItem (triggermenu, 0x108f, "Lever");
+	AddMenuItem (triggermenu, 0x1092, "Lever");
+
+	var triggerselect := SelectMenuItem2 (character, triggermenu);
+	if (!triggerselect)
+		SendSysMessage (character, "Canceled");
+		return 0;
+	endif
+	
+	return triggerselect.objtype;
+endfunction
+

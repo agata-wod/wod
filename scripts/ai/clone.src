@@ -1,0 +1,240 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/sleepmode_normal";
+include "../pkg/npcs/main_ai/combat/fightmode_normal_default";
+include "../pkg/npcs/main_ai/combat/closedistance_archer";
+include "../pkg/npcs/main_ai/combat/gethelp_good";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/speech";
+
+const HALT_THRESHOLD := 8; // how close before he attacks?
+var spellcast;
+drop_anchor();
+
+program HelpPlayers()
+	if (!me.backpack)
+		DoOnCreationSetup ();
+	endif
+	DoStartupSetup ();
+	SetUpSpeech ();
+
+	if (GetObjProperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+	if (!GetObjProperty (me, "logoff_clone_options"))
+		KillMe ();
+	endif
+
+	SetWarMode ( 0 );
+
+
+	var ev;
+	var wanders := 100;
+	var next_wander := ReadGameClock() + 10;
+	next_look_around := ReadGameClock () + 30;
+	EnableMainEvents();
+
+	while (me)
+		if (ReadGameClock () > next_wander)
+			if (GetObjProperty (me, "destinationx"))
+				var mydestx := GetObjProperty (me, "destinationx");
+				var mydesty := GetObjProperty (me, "destinationy");
+				var steps := CINT (GetObjProperty (me, "destinationsteps"));
+				SetObjProperty (me, "destinationsteps", CINT(steps + 1));
+				WalkTowardLocation (mydestx, mydesty);
+				if ( (me.x == mydestx and me.y == mydesty) or ( steps > 10 ) )
+					EraseObjProperty (me, "destinationx");
+					EraseObjProperty (me, "destinationy");
+					EraseObjProperty (me, "destinationsteps");
+				endif
+				next_wander := ReadGameClock ();
+			else	
+				wander();
+				wanders := wanders + 1;
+				next_wander := ReadGameClock () + 3;
+			endif
+		endif
+
+		if (wanders > 60)
+			wanders := 0;
+			ev := sleepmode();
+		else
+			ev := wait_for_event (2);
+		endif
+
+		if (ev)
+			repeat
+				case (ev.type)
+					EVID_ENTEREDAREA:
+						if ( IsHostile (ev.source) )
+							say ("Ah ha! " + ev.source.name);
+							Fight(ev.source);
+						endif
+					EVID_SPEECH:
+						if (!ev.source.npctemplate)
+							next_wander := ReadGameClock () + 30;
+							wanders := 0;
+							ProcessSpeechEvent (ev);
+						endif
+					EVID_ITEM_GIVEN:
+						TakeItem (ev.source,ev.item);
+						next_wander := ReadGameClock () + 60;
+					EVID_ALL_ATTACK_CMD:
+						Fight ( ev.source );
+					EVID_ENGAGED:
+					EVID_DAMAGED:
+						if (ev.source)
+							GetHelpFromAllies ( ev.source );
+							Fight (ev.source);
+						endif
+					EVID_ALL_FOLLOW_CMD:
+						SetObjProperty (me, "destinationx", ev.x);
+						SetObjProperty (me, "destinationy", ev.y);
+						SetObjProperty (me, "destinationsteps", 0);
+						drop_anchor ();
+						WalkTowardLocation (ev.x, ev.y);
+				endcase
+				ev := wait_for_event ( 2 );
+			until (!ev);
+		endif
+	endwhile
+endprogram
+
+function ProcessSpeechEvent (ev)
+	var text := Lower (ev.text);
+	var player := ev.source;
+
+	if (text ["go away"] or text["leave"] or text["beat it"])
+		if (!text["please"])
+			TurnToward (player);
+			Say ("What's the magic word?");
+			return;
+		endif
+		Say ("Ok.");
+		sleep (1);
+		PerformAction (me, ANIM_CAST_DIR);
+		PrintTextAbove (me, "Kal Ort Por");
+		PlaySoundEffect (me, 0x210);
+		sleep (1);
+		KillMe ();
+	endif
+
+
+
+	check_speech (text, player);
+endfunction
+
+
+function look_around ()
+	return;
+endfunction
+
+function EnableMainEvents()
+	DisableEvents (SYSEVENT_LEFTAREA + SYSEVENT_DISENGAGED + SYSEVENT_OPPONENT_MOVED );
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_ENTEREDAREA, HALT_THRESHOLD);
+	EnableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN, 3);
+endfunction
+
+function DisableMainEvents()
+	DisableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED + SYSEVENT_ENTEREDAREA);
+	DisableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN);
+endfunction
+
+function process_combat_event (byref ev)
+	if (spellcast)
+		spellattack (ev.source);
+	endif
+
+	if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/2))
+		ApplyHealing ();
+	endif
+
+	if (ev.type == EVID_DAMAGED)
+		if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/10))
+			EraseObjProperty (me, "#flees");
+			flee (ev.source);
+		endif
+	endif
+
+endfunction
+
+function in_combat_event_loop (byref opponent)
+	if (spellcast)
+		spellattack(opponent);
+	endif
+
+	if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/2))
+		ApplyHealing();
+	endif
+endfunction
+
+function post_combat()
+
+	DisableCombatEvents();
+	EnableMainEvents();
+
+	SetWarMode( 0 );
+	SetOpponent( 0 );
+
+	sleep(1);
+	look_around();
+
+endfunction
+
+function prepare_for_fight (byref opponent)
+	DisableMainEvents();
+	if (!opponent)
+	endif
+
+	var weaponone := GetEquipmentByLayer( me,  LAYER_HAND1 );
+	var weapontwo := GetEquipmentByLayer( me,  LAYER_HAND2 );
+	if ( (weaponone.objtype == 0x13B2) or (weapontwo.objtype == 0x13B2) )
+		runaway:=0;
+		CreateItemInInventory(me.backpack,0xf3f,50);
+	elseif ( (weaponone.objtype == 0x0f4f) or (weapontwo.objtype == 0x0f4f) or 
+		(weaponone.objtype == 0x13fd) or (weapontwo.objtype == 0x13fd) )
+		runaway:=0;
+		CreateItemInInventory(me.backpack,0x1bfb,50);
+	elseif ( (weaponone.objtype == 0x16050) or (weapontwo.objtype == 0x6050) )
+		runaway:=0;
+		CreateItemInInventory(me.backpack,0x16051,25);
+	else
+		RunAway := 100;	
+	endif
+
+	if ( (!weaponone) and (!weapontwo) )
+		spellcast := 1;
+	elseif	( (!weaponone.maxhp) and (!weapontwo.maxhp) )
+		spellcast := 1;
+	else
+		spellcast := 0;
+	endif
+
+	EnableCombatEvents();
+
+endfunction
+
+function spellattack (byref opponent)
+
+	if (!GetObjProperty(me,"#lastbreath"))
+		SetObjProperty(me,"#lastbreath",ReadGameClock() + 5);
+	endif
+
+	if (GetObjProperty(me,"#lastbreath") > ReadGameClock() )
+		return;
+	endif
+
+	if (RandomInt(2)==1)
+		sleep(1);
+		cast_offensive_spell(me,opponent);
+	endif
+
+	SetObjProperty(me,"#lastbreath",ReadGameClock() + 5);
+
+endfunction

@@ -1,0 +1,149 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/wodinc";
+include "include/dotempmods";
+include "../pkg/npcs/npcinfo";
+
+program poisonhit (parms)
+	var who := parms [1];
+	var plvl := CINT(parms [2]);
+	var msg := parms [3];
+	
+	if (!who or !plvl or plvl < 0)
+		return;
+	endif
+	if (who.npctemplate)
+		var MyTemplateElem := GetNpcTemplateElem (who.npctemplate);
+		case (MyTemplateElem.poison)
+			"immune":	return;
+			"strong":	plvl := plvl - 3;
+			"weak":	plvl := plvl + 3;
+		endcase
+	endif
+	//12 is the maximum poison level
+	if (plvl > 12)
+		plvl := 12;
+	endif
+
+	var poisoned := GetObjProperty (who, "#poisoninfo");
+	if (!poisoned)
+		poisoned := array {0, 0, 0};
+	endif
+
+	//if they're already more poisoned and that poison is still going, quit
+	if (poisoned [1] > plvl)
+		if (poisoned [2] > ReadGameClock() + 2)
+			if (GetProcess (poisoned [3]))
+				RecalcVitals (who);
+				return;
+			endif
+		endif
+	endif
+
+	if (ProtectedFromPoison (who))
+		EraseObjProperty (who, "#poisoninfo");
+		RecalcVitals (who);
+		return;
+	endif
+	
+	var endtime := ReadGameClock () + 30;
+	poisoned := array {};
+	poisoned [1] := plvl;
+	poisoned [2] := endtime;
+	poisoned [3] := GetPID ();
+	SetObjProperty (who, "#poisoninfo", poisoned);
+
+	var poison_damage := GetPoisonDamagePerTick (who, plvl);
+	who.SetPoisoned (plvl);
+	BuffDebuffIcon(who, BUFFICON_POISON, BUFFSTATE_ENABLED, 30, array { poison_damage, 5 });
+	RecalcVitals (who);
+	if (msg)
+		PrintTextAbovePrivate (who, msg, who, FONT_NORMAL, 37);
+	endif
+	foreach player in EnumerateOnlineCharacters ()
+		if (player != who)
+			if (Distance (player, who) < 20)
+				PrintTextAbovePrivate (who, "*poisoned!*", player, FONT_NORMAL, 37);
+			endif
+		endif
+	endforeach
+
+	repeat
+		if (!who or who.dead)
+			RecalcVitals (who);
+			return;
+		endif
+		poisoned := GetObjProperty (who, "#poisoninfo");
+		if (!poisoned)
+			RecalcVitals (who);
+			return;
+		endif
+		if (poisoned [2] != endtime)
+			RecalcVitals (who);
+			return;
+		endif
+		DoDamageByType (0, who, poison_damage, DAMAGETYPE_PHYSICAL);
+		sleep (5);
+	until (ReadGameClock () > endtime);
+
+//	This crashes the server.  I don't know why.
+	SetScriptController (0);
+
+	who.SetPoisoned (0);
+	BuffDebuffIcon(who, BUFFICON_POISON, BUFFSTATE_DISABLED);
+	EraseObjProperty (who, "#poisoninfo");
+	RecalcVitals (who);
+endprogram
+
+
+
+
+///////////////////
+//  finds out if the target of the poison has an item equipped that protects them from poison
+///////////////////
+
+function ProtectedFromPoison (who)
+	var item;
+	foreach thing in ListEquippedItems (who)
+		if (GetObjProperty (thing, "protpoison"))
+			item := thing;
+			var charges := GetObjProperty (item, "protpoison");
+			if (charges > 0)
+				charges := charges -1;
+				setobjproperty (item, "protpoison", charges);
+				PrintTextAbovePrivate (item, item.desc + " protects you from the poison!",who);
+				item.resist_poison_mod := charges;
+				item.name := item.desc;
+				return 1;
+			endif
+		endif
+	endforeach
+
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Calculates how much damage should be done each poison tick based on the character and poison level
+///////////////////
+
+function GetPoisonDamagePerTick (who, plvl)
+//	if (GetAttributeBaseValue (who, "Strength") > 1750)
+//		plvl := plvl - 4;
+//	elseif (GetAttributeBaseValue (who, "Strength")  > 1250)
+//		plvl := plvl - 2;
+//	endif
+	if (who)
+	endif
+	if (plvl < 1)
+		plvl := 1;
+	elseif (plvl > 12)
+		plvl := 12;
+	endif
+
+	return (CINT (plvl * 1.5));
+endfunction

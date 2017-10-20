@@ -1,0 +1,91 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/spawn";
+
+program textcmd_createnpc (character, npctemplate)
+
+	if (!npctemplate)
+		npctemplate := DisplayNPCSelectionMenu (character);
+
+		if (!npctemplate)
+			return;
+		endif
+	endif
+
+	var loc := TargetCoordinates (character);
+	if (!loc)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+	var npc := SpawnNPCAtLocation( npctemplate, loc.x, loc.y, loc.z, 0, loc.realm);
+	if (!npc)
+		SendSysMessage (character, "Can't create NPC! ");
+	endif
+
+endprogram
+
+function DisplayNPCSelectionMenu (character)
+	var npcmenu := CreateMenu ("Select an NPC type:");
+	var thepackages := array{};
+
+	foreach pkgname in (polcore().packages)
+		var cfg := ReadConfigFile (":" + pkgname + ":npcdesc");
+		if (cfg)
+			var elem := FindConfigElem (cfg, "CreateNPCInfo");
+			if (elem)
+				AddMenuItem (npcmenu, elem.groupgraphic, elem.groupname);
+				thepackages.append (elem.groupname);
+			endif
+		endif
+	endforeach
+
+	var selection := SelectMenuItem2 (character, npcmenu);
+	if (!selection)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+
+	var thepkg := thepackages [selection.index];
+	SendSysMessage (character, "You chose " + thepkg);
+
+	var cfg := ReadConfigFile (":" + thepkg + ":npcdesc");
+	var elem := FindConfigElem (cfg, "CreateNPCInfo");
+	if (!elem)
+		SendSysMessage (character, "Whoops!  Big error!");
+		return;
+	endif
+
+	var thenpctypes := GetConfigStringArray (elem, "npc");
+	if (!thenpctypes or !len (thenpctypes))
+		SendSysMessage (character, "No NPCs in that group.");
+		return;
+	endif
+
+	var npcmenu2 := CreateMenu ("Select an NPC type:");
+	var thenpcs := array{};
+	foreach entry in thenpctypes
+		var template := SplitWords (entry)[1];
+		var graphic := CINT (SplitWords (entry)[2]);
+		AddMenuItem (npcmenu2, graphic, template);
+		thenpcs.append (template);
+	endforeach
+
+	var selection2 := SelectMenuItem2 (character, npcmenu2);
+	if (!selection2)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+
+	return thenpcs [selection2.index];
+endfunction
+
+
+
+
+
+
+
+
+

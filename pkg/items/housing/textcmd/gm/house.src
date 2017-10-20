@@ -1,0 +1,438 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/gumps";
+include "include/client";
+include "include/objtype";
+include "../pkg/items/housing/house";
+
+program find_account_houses (character, text)
+	text := Lower (text);
+	if (!text)
+		var optionmenu := CreateMenu ("Select an option:");
+		AddMenuItem (optionmenu, 0, "Find houses owned by an account");
+		AddMenuItem (optionmenu, 0, "Create a For Sale sign");
+		AddMenuItem (optionmenu, 0, "Change housesign properties");
+		AddMenuItem (optionmenu, 0, "Change housesign lockdown area");
+		AddMenuItem (optionmenu, 0, "GM Lockdown an item");
+		AddMenuItem (optionmenu, 0, "Set a housesign login point");
+		AddMenuItem (optionmenu, 0, "Create a house teleporter");
+
+		var selection := SelectMenuItem2 (character, optionmenu);
+		if (!selection)
+			SendSysMessage (character, "Canceled: "+ selection + optionmenu);
+			return;
+		endif
+		
+		case (selection.index)
+			1:
+				var acctname := SendTextEntryGump (character, "Enter the accountname:" ,
+					TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+				text := "find " + acctname;
+			2:
+				text := "forsale";
+			3:
+				text := "fix";
+			4:
+				text := "area";
+			5:
+				text := "gmlockdown";
+			6:
+				text := "login";
+			7:
+				text := "maketele";
+
+			default:
+				SendSysMessage (character, "Canceled.");
+				return;
+		endcase
+	endif
+	
+	if (text["find"])
+		var new_text := SplitWords (text);
+		if (!new_text[2])
+			SendSysMessage (character, "You must supply an account name!");
+			return;
+		endif
+		FindHousesOfAccount (character, new_text[2]);
+	elseif (text["fix"] or text["reset"])
+		AdjustHouseSign (character);
+	elseif (text["area"] or text["fixarea"])
+		AdjustLockdownArea (character);
+	elseif (text["for sale"] or text["forsale"])
+		CreateForSaleSign (character);
+	elseif (text["gmlockdown"])
+		SetGMLockdownItem (character);
+	elseif (text["login"])
+		SetHouseLoginLocation (character);
+	elseif (text["maketele"])
+		MakeHouseTeleporters (character);
+	else
+		SendSysMessage (character, "Invalid selection");
+	endif
+endprogram
+
+
+
+
+///////////////////
+//  Finds all the houses that a given account owns
+///////////////////
+
+function FindHousesOfAccount (character, acctname)
+	var acct := FindAccount (acctname);
+	if (!acct)
+		SendSysMessage (character, "That's not an existing account name.");
+		return;
+	endif
+	
+	var housesigns := array{};
+	var global_prop_name := "#housing_of_" + acctname;
+	var sign_serials := GetGlobalProperty (global_prop_name);
+	if (!sign_serials)
+		SendSysMessage (character, "No houses found");
+		return;
+	endif
+	
+	var themessage := "Houses of " + acctname;
+	
+	foreach sign_serial in sign_serials
+		var sign := SystemFindObjectBySerial (sign_serial);
+		if (sign)
+			var house_owner := Lower (GetObjProperty (sign, "account"));
+			if (house_owner and house_owner == acctname)
+				themessage := themessage + "<p>Found house at " + sign.x + ", " + sign.y + ", " + sign.realm;
+				housesigns.append (sign);
+			endif
+		endif
+	endforeach
+
+	if (!len (housesigns))
+		SendSysMessage (character, "No houses found");
+		return;
+	endif
+
+	SendStringAsHtmlWindow (character, themessage, "Houses");
+endfunction
+
+
+
+
+///////////////////
+//  Same as "createat forsalesign"
+///////////////////
+
+function CreateForSaleSign (character)
+	var location := TargetCoordinates (character);
+	if (!location)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	
+	var item := CreateItemAtLocation (location.x, location.y, location.z, 0x1708a, 1, location.realm );
+	if (!item)
+		SendSysMessage (character, "Can't place there");
+		return;
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Used to adjust the housevalue or other property of a housesign
+///////////////////
+
+function AdjustHouseSign (character)
+	SendSysMessage (character, "Select the house sign to adjust:");
+	var sign := Target (character);
+	if (!sign)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	if (sign.objtype != 0x0bd2 and sign.objtype != 0x0bd0 and sign.objtype != 0x7060)
+		SendSysMessage (character, "That's not a house sign!");
+		return;
+	endif
+
+	var boxmenu := CreateMenu ("Select a sign type:");
+	AddMenuItem (boxmenu, 0xbd1, "brass");
+	AddMenuItem (boxmenu, 0xbd2, "brass2");
+	AddMenuItem (boxmenu, 0xbcf, "wooden");
+	AddMenuItem (boxmenu, 0xbd0, "wooden2");
+	var selection := SelectMenuItem2 (character, boxmenu);
+	if (!selection)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	sign.graphic := selection.objtype;
+	SetObjProperty (sign, "originalgraphic", selection.objtype);
+
+	var homeinfo := array{ };
+	homeinfo[1] := 0;
+	SendSysMessage (character, "Target the North-West corner of the house (Up!)");
+	var coords := TargetCoordinates (character);
+	if (!coords)
+		SendSysMessage (character, "Canceled!");
+		return;
+	endif
+	homeinfo[2]:= coords.x;
+	homeinfo[3]:= coords.y;
+
+	SendSysMessage (character, "Target the South-East corner of the house (Down!)");
+	coords := TargetCoordinates (character);
+	if (!coords)
+		SendSysMessage (character, "Canceled!");
+		return;
+	endif
+	homeinfo[4]:= coords.x;
+	homeinfo[5]:= coords.y;
+		
+	var hvalue := SendTextEntryGump (character, "Enter the HOUSEVALUE of this place:", TE_CANCEL_ENABLE, TE_STYLE_NORMAL);
+	var housevalue := CINT (hvalue);
+	if (!housevalue)
+		housevalue := 1;
+	endif
+
+	var svalue := SendTextEntryGump (character, "Enter the PRICE of this place:", TE_CANCEL_ENABLE, TE_STYLE_NORMAL,
+			10, "Default price: " + GetDefaultHousePrice (housevalue) + " gold");
+	var sellvalue := CINT (svalue);
+	if (!sellvalue)
+		sellvalue := GetDefaultHousePrice (housevalue);
+	endif
+
+	SetObjProperty (sign, "housevalue", housevalue);
+	SetObjProperty (sign, "homeinfo", homeinfo);
+	SetObjProperty (sign, "houseprice", sellvalue);
+	SendSysMessage (character, "Done.");
+endfunction
+
+
+
+
+///////////////////
+//  Just change the lockdown area
+///////////////////
+
+function AdjustLockdownArea (character)
+	SendSysMessage (character, "Select the house sign to adjust:");
+	var sign := Target (character);
+	if (!sign)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	if (sign.objtype != 0x0bd2 and sign.objtype != 0x0bd0 and sign.objtype != 0x17060)
+		SendSysMessage (character, "That's not a house sign!");
+		return;
+	endif
+
+	var homeinfo := array{ };
+	homeinfo[1] := 0;
+	SendSysMessage (character, "Target the North-West corner of the house (Up!)");
+	var coords := TargetCoordinates (character);
+	if (!coords)
+		SendSysMessage (character, "Canceled!");
+		return;
+	endif
+	homeinfo[2]:= coords.x;
+	homeinfo[3]:= coords.y;
+
+	SendSysMessage (character, "Target the South-East corner of the house (Down!)");
+	coords := TargetCoordinates (character);
+	if (!coords)
+		SendSysMessage (character, "Canceled!");
+		return;
+	endif
+	homeinfo[4]:= coords.x;
+	homeinfo[5]:= coords.y;
+
+	SetObjProperty (sign, "homeinfo", homeinfo);
+	SendSysMessage (character, "Done.");
+endfunction
+
+
+
+
+///////////////////
+//  Set an item as a GM lockdown
+///////////////////
+
+function SetGMLockdownItem (character)
+//	SendSysMessage (character, "Select the house sign to associate the item with:");
+//	var sign := Target (character);
+//	if (!sign)
+//		SendSysMessage (character, "Canceled.");
+//		return;
+//	endif
+//	if (sign.objtype != 0x0bd2 and sign.objtype != 0x0bd0 and sign.objtype != 0x7060)
+//		SendSysMessage (character, "That's not a house sign!");
+//		return;
+//	endif
+
+	var svalue := SendTextEntryGump (character, "Enter the PRICE of this item:", TE_CANCEL_ENABLE, TE_STYLE_NORMAL,
+			10, "(1/2 returned if owner sells house)");
+	svalue := CINT (svalue);
+
+	SendSysMessage (character, "Select the item(s) to GM lockdown:");
+	SendSysMessage (character, "Press escape to finish");
+
+	var done := 0;
+	repeat
+		var item := Target (character);
+		if (!item)
+			SendSysMessage (character, "Canceled.");
+			return;
+		endif
+		
+		var sign := FindHouseSignAtLocation (item.x, item.y, item.realm);
+		if (!sign)
+			SendSysMessage (character, "That item doesn't seem to be within a house.");
+			return;
+		endif
+
+		SetObjProperty (item, "price", svalue);
+		SetObjProperty (item, "gmlockeddown", sign.serial);
+		item.movable := 0;
+	until (done);
+	SendSysMessage (character, "Done!");
+endfunction
+
+
+
+
+///////////////////
+//  Characters are moved outside of a house when they log in in a house they're not
+//  friended to, but some houses have their signs in bad locations where this won't work
+//  so you can set the location to move a character to with this
+///////////////////
+
+function SetHouseLoginLocation (character)
+	SendSysMessage (character, "Select the house sign to set a login location for:");
+	var sign := Target (character);
+	if (!sign)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	if (sign.objtype != 0x0bd2 and sign.objtype != 0x0bd0 and sign.objtype != 0x17060)
+		SendSysMessage (character, "That's not a house sign!");
+		return;
+	endif
+
+	SendSysMessage (character, "Target the location characters should be moved to on login:");
+	var targetted := TargetCoordinates (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.  Defaulting to house sign location");
+		EraseObjProperty (sign, "loginx");
+		EraseObjProperty (sign, "loginy");
+		EraseObjProperty (sign, "loginz");
+		EraseObjProperty (sign, "loginr");
+		return;
+	endif
+	
+	SetObjProperty (sign, "loginx", targetted.x);
+	SetObjProperty (sign, "loginy", targetted.y);
+	SetObjProperty (sign, "loginz", targetted.z);
+	SetObjProperty (sign, "loginr", targetted.realm);
+	SendSysMessage (character, "Login location set.");
+endfunction
+
+
+
+
+///////////////////
+//  Makes a teleporter for in a house with a rune graphic
+///////////////////
+
+function MakeHouseTeleporters (character)
+	var sign := FindHouseSignAtLocation (character.x, character.y, character.realm);
+	if (!sign)
+		SendSysMessage (character, "You don't seem to be within a house.");
+		return;
+	endif
+
+	SendSysmessage (character, "Select a rune to create the gate from.");
+	var rune := Target (character, TGTOPT_NOCHECK_LOS);
+	if (!rune)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+
+	if (rune.objtype != UOBJ_RECALL_RUNE)
+		SendSysmessage (character, "You can only use this on a rune!");
+		return;
+	endif
+	
+	var dest := rune.GetDestination();
+	if (!dest)
+		SendSysmessage (character, "That rune is not marked!");
+		return;
+	endif
+
+	var othersign := FindHouseSignAtLocation (dest.x, dest.y, dest.realm);
+	if (!othersign)
+		SendSysMessage (character, "You don't seem to be within a house.");
+		return;
+	endif
+	if (othersign != sign)
+		SendSysMessage (character, "The other end of the gate isn't within the same house!");
+		return;
+	endif
+
+	var select_menu := CreateMenu ("Select rune:");
+	AddMenuItem (select_menu, 0x0E5C, "Y Rune");
+	AddMenuItem (select_menu, 0x0E5F, "P Rune");
+	AddMenuItem (select_menu, 0x0E62, "M Rune");
+	AddMenuItem (select_menu, 0x0E65, "F Rune");
+	AddMenuItem (select_menu, 0x0E68, "N Rune");
+
+	var selected_item := SelectMenuItem2 (character, select_menu);
+	if (!selected_item)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	
+	sign := FindHouseSignAtLocation (character.x, character.y, character.realm);
+	if (!sign)
+		SendSysMessage (character, "You don't seem to be within a house.");
+		return;
+	endif
+	if (othersign != sign)
+		SendSysMessage (character, "The other end of the gate isn't within the same house!");
+		return;
+	endif
+
+	var gate1 := CreateItemAtLocation (character.x, character.y, character.z, 0x16203, 1, sign.realm);
+	gate1.facing := 29;
+	gate1.invisible := 0;
+	gate1.graphic := selected_item.graphic;
+	var gate2 := CreateItemAtLocation (dest.x, dest.y, dest.z, 0x16203, 1, dest.realm);
+	gate2.facing := 29;
+	gate2.invisible := 0;
+	gate2.graphic := selected_item.objtype;
+	if (!gate1 or !gate2)
+		SendSysMessage (character, "Error creating gates!");
+		DestroyItem (gate1);
+		DestroyItem (gate2);
+		return;
+	endif
+
+	SetObjProperty (gate1, "DestX", gate2.x);
+	SetObjProperty (gate1, "DestY", gate2.y);
+	SetObjProperty (gate1, "DestZ", gate2.z);
+	SetObjProperty (gate1, "DestR", gate2.realm);
+	SetObjProperty (gate2, "DestX", gate1.x);
+	SetObjProperty (gate2, "DestY", gate1.y);
+	SetObjProperty (gate2, "DestZ", gate1.z);
+	SetObjProperty (gate2, "DestR", gate1.realm);
+	SetObjProperty (gate1, "price", 5000);
+	SetObjProperty (gate1, "gmlockeddown", sign.serial);
+	SetObjProperty (gate2, "price", 5000);
+	SetObjProperty (gate2, "gmlockeddown", sign.serial);
+
+	return;
+
+endfunction
+
+

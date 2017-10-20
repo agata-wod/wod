@@ -1,0 +1,15 @@
+Use uo;
+Use os;
+
+program grey ( me )
+
+	if (me.murderer)
+		me.SetMurderer (0);
+		SendSysMessage (me, "You're no longer flagged red.");
+		return;
+	endif
+
+	me.SetMurderer (1);
+	SendSysMessage (me, "You're now red.");
+
+endprogram

@@ -1,0 +1,294 @@
+use os;
+use uo;
+use npc;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/eventid";
+include "include/gumps";
+include "include/utility";
+include "include/sysevent";
+include "include/locations";
+include "../pkg/npcs/speech";
+include "../pkg/npcs/npc_util";
+include "../pkg/npcs/main_ai/combat/spellcasting";
+
+var me := Self();
+
+program shipcaptain();
+	if (me.name ["<random>"])
+		DoCaptainOnCreationSetup ();
+	endif
+	speech := 15;
+
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN + SYSEVENT_ENTEREDAREA, 4);
+	WalkHome ();
+
+	while (me)
+		if (me.hidden)
+			me.hidden := 0;
+		endif
+
+		var ev := os::wait_for_event (120);
+		if (ev)
+			case (ev.type)
+				EVID_ITEM_GIVEN:
+					if (GetObjProperty (ev.item, "deliverto") and GetObjProperty (ev.item, "deliverto") == me.serial)
+						MoveItemToContainer (ev.item, me.backpack);
+						PayForItemDelivery (ev);
+					else
+						TakeItem(ev.source, ev.item);
+					endif
+				EVID_SPEECH:
+					TurnToward(ev.source);
+					var text := lower (ev.text);
+					if (text["sail"])
+						SailAway (ev.source, text);
+					elseif (text["buy"])
+						Say ("If you want me to [SAIL] you somewhere, just ask.");
+					elseif (text["sell"])
+						Say ("A fine ship and the open seas - that's all I need!");
+					else
+						check_speech (ev.text, ev.source);
+					endif
+			endcase
+		endif
+	endwhile
+endprogram
+
+function SailAway (byref who, text)
+	var sailto := GetDestination (who, text);
+	if (!sailto)
+		return;
+	endif
+
+	say("So you want to sail to " + sailto[5] + ", eh?");
+	say("I'll take you there for " + sailto[6] + " gold.");
+
+	if (YesNo (who,"Sail there?"))
+		if (who.spendgold (sailto[6]))
+			var parms := array {};
+			parms[1] := who;
+			parms[2] := sailto;
+			setobjproperty (who, "sailto", sailto);
+			start_script ("::/misc/sailto", parms);
+		else
+			say ("Say, you're a little short on funds there, me bucko.");
+		endif
+	else
+		say ("Guess I misunderstood.");
+	endif
+endfunction
+
+function GetDestination (player, text)
+	//If sail was the only thing they said, then give them a menu
+	if (text == "sail")
+		var travelmenu := CreateMenu ("Travel Locations");
+		AddMenuItem (travelmenu, 0, "Britain");
+		AddMenuItem (travelmenu, 0, "Skara Brae");
+		AddMenuItem (travelmenu, 0, "Moonglow");
+		AddMenuItem (travelmenu, 0, "New Magincia");
+		AddMenuItem (travelmenu, 0, "Vesper");
+		AddMenuItem (travelmenu, 0, "Ocllo");
+		AddMenuItem (travelmenu, 0, "Nujel'M");
+		AddMenuItem (travelmenu, 0, "Trinsic");
+		AddMenuItem (travelmenu, 0, "Jhelom");
+		AddMenuItem (travelmenu, 0, "Serpent's Hold");
+		AddMenuItem (travelmenu, 0, "Cove");
+		AddMenuItem (travelmenu, 0, "Buccaneer's Den");
+		AddMenuItem (travelmenu, 0, "Sea Market");
+
+		var selection := SelectMenuItem2 (player, travelmenu);
+		if (!selection)
+			return 0;
+		endif
+		case (selection.index)
+			1:	text := "sail britain";
+			2:	text := "sail skara";
+			3:	text := "sail moonglow";
+			4:	text := "sail new magincia";
+			5:	text := "sail vesper";
+			6:	text := "sail ocllo";
+			7:	text := "sail nujel'm";
+			8:	text := "sail trinsic";
+			9:	text := "sail jhelom";
+			10:	text := "sail serpents hold";
+			11:	text := "sail cove";
+			12:	text := "sail buccaneers den";
+			13:	text := "sail sea market";
+			default:
+				return 0;
+		endcase
+
+	endif
+
+	var parms := array {};
+	if (text["skara"])
+		parms[1] := 662;//x
+		parms[2] := 2228;//y
+		parms[3] := -3;//z
+		parms[4] := 8;//duration
+		parms[5] := "Skara Brae";//destination
+		parms[6] := 100;//cost
+		parms[7] :=  REALM_BRITANNIA;//realm
+		return parms;
+	elseif (text["britain"])
+		parms[1] := 1499;//x
+		parms[2] := 1760;//y
+		parms[3] := -2;//z
+		parms[4] := 8;//duration
+		parms[5] := "Britain";//destination
+		parms[6] := 100;//cost
+		parms[7] :=  REALM_BRITANNIA;//realm
+		return parms;
+	elseif (text["vesper"])
+		parms[1] := 3044;//x
+		parms[2] := 818;//y
+		parms[3] := -3;//z
+		parms[4] := 8;//duration
+		parms[5] := "Vesper";//destination
+		parms[6] := 100;//cost
+		parms[7] :=  REALM_BRITANNIA;//realm
+		return parms;
+	elseif (text["moonglow"])
+		parms[1] := 4426;//x
+		parms[2] := 1025;//y
+		parms[3] := -2;//z
+		parms[4] := 8;//duration
+		parms[5] := "Moonglow";//destination
+		parms[6] := 100;//cost
+		parms[7] :=  REALM_BRITANNIA;//realm
+		return parms;
+	elseif ( (text["occlo"]) or (text["ocllo"]) )
+		parms[1] := 3662;//x
+		parms[2] := 2680;//y
+		parms[3] := -2;//z
+		parms[4] := 10;//duration
+		parms[5] := "Ocllo";//destination
+		parms[6] := 300;//cost
+		parms[7] :=  REALM_BRITANNIA;//realm
+		return parms;
+	elseif ( text["nujel"] )
+		parms[1] := 3806;//x
+		parms[2] := 1278;//y
+		parms[3] := 5;//z
+		parms[4] := 10;//duration
+		parms[5] := "Nujel'M";//destination
+		parms[6] := 300;//cost
+		parms[7] :=  REALM_BRITANNIA;//realm
+		return parms;
+	elseif ( text["den"] )
+		parms[1] := 2760;//x
+		parms[2] := 2165;//y
+		parms[3] := -2;//z
+		parms[4] := 11;//duration
+		parms[5] := "Buccaneer's Den";//destination
+		parms[6] := 500;//cost
+		parms[7] :=  REALM_BRITANNIA;//realm
+		return parms;
+	elseif ( text["magincia"] )
+		parms[1] := 3693;//x
+		parms[2] := 2297;//y
+		parms[3] := -2;//z
+		parms[4] := 8;//duration
+		parms[5] := "New Magincia";//destination
+		parms[6] := 100;//cost
+		parms[7] :=  REALM_BRITANNIA;//realm
+		return parms;
+	elseif ( text["jhelom"] )
+		parms[1] := 1512;//x
+		parms[2] := 3707;//y
+		parms[3] := -3;//z
+		parms[4] := 8;//duration
+		parms[5] := "Jhelom";//destination
+		parms[6] := 100;//cost
+		parms[7] :=  REALM_BRITANNIA;//realm
+		return parms;
+	elseif ( text["hold"] )
+		parms[1] := 2941;//x
+		parms[2] := 3413;//y
+		parms[3] := 1;//z
+		parms[4] := 10;//duration
+		parms[5] := "Serpent's Hold";//destination
+		parms[6] := 200;//cost
+		parms[7] :=  REALM_BRITANNIA;//realm
+		return parms;
+	elseif ( text["trinsic"] )
+		parms[1] := 2085;//x
+		parms[2] := 2849;//y
+		parms[3] := -3;//z
+		parms[4] := 8;//duration
+		parms[5] := "Trinsic";//destination
+		parms[6] := 100;//cost
+		parms[7] :=  REALM_BRITANNIA;//realm
+		return parms;
+	elseif ( text["cove"] )
+		parms[1] := 2256;//x
+		parms[2] := 1171;//y
+		parms[3] := -2;//z
+		parms[4] := 8;//duration
+		parms[5] := "Cove";//destination
+		parms[6] := 250;//cost
+		parms[7] :=  REALM_BRITANNIA;//realm
+		return parms;
+	elseif (text["market"])
+		parms[1] := 4552;//x
+		parms[2] := 2336;//y
+		parms[3] := -2;//z
+		parms[4] := 8;//duration
+		parms[5] := "Sea Market";//destination
+		parms[6] := 100;//cost
+		parms[7] :=  REALM_BRITANNIA;//realm
+		return parms;
+	endif	
+
+	say ("I can sail to Skara Brae, Britain, Vesper, Moonglow, Occlo, Nujel'M,");
+	sleepms(100);
+	say ("Buccaneer's Den, Sea Market, New Magincia, Jhelom, Serpent's Hold, Cove or Trinsic.");
+	return 0;
+
+endfunction
+
+
+
+
+
+///////////////////
+//  called when someone does a quest for the merchant
+///////////////////
+
+function PayForItemDelivery (byref ev)
+	var parms := array { };
+	parms[1] := me;
+	parms[2] := ev.source;
+	parms[3] := ev.item;
+	start_script (":merchants:merchant_quest", parms);
+endfunction
+
+
+///////////////////
+//  called when the NPC is first created, this function names
+//  them and clothes them
+///////////////////
+
+function DoCaptainOnCreationSetup ()
+	run_script_to_completion (":npcs:npc_setup", me);
+	var mytown := FindMyTown (me);
+	if (!mytown)
+		return;
+	endif
+	
+	set_critical (1);
+	var merchantarray := GetGlobalProperty ("#merchants_of_town_" + mytown);
+	if (!merchantarray)
+		merchantarray := array {};
+	endif
+	
+	if (!(me.serial in merchantarray))
+		merchantarray.append (me.serial);
+		SetGlobalProperty ("#merchants_of_town_" + mytown, merchantarray);
+	endif
+	set_critical (0);
+endfunction

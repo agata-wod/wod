@@ -1,0 +1,261 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/attributes";
+
+program use_blank_map (character, map)
+	var choice := SelectMenuItem2 (character, "Cartography");
+	if (!choice)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+	
+	var cart_skill := GetAttribute (character, ATTRIBUTEID_CARTOGRAPHY);
+	case (choice.index)
+		1:	if (cart_skill < 30)
+				SendSysMessage (character, "Your skill is not high enough to draw the map.");
+				return;
+			endif
+			if (CheckSkill (character, SKILLID_CARTOGRAPHY, 40, 0))
+				SendSysMessage (character, "You carefully scribe a detailed map and place it in your pack.");
+				MakeLocalMap (character);
+			else
+				SendSysMessage (character, "You are not familiar enough with the area to draw the map");
+			endif
+			SubtractAmount (map, 1);
+
+		2:	if (cart_skill < 50)
+				SendSysMessage (character, "Your skill is not high enough to draw the map.");
+				return;
+			endif
+			if (CheckSkill (character, SKILLID_CARTOGRAPHY, 60, 0))
+				SendSysMessage (character, "You carefully scribe a detailed map and place it in your pack.");
+				MakeRegionalMap (character);
+			else
+				SendSysMessage( character , "You are not familiar enough with the area to draw the map" );
+			endif
+			SubtractAmount (map, 1);
+
+		3:	if (cart_skill < 70)
+				SendSysMessage (character, "Your skill is not high enough to draw the map.");
+				return;
+			endif
+			if (CheckSkill (character, SKILLID_CARTOGRAPHY, 80, 0))
+				SendSysMessage (character, "You carefully scribe a detailed map and place it in your pack.");
+				MakeWorldMap (character);
+			else
+				SendSysMessage( character , "You are not familiar enough with the area to draw the map" );
+			endif
+			SubtractAmount (map, 1);
+
+		default:
+			SendSysmessage (character, "Whoops...");
+	endcase
+
+endprogram
+
+
+
+
+///////////////////
+//  makes a map of the local area
+///////////////////
+
+function MakeLocalMap (character)
+	var map := CreateItemInBackpack (character, UOBJ_MAP1);
+	map.name := "a completed local map";
+	var MinX := 0;
+	var MaxX := 0;
+	var MinY := 0;
+	var MaxY := 0;
+	case (character.realm)
+		REALM_BRITANNIA:
+			map.facetid := 0;
+			MaxX := 5119;
+			MaxY := 4095;
+		REALM_BRITANNIA_ALT:
+			map.facetid := 1;		
+			MaxX := 5119;
+			MaxY := 4095;
+		REALM_ILSHENAR:
+			map.facetid := 2;
+			MaxX := 1980;
+			MaxY := 1600;
+		REALM_MALAS:
+			map.facetid := 3;	
+			MinX := 512;
+			MaxX := 2559;
+			MaxY := 2047;
+		REALM_TOKUNO:
+			map.facetid := 4;
+			MaxX := 1447;
+			MaxY := 1447;
+		REALM_TERMUR:
+			map.facetid := 5;
+			MinX := 262;
+			MaxX := 1279;
+			MinY := 2750;
+			MaxY := 4095;
+		default:
+			SendSysMessage (character, "You can't map the limbo!");
+			return;
+	endcase
+	if (character.x > MaxX or character.x < MinX or character.y > MaxY or character.y < MinY)
+		SendSysMessage (character, "You must be outdoors to trace a map!");
+		return;		
+	endif
+	if (character.x < (MinX + 265))
+		map.xwest := MinX;
+	else
+		map.xwest := character.x-265;
+	endif
+
+	if (character.y < (MinY + 260))
+		map.ynorth := MinY;
+	else
+		map.ynorth := character.y-260;
+	endif
+
+	if (character.x > (MaxX - 265))
+		map.xeast := MaxX;
+	else
+		map.xeast := character.x+265;
+	endif
+	if (character.y > (MaxY - 260))
+		map.ysouth := MaxY;
+	else
+		map.ysouth := character.y+260;
+	endif
+
+	map.gumpwidth := 200;
+	map.gumpheight := 200;
+endfunction
+
+
+
+
+///////////////////
+//  makes a map of the region
+///////////////////
+
+function MakeRegionalMap (character)
+	var map := CreateItemInBackpack (character, UOBJ_MAP1);
+	map.name := "a completed regional map";
+	var MinX := 0;
+	var MaxX := 0;
+	var MinY := 0;
+	var MaxY := 0;
+	case (character.realm)
+		REALM_BRITANNIA:
+			map.facetid := 0;
+			MaxX := 5119;
+			MaxY := 4095;
+		REALM_BRITANNIA_ALT:
+			map.facetid := 1;		
+			MaxX := 5119;
+			MaxY := 4095;
+		REALM_ILSHENAR:
+			map.facetid := 2;
+			MaxX := 1980;
+			MaxY := 1600;
+		REALM_MALAS:
+			map.facetid := 3;	
+			MinX := 512;
+			MaxX := 2559;
+			MaxY := 2047;
+		REALM_TOKUNO:
+			map.facetid := 4;
+			MaxX := 1447;
+			MaxY := 1447;
+		REALM_TERMUR:
+			map.facetid := 5;
+			MinX := 262;
+			MaxX := 1279;
+			MinY := 2750;
+			MaxY := 4095;
+		default:
+			SendSysMessage (character, "You can't map the limbo!");
+			return;
+	endcase
+	if (character.x > MaxX or character.x < MinX or character.y > MaxY or character.y < MinY)
+		SendSysMessage (character, "You must be outdoors to trace a map!");
+		return;		
+	endif
+	if (character.x < (MinX + 850))
+		map.xwest := MinX;
+	else
+		map.xwest := character.x-850;
+	endif
+
+	if (character.y < (MinY + 800))
+		map.ynorth := MinY;
+	else
+		map.ynorth := character.y-800;
+	endif
+
+	if (character.x > (MaxX + 850))
+		map.xeast := MaxX;
+	else
+		map.xeast := character.x+850;
+	endif
+	if (character.y > (MaxY + 800))
+		map.ysouth := MaxY;
+	else
+		map.ysouth := character.y+800;
+	endif
+
+	map.gumpwidth := 400;
+	map.gumpheight := 400;
+endfunction
+
+
+
+
+///////////////////
+//  makes a map of the region
+///////////////////
+
+function MakeWorldMap (character)
+	var map := CreateItemInBackpack (character, UOBJ_MAP1);
+	map.name := "a completed world map";
+
+	map.xwest := 0;
+	map.ynorth := 0;
+	case (character.realm)
+		REALM_BRITANNIA:
+			map.facetid := 0;
+			map.xeast := 5119;
+			map.ysouth := 4095;
+		REALM_BRITANNIA_ALT:
+			map.facetid := 1;		
+			map.xeast := 5119;
+			map.ysouth := 4095;
+		REALM_ILSHENAR:
+			map.facetid := 2;
+			map.xeast := 1980;
+			map.ysouth := 1600;
+		REALM_MALAS:
+			map.facetid := 3;	
+			map.xwest := 512;
+			map.xeast := 2559;
+			map.ysouth := 2047;
+		REALM_TOKUNO:
+			map.facetid := 4;
+			map.xeast := 1447;
+			map.ysouth := 1447;
+		REALM_TERMUR:
+			map.facetid := 5;
+			map.xwest := 262;
+			map.xeast := 1279;
+			map.ynorth := 2750;
+			map.ysouth := 4095;
+		default:
+			SendSysMessage (character, "You can't map the limbo!");
+			return;
+	endcase
+
+	map.gumpwidth := 500;
+	map.gumpheight := 500;
+endfunction

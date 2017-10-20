@@ -1,0 +1,96 @@
+use uo;
+use os;
+use vitals;
+
+include "include/client";
+
+Const REGEN_CYCLES	:= 120;
+
+program equip_chargedspellitem (parms)
+	var player := parms[1];
+	var what := parms[2];
+	var time := parms[3];
+
+	repeat
+		if (player.dead)
+			return;
+		endif
+	
+		//Only activate at <50% life
+		if (GetVital (player, "Life") * 2 < GetVitalMaximumValue (player, "Life"))
+			//Make sure there's charges left
+			if (!UseCharge (what, player))
+				return;
+			endif
+
+			PlayObjectCenteredEffect (player , FX_SPARK_EFFECT , 7 , 0x10);
+			PlaySoundEffect (player , SFX_SPELL_HEAL);
+			
+			var cycle_counter := 0;
+			var player_life, player_maxlife;
+			repeat
+				player_life := GetVital (player, "Life") + 300;
+				player_maxlife := GetVitalMaximumValue (player, "Life");
+				if (player_life > player_maxlife)
+					player_life := player_maxlife;
+				endif
+				SetVital (player, "Life", player_life);		
+
+				sleep (1);
+				cycle_counter := cycle_counter + 1;
+			until (cycle_counter > REGEN_CYCLES or player.dead);
+		endif
+
+		sleep (3);				
+	until (!player or !IsEquipped (player, what, time));
+endprogram
+
+function UseCharge (item, character)
+	var charges := CINT (GetObjProperty (item, "charges"));
+
+	if (charges > 1)
+		charges := charges - 1;
+		SetObjProperty (item, "charges", charges);
+		return 1;
+	else
+		EraseObjProperty (item, "charges");
+		EraseObjProperty (item, "equipspell");
+		PrintTextAbovePrivate (item, item.desc + " is out of charges", character );
+
+		var spellname := GetObjProperty (item, "itemspellname");
+		if (spellname)
+			var itemname := item.desc;
+			if (itemname[CSTR ("of " + spellname)])
+				itemname[CSTR ("of " + spellname)] := "";
+			else
+				itemname[CSTR ("and " + spellname)] := "";
+			endif
+			item.name := itemname;
+		endif
+		if (GetObjProperty (item, "oldname") )
+			var itemname := GetObjProperty (item, "oldname");
+			if (itemname[CSTR ("of " + spellname)])
+				itemname[CSTR ("of " + spellname)] := "";
+			else
+				itemname[CSTR ("and " + spellname)] := "";
+			endif
+			SetObjProperty (item, "oldname", itemname);
+		endif
+		return 0;
+	endif
+endfunction
+
+
+function IsEquipped (player, what, time)
+	if (Getobjproperty (what, "#equiptime") != time)
+		return 0;
+	endif
+
+	foreach item in ListEquippedItems (player)
+		if (item == what)
+			return 1;
+		endif
+	endforeach
+
+	return 0;
+endfunction

@@ -1,0 +1,8 @@
+use uo;
+use os;
+
+program kickem( who )
+	return;
+	syslog (who.name + " disconnected due to alchemy thing.");
+	DisconnectClient (who);
+endprogram

@@ -1,0 +1,48 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 4;
+
+program cast_controlundead (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	if (!CheckSkill (caster, SKILLID_SPIRITSPEAK, -1, 0))
+		SendSysMessage (caster, "You fail to contact the nether realm");
+		return 1;
+	endif
+
+	//make sure the targetted creature is really undead
+	var powerlevel := IsAnUndeadCreature (cast_on.npctemplate);
+	if (!powerlevel)
+		SendSysMessage (caster, "This can only be cast on undead creatures.");
+		return 1;
+	endif
+
+	PlaySoundEffect (cast_on, 0x202);
+	PlayObjectCenteredEffect (cast_on, 0x375a, 1, 0x10);
+
+	//lesser undead are killed instantly
+	if (powerlevel == 1)
+		var it := cast_on.name;
+		DoDamageByType (caster, cast_on, CINT (GetVital (cast_on, "Life")/100)+3, DAMAGETYPE_MAGIC);
+		sendsysmessage (caster, it + ": thank youuuuuu");
+		return 1;
+	endif
+
+	//otherwise just do damage
+	var dmg := RandomDiceRoll ("6d6") + CINT (GetAttribute (caster, ATTRIBUTEID_NECROMANCY)/10);
+	DoDamageByType (caster, cast_on, dmg, DAMAGETYPE_MAGIC);
+	return 1;
+endprogram

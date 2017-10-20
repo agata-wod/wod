@@ -1,0 +1,23 @@
+use uo;
+use os;
+
+include "include/packets";
+
+program testdamage (character, text)
+	text := CINT (text);
+	DisplayDamage (character, character, text);
+endprogram
+
+function DisplayDamage (attacker, defender, dmg) 
+    var thepacket := "BF000B002201" + fixPacketLength(hex(defender.serial),4)+ fixPacketLength(hex(dmg),1);
+    SendPacket(attacker, thepacket); 
+endfunction 
+
+function FixSize(byref value, fixamt) 
+
+  var i; 
+  for(i := 1; i <= CInt(fixamt); i := i+1) 
+    value := "0" + value; 
+  endfor 
+  
+endfunction 

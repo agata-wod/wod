@@ -1,0 +1,174 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+include "include/skills";
+var spell_circle := 7;
+
+program cast_natures_blessing (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+
+	//allow them to cast another spell now
+	SetScriptController( caster );
+	EraseObjProperty (caster, "#castingdruidspell");
+	detach ();
+
+	var casterskill := GetAttribute (caster, ATTRIBUTEID_ANIMALLORE);
+	var duration := (10 + CINT(casterskill/5))*60;
+	var mod_amount := 5 + CINT (casterskill/20);
+	
+	DoNaturesBlessingSpellEffect (cast_on);
+
+	DoTempMod (cast_on, "natures_blessing", mod_amount, duration, "Nature's Blessing");
+	return 1;
+endprogram
+
+
+
+
+
+function DoNaturesBlessingSpellEffect (character)
+	var oldx := character.x;
+	var oldy := character.y;
+	var items := array{};
+
+	set_critical (1);
+	items.append (CreateItemAtLocation (character.x+2, character.y, character.z, UOBJ_SPLASH_TILE, 1, character.realm));
+	items.append (CreateItemAtLocation (character.x, character.y-2, character.z, UOBJ_SPLASH_TILE, 1, character.realm));
+	items.append (CreateItemAtLocation (character.x-2, character.y, character.z, UOBJ_SPLASH_TILE, 1, character.realm));
+	items.append (CreateItemAtLocation (character.x, character.y+2, character.z, UOBJ_SPLASH_TILE, 1, character.realm));
+	foreach item in items
+		IncrementGraphic (item);
+	endforeach
+	set_critical (0);
+	sleepms (250);
+	
+	set_critical (1);
+	items.append (CreateItemAtLocation (character.x+1, character.y+1, character.z, UOBJ_SPLASH_TILE, 1, character.realm));
+	items.append (CreateItemAtLocation (character.x+1, character.y-1, character.z, UOBJ_SPLASH_TILE, 1, character.realm));
+	items.append (CreateItemAtLocation (character.x-1, character.y-1, character.z, UOBJ_SPLASH_TILE, 1, character.realm));
+	items.append (CreateItemAtLocation (character.x-1, character.y+1, character.z, UOBJ_SPLASH_TILE, 1, character.realm));
+	foreach item in items
+		IncrementGraphic (item);
+	endforeach
+	CheckMovement (character, oldx, oldy, items);
+	set_critical (0);
+	sleepms (250);
+	
+	set_critical (1);
+	items.append (CreateItemAtLocation (character.x+1, character.y, character.z, UOBJ_SPLASH_TILE, 1, character.realm));
+	items.append (CreateItemAtLocation (character.x, character.y-1, character.z, UOBJ_SPLASH_TILE, 1, character.realm));
+	items.append (CreateItemAtLocation (character.x-1, character.y, character.z, UOBJ_SPLASH_TILE, 1, character.realm));
+	items.append (CreateItemAtLocation (character.x, character.y+1, character.z, UOBJ_SPLASH_TILE, 1, character.realm));
+	foreach item in items
+		IncrementGraphic (item);
+	endforeach
+	CheckMovement (character, oldx, oldy, items);
+	set_critical (0);
+	sleepms (250);
+	
+	set_critical (1);
+	foreach item in items
+		IncrementGraphic (item);
+	endforeach
+	CheckMovement (character, oldx, oldy, items);
+	set_critical (0);
+	sleepms (250);
+	
+	set_critical (1);
+	foreach item in items
+		IncrementGraphic (item);
+	endforeach
+	CheckMovement (character, oldx, oldy, items);
+	set_critical (0);
+	sleepms (250);
+
+	set_critical (1);
+	foreach item in items
+		IncrementGraphic (item);
+	endforeach
+	CheckMovement (character, oldx, oldy, items);
+	set_critical (0);
+	sleepms (250);
+	
+	set_critical (1);
+	foreach item in items
+		IncrementGraphic (item);
+	endforeach
+	CheckMovement (character, oldx, oldy, items);
+	set_critical (0);
+	sleepms (250);
+
+	set_critical (1);
+	foreach item in items
+		IncrementGraphic (item);
+	endforeach
+	set_critical (0);
+	PlayObjectCenteredEffect (character, FX_SPARK_EFFECT, 7, 0x10);
+endfunction
+
+
+
+
+function IncrementGraphic (item)
+	case (item.graphic)
+		3676:
+			item.graphic := 3679;
+		3679:
+			item.graphic := 3682;
+		3682:
+			item.graphic := 3685;
+		3685:
+			item.graphic := 3688;
+		3688:
+			DestroyItem (item);
+		default:
+			item.graphic := 3676;
+	endcase
+endfunction
+
+
+
+function CheckMovement (character, byref oldx, byref oldy, items)
+	if (character.x == oldx and character.y == oldy)
+		return;
+	endif
+
+	foreach item in items
+		item.movable := 1;
+	endforeach
+
+	MoveObjectToLocation( items[1], character.x+2,character.y,character.z, character.realm, MOVEOBJECT_NORMAL );
+	MoveObjectToLocation( items[2], character.x,character.y-2,character.z, character.realm, MOVEOBJECT_NORMAL );
+	MoveObjectToLocation( items[3], character.x-2,character.y,character.z, character.realm, MOVEOBJECT_NORMAL );
+	MoveObjectToLocation( items[4], character.x,character.y+2,character.z, character.realm, MOVEOBJECT_NORMAL );
+	MoveObjectToLocation( items[5], character.x+1,character.y+1,character.z, character.realm, MOVEOBJECT_NORMAL );
+	MoveObjectToLocation( items[6], character.x+1,character.y-1,character.z, character.realm, MOVEOBJECT_NORMAL );
+	MoveObjectToLocation( items[7], character.x-1,character.y-1,character.z, character.realm, MOVEOBJECT_NORMAL );
+	MoveObjectToLocation( items[8], character.x-1,character.y+1,character.z, character.realm, MOVEOBJECT_NORMAL );
+	MoveObjectToLocation( items[8], character.x-1,character.y+1,character.z, character.realm, MOVEOBJECT_NORMAL );
+	MoveObjectToLocation( items[9], character.x+1,character.y,character.z, character.realm, MOVEOBJECT_NORMAL );
+	MoveObjectToLocation( items[10], character.x,character.y-1,character.z, character.realm, MOVEOBJECT_NORMAL );
+	MoveObjectToLocation( items[11], character.x-1,character.y,character.z, character.realm, MOVEOBJECT_NORMAL );
+	MoveObjectToLocation( items[12], character.x,character.y+1,character.z, character.realm, MOVEOBJECT_NORMAL );
+
+	foreach item in items
+		item.movable := 0;
+	endforeach
+
+	oldx := character.x;
+	oldy := character.y;
+endfunction

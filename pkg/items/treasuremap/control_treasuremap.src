@@ -1,0 +1,65 @@
+use uo;
+use os;
+
+program control_treasuremap (map)
+
+	//make sure its a treasuremap, and not just a random map
+	if (map.objtype == 0x14eb and !GetObjProperty (map, "chestx") )
+		sleep (5);
+		if (!GetObjProperty (map, "chestx") )
+			return;
+		endif
+	endif
+
+	var timer := GetObjProperty (map, "timer");
+	if (!timer)
+		timer := 0;
+		SetObjProperty (map, "timer", timer);
+	endif
+
+	while (map)
+		sleep (30*60);
+		timer := timer + (30*60);
+		SetObjProperty (map, "timer", timer);
+		if (timer > 604800)
+			DestroyItem (map);
+			return;
+		endif
+
+		if (timer > 432000)
+			map.name := CSTR ("an old " + GetMapDesc (map) + " map");
+		endif
+	endwhile
+
+	return;
+
+endprogram
+
+
+
+
+///////////////////
+//  figures out what the description of the map is
+///////////////////
+
+function GetMapDesc (map)
+	//undecoded maps get their name by objtype
+	case (map.objtype)
+		0x16003:	return "tattered";
+		0x16004:	return "frazzled";
+		0x16005:	return "frayed";
+		0x16006:	return "worn";
+		0x16007:	return "ragged";
+	endcase
+
+	//decoded maps are all the same objype, so we figure out their level by a CProp
+	var maplevel := GetObjProperty (map, "level");
+	case (maplevel)
+		2:	return "tattered";
+		4:	return "frazzled";
+		6:	return "frayed";
+		8:	return "worn";
+		default:
+			return "ragged";
+	endcase
+endfunction

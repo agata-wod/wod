@@ -1,0 +1,208 @@
+use os;
+use uo;
+
+include "include/gumps";
+include "../pkg/skills/craftingskills/alchemy/alchemy";
+
+Const SOUND_EFFECT_POUR		:= 0x0241;
+Const MAX_KEG_VOLUME		:= 100;
+
+program potionkeg (character, keg)
+	if (!ReserveItem (keg))
+		SendSysMessage (character, "You cannot use that keg.");
+		return;
+	endif
+
+	//load info about the keg
+	var keg_potion_type := GetObjProperty (keg, "type");
+	var keg_fullness := GetObjProperty (keg, "amount");
+	var created_potion;
+
+	//very, very old crafting system thing
+	if (keg_potion_type == "c")
+		keg_potion_type := 0;
+	endif
+
+	//target a potion or empty bottle
+	SendSysMessage (character, "Select a potion or bottle.");
+	var targetted := Target(character);
+	if (!targetted)
+		SendSysmessage (character, "Canceled.");
+		return;
+	elseif (!targetted.movable)
+		SendSysmessage (character, "Canceled.");
+		return;
+	elseif (!ReserveItem (targetted))
+		SendSysmessage (character, "You cannot use the keg on that.");
+		return;
+	endif
+
+	//save the objtype of the targetted item so that it can be found again later
+	var targetted_objtype := targetted.objtype;
+
+	//whole lotta possible errors
+	if (targetted.objtype == 0x17059)
+		SendSysMessage (character, "You cannot put the old potions in a keg anymore");
+		SendSysMessage (character, "Double-click them to turn them into new potions.");
+		return;
+	elseif (targetted.objtype != UOBJ_EMPTY_BOTTLE and !IsKeggablePotion (targetted.objtype))
+		SendSysMessage (character, "You cannot use the keg on that.");
+		return;
+	elseif (targetted.objtype != UOBJ_EMPTY_BOTTLE and keg_potion_type and targetted.objtype != keg_potion_type)
+		SendSysMessage (character, "The keg already has another type of potion in it.");
+		return;
+	elseif (keg_fullness == MAX_KEG_VOLUME and targetted.objtype != UOBJ_EMPTY_BOTTLE)
+		SendSysMessage (character, "That keg is already full.");
+		return;
+	elseif (!keg_potion_type and targetted.objtype == UOBJ_EMPTY_BOTTLE)
+		SendSysMessage (character, "You cannot fill bottles from an empty keg.");
+		return;
+	endif
+
+	var loopit;
+	//if the targetted potion isn't in the character's main backpack, skip autoloop since it wouldn't
+	//work anyway
+	if (targetted.container != character.backpack and targetted.objtype != UOBJ_EMPTY_BOTTLE)
+		loopit := 0;
+	elseif (targetted.objtype == UOBJ_EMPTY_BOTTLE and targetted.amount == 1)
+		loopit := 0;
+	else
+		loopit := YesNo (character,"Autoloop?");
+	endif
+
+	//If the user targetted empty bottles, this is the container that those empty bottles were in
+	var empty_bottle_container := 0;
+	if (targetted.objtype == UOBJ_EMPTY_BOTTLE and targetted.container)
+		empty_bottle_container := targetted.container;
+	endif
+
+	//data to make sure the characters don't move
+	var characterx := character.x;
+	var charactery := character.y;
+
+	repeat
+		//if there's no potion keg type, then they can only target new potions to fill it up
+		if (!keg_potion_type)
+			if (IsKeggablePotion (targetted.objtype))
+				playsoundeffect (character, SOUND_EFFECT_POUR);
+				SetObjProperty (keg, "type", targetted.objtype);
+				SetObjProperty (keg, "amount", 1);
+
+				//destroy the potion, create an empty bottle, and rename the keg
+				CreateItemInBackpack (character, UOBJ_EMPTY_BOTTLE, 1);
+				SubtractAmount (targetted, 1);
+				RenameKeg (keg);
+
+			else
+				SendSysMessage (character, "You cannot fill the keg with that.");
+				return;
+			endif
+
+		//check to see if they targetted an empty bottle
+		elseif (targetted.objtype == UOBJ_EMPTY_BOTTLE)
+			playsoundeffect (character, SOUND_EFFECT_POUR);
+
+			//Figure out the correct potion objtype.  Lots of leftover crap from the
+			//old advanced potion system
+			var potion_objtype := keg_potion_type;
+			if (GetObjProperty (keg, "subtype"))
+				case (GetObjProperty (keg, "subtype"))
+					23:	potion_objtype := 0xdc20;
+					24:	potion_objtype := 0xdc21;
+					25:	potion_objtype := 0xdc22;
+					26:	potion_objtype := 0xdc22;
+					27:	potion_objtype := 0xdc23;
+					28:	potion_objtype := 0xdc24;
+					29:	potion_objtype := 0xdc24;
+					31:	potion_objtype := 0xdc25;
+					32:	potion_objtype := 0xdc26;
+					33:	potion_objtype := 0xdc27;
+					34:	potion_objtype := 0xdc28;
+					35:	potion_objtype := 0xdc29;
+				endcase
+			endif
+
+			//destroy the bottle and create the potion
+			SubtractAmount (targetted, 1);
+			if (empty_bottle_container)
+				created_potion := CreateItemInContainer (empty_bottle_container, potion_objtype, 1);
+			else
+				created_potion := CreateItemInBackpack (character, potion_objtype, 1);
+			endif
+
+			//reduce the keg fullness
+			keg_fullness := keg_fullness - 1;
+
+			//if its empty, erase the properties, rename the keg, and exit
+			//otherwise, decrease its fullness and rename it
+			if (keg_fullness < 1)
+				EraseObjProperty (keg, "type");
+				EraseObjProperty (keg, "amount");
+				EraseObjProperty (keg, "subtype");
+				RenameKeg (keg);
+				SendSysMessage (character, "The keg is empty!");
+				return;
+			else
+				SetObjProperty (keg, "amount", keg_fullness);
+				RenameKeg (keg);
+			endif
+
+			//make sure there's some empty bottles left.  if not, return
+			if (!targetted)
+				SendSysMessage (character, "You're out of bottles.");
+				return;
+			endif
+
+		//see if the potion that was targetted is the same as the potion already in the keg
+		elseif (targetted.objtype == keg_potion_type)
+			//if the keg is already full, return
+			if (keg_fullness >= MAX_KEG_VOLUME)
+				SendSysMessage (character, "The keg is full.");
+				return;
+			else
+				keg_fullness := keg_fullness + 1;
+				playsoundeffect (character, SOUND_EFFECT_POUR);
+				SetObjProperty (keg, "amount", keg_fullness);
+				RenameKeg (keg);
+
+				//destroy the potion and create an empty bottle
+				CreateItemInBackpack (character, UOBJ_EMPTY_BOTTLE, 1);
+				SubtractAmount (targetted, 1);
+			endif
+
+		//if its a usable potion but doesn't match the one in the keg, return
+		elseif ((targetted.objtype >= 0xdc01 and targetted.objtype <= 0xdc17) or targetted.objtype == 0xdce6 )
+			SendSysMessage (character, "The keg already has another type of potion in it.");
+			return;
+
+		//otherwise, generic error message
+		else
+			SendSysMessage (character, "You cannot fill the keg with that.");
+			return;
+		endif
+
+		//if they're not autolooping, return.  otherwise find the next potion
+		if (!loopit)
+			return;
+		else
+			if (targetted.objtype != UOBJ_EMPTY_BOTTLE)
+				targetted := FindObjtypeInContainer (character.backpack, targetted_objtype);
+			endif
+
+			if (!targetted)
+				SendSysmessage (character, "You don't have any more that that type of potion.");
+				return;
+			elseif (!ReserveItem (targetted))
+				SendSysmessage (character, "You cannot use the keg on that.");
+				return;
+			endif
+		endif
+
+		sleep (1);
+
+		//reload info about the keg, just to be safe
+		keg_potion_type := GetObjProperty (keg, "type");
+		keg_fullness := GetObjProperty (keg, "amount");
+
+	until (characterx != character.x or charactery != character.y or !character);
+endprogram

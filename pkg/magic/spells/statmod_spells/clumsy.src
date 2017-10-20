@@ -1,0 +1,49 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 1;
+
+program cast_clumsy (parms, spellid)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	cast_on := CheckMagicReflection (caster, cast_on);
+	if (!cast_on)
+		return 1;
+	endif
+
+	var mod_amount := CalcModAmount() * 2;
+	if (cast_on.npctemplate)
+		//more effective against NPCs, but only for good mages
+		if (caster_magery > 90)
+			var npc_mod_amount := GetAttribute (cast_on, "Dexterity") - 20;
+			if (npc_mod_amount > mod_amount)
+				mod_amount := npc_mod_amount;
+			endif
+		elseif (caster_magery > 70)
+			var npc_mod_amount := GetAttribute (cast_on, "Dexterity") - 50;
+			if (npc_mod_amount > mod_amount)
+				mod_amount := npc_mod_amount;
+			endif
+		endif
+	endif
+	mod_amount := Resisted (caster, cast_on, mod_amount);
+
+	var duration := CalcCurseModDuration ();
+
+	PlaySoundEffect (cast_on, SFX_SPELL_CURSE);
+	PlayObjectCenteredEffect (cast_on, FX_CURSE_EFFECT, 7, 7);
+	DoMagicStatMod (cast_on, STATMOD_DEX, 0-mod_amount, duration, "Clumsy Spell");
+	return 1;
+endprogram

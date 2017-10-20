@@ -1,0 +1,40 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 6;
+
+program dispel (parms, spellid)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	if (!GetObjProperty (cast_on, "summoned"))
+		SendSysmessage (caster, "That is not a summoned creature!");
+		return 1;
+	endif
+
+	var resist_difficulty := caster_magery + 20;
+	PlaySoundEffect (caster, SFX_SPELL_MANA_VAMPIRE);
+	if (!checkskill (cast_on, SKILLID_MAGICRESISTANCE, resist_difficulty, 0) )
+		PlayStationaryEffect (cast_on.x, cast_on.y, cast_on.z, FX_SMOKE, 0xA, 0xA, 0, cast_on.realm);
+		KillNPC (cast_on);
+	else
+		SendSysmessage (caster, "You could not dispel the creature.");
+		//Set a property on the creature so that NPCs won't keep trying to dispel over and over again
+		//if they fail.
+		if (caster.npctemplate)
+			SetObjProperty (cast_on, "#failed_dispel", caster.serial);
+		endif
+	endif
+	return 1;
+endprogram

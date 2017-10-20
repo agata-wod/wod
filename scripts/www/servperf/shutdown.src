@@ -1,0 +1,33 @@
+use uo;
+use os;
+use http;
+
+include "include/client";
+
+WriteHTML ("<html><head><title>Server restart center</title></head>");
+WriteHTML ("<body bgcolor=\"#dcdeed\">");
+
+var confirm := QueryParam ("confirm");
+if (!confirm)
+	WriteHTML ("Are you sure you want to restart?<br>");
+	WriteHTML ("<a href=shutdown.ecl?confirm=yes>Yes, restart the server</a><br>");
+	WriteHTML ("<a href=shutdown.ecl?confirm=no>Never mind</a><br>");
+	WriteHTML ("</body></html>");
+	return;
+endif
+
+if (confirm=="no")
+	WriteHTML ("Restart canceled.");
+	WriteHTML ("</body></html>");
+	return;
+endif
+
+detach ();
+Syslog ("Initiating Shutdown via Web Interface");
+start_script (":saver:doshutdown", array{});
+
+WriteHTML ("<p>Restart initiated - 10 minutes until restart</p>");
+WriteHTML ("<p>The restart can be delayed by the .delayrestart command in-game, but only until the countdown timer reaches 5 minutes.");
+WriteHTML ("</body></html>");
+
+

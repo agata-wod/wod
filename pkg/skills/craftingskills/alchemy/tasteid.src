@@ -1,0 +1,48 @@
+use uo;
+use os;
+use cfgfile;
+use attributes;
+
+include "include/client";
+
+program do_tasteid (character)
+	var alchemcfg := ReadConfigFile (":alchemy:itemdesc");
+
+	SendSysMessage (character, "Select an object to taste.");
+	var the_item := Target (character);
+	if (!the_item)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif
+	if (!ReserveItem (the_item))
+		SendSysMessage (character, "You can't use that right now!");
+		return;
+	endif
+
+	var poison_desc;
+	if (CheckSkill (character, SKILLID_ALCHEMY, -1, 0))
+		case (GetObjProperty (the_item, "poison_level"))
+			1:
+				poison_desc := "a lesser poison.";
+			2:
+				poison_desc := "a regular poison.";
+			3:
+				poison_desc := "a greater poison.";
+			4:
+				poison_desc := "a deadly poison.";
+			5:
+				poison_desc := "an extremely deadly poison.";
+			default:
+				poison_desc := "nothing out of the ordinary.";
+		endcase            
+	else
+		poison_desc := "nothing out of the ordinary.";
+	endif
+
+	SendSysmessage(character, "This contains " + poison_desc);
+	var item_name := alchemcfg[the_item.objtype].sname;
+	if (item_name)
+		SendSysmessage(character, "It seems to be " + item_name);
+		the_item.name := item_name;
+	endif
+endprogram

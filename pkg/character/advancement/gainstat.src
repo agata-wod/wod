@@ -1,0 +1,139 @@
+use os;
+use uo;
+use util;
+use math;
+use attributes;
+use vitals;
+
+include "include/utility";
+
+var maxstr := 75;
+var maxdex := 75;
+var maxint := 75;
+var unmod_str := 75;
+var unmod_dex := 75;
+var unmod_int := 75;
+
+var last_check_x := 0;
+var last_check_y := 0;
+
+program gainstats (who)
+	if (who.cmdlevel)
+		return;
+	endif
+
+	var starttime := GetObjProperty (who, "logontime");
+	last_check_x := who.x;
+	last_check_y := who.y;
+
+	while (who)
+		sleep ( 5 * 60 );
+		if (who)
+			if (starttime != GetObjProperty (who, "logontime"))
+				return;
+			endif
+			set_critical (1);
+			StatGain ( who );
+			set_critical (0);
+		endif
+	endwhile
+endprogram
+
+
+function StatGain (who)
+	maxstr := GetObjProperty (who, "maxstr");
+	maxdex := GetObjProperty (who, "maxdex");
+	maxint := GetObjProperty (who, "maxint");
+	unmod_str := Cint (GetAttributeBaseValue (who, "Strength")/10);
+	unmod_dex := Cint (GetAttributeBaseValue (who, "Dexterity")/10);
+	unmod_int := Cint (GetAttributeBaseValue (who, "Intelligence")/10);
+
+	if (!maxstr)
+		SendSysMessage (who, "Remember to choose your specializations.");
+	endif
+
+	if (randomint(10) == 1)
+		ResetToMax (who);
+	endif
+
+	if (!who.dead)
+		if (CheckStatIncreaseOdds (who))
+			StatIncrease (who);
+		endif
+	endif
+
+endfunction
+
+function ResetToMax (who)
+	if (who.cmdlevel)
+		return;
+	endif
+
+	if (unmod_str > maxstr)
+		SetAttributeBaseValue (who, "Strength", maxstr*10);
+		RecalcVitals (who);
+	endif
+	if (unmod_dex > maxdex)
+		SetAttributeBaseValue (who, "Dexterity", maxdex*10);
+		RecalcVitals (who);
+	endif
+	if (unmod_int > maxint)
+		SetAttributeBaseValue (who, "Intelligence", maxint*10);
+		RecalcVitals (who);
+	endif
+
+endfunction
+
+
+function CheckStatIncreaseOdds (who)
+	var thedist := CoorDist (who.x, who.y, last_check_x, last_check_y);
+	if (thedist > 100)
+		return 1;
+	endif
+	
+	thedist := Cint (thedist/5);
+	if (RandomInt (thedist+1))
+		return 1;
+	endif
+	return 0;
+endfunction
+
+
+
+function StatIncrease (who)
+	last_check_x := who.x;
+	last_check_y := who.y;
+
+	if (unmod_str < 30 and RandomInt (2) and unmod_str < maxstr)
+		SetAttributeBaseValue (who, "Strength", unmod_str*10 + 10);
+	elseif ( (unmod_str < maxstr) and (RandomInt(5)==1) )
+		if ( (RandomInt(180)+1 ) > unmod_str)
+			SetAttributeBaseValue (who, "Strength", unmod_str*10 + 10);
+			RecalcVitals (who);
+		endif
+	endif
+
+	if (unmod_dex < 30 and RandomInt (2) and unmod_dex < maxdex)
+		SetAttributeBaseValue (who, "Dexterity", unmod_dex*10 + 10);
+	elseif ( (unmod_dex < maxdex) and (RandomInt(5)==1) )
+		if ( (RandomInt(180)+1 ) > unmod_dex)
+			SetAttributeBaseValue (who, "Dexterity", unmod_dex*10 + 10);
+			RecalcVitals (who);
+		endif
+	endif
+
+	if (unmod_int < 30 and RandomInt (2) and unmod_int < maxint)
+		SetAttributeBaseValue (who, "Intelligence", unmod_int*10 + 10);
+	elseif ( (unmod_int < maxint) and (RandomInt(5)==1) )
+		if ( (RandomInt(180)+1 ) > unmod_int)
+			SetAttributeBaseValue (who, "Intelligence", unmod_int*10 + 10);
+			RecalcVitals (who);
+	  	endif
+	endif
+
+endfunction
+
+
+
+
+

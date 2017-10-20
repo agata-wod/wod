@@ -1,0 +1,446 @@
+use uo;
+use os;
+
+include "include/magic";
+include "include/magicitems";
+
+program use_magic_wand (character, wand)
+
+	if (CINT (GetObjProperty (character, "#useitem")) > ReadGameClock())
+		SendSysmessage (character, "You must wait to use that!");
+		return;
+	endif
+
+	if (!ReserveItem (wand) )
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+
+	var wand_spell := GetObjProperty (wand, "spell");
+	if (!wand_spell)
+		SendSysMessage (character, "That wand has not been charged.");
+		return;
+	endif
+	
+	if (wand_spell == "fireworks")
+		DoFireworkEffect (character);
+		return;
+	endif
+
+	var charges := GetObjProperty (wand, "charges");
+	if (!charges)
+		SendSysMessage (character, "That wand is out of charges.");
+		DestroyItem (wand);
+		return;
+	endif
+
+	var mypack := character.backpack;
+	if ( GetObjProperty (character, "disarmbag") )
+		var bagserial := GetObjProperty (character, "disarmbag");
+		foreach item in EnumerateItemsInContainer (character.backpack)
+			if (item.serial == bagserial)
+				mypack := item;
+				break;
+			endif
+		endforeach
+	endif
+
+	var weapon := GetEquipmentByLayer (character, LAYER_HAND1);
+	var shield := GetEquipmentByLayer (character, LAYER_HAND2);
+	if (shield or !weapon or weapon != wand)
+		if (weapon)
+			MoveItemToContainer (weapon, mypack);
+		endif
+		if (shield)
+			MoveItemToContainer (shield, mypack);
+		endif
+
+		if (!EquipItem (character, wand))
+			SendSysMessage (character, "Can't equip wand!");
+			return;
+		endif
+	endif
+
+	var cast_on;
+	var parms := array{};
+	parms [1] := "#WAND";
+	parms [2] := character;
+	case (wand_spell)
+		"bless":
+			cast_on := Target (character, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+			if(!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return 0;
+			endif
+			if (!GetVital (cast_on, "Life"))
+				SendSysMessage (character, "That is not a valid target!");
+				return 0;
+			endif
+			parms [3] := cast_on;
+
+			var retvalue := run_script_to_completion (":statmod_spells:bless", parms);
+			if (retvalue)
+				UseCharge (character, wand);
+			endif
+			return;
+
+		"agility":
+			cast_on := Target (character, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+			if(!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return 0;
+			endif
+			if (!GetVital (cast_on, "Life"))
+				SendSysMessage (character, "That is not a valid target!");
+				return 0;
+			endif
+			parms [3] := cast_on;
+
+			var retvalue := run_script_to_completion (":statmod_spells:agility", parms);
+			if (retvalue)
+				UseCharge (character, wand);
+			endif
+			return;
+
+
+		"cunning":
+			cast_on := Target (character, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+			if(!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return 0;
+			endif
+			if (!GetVital (cast_on, "Life"))
+				SendSysMessage (character, "That is not a valid target!");
+				return 0;
+			endif
+			parms [3] := cast_on;
+
+			var retvalue := run_script_to_completion (":statmod_spells:cunning", parms);
+			if (retvalue)
+				UseCharge (character, wand);
+			endif
+			return;
+
+		"strength":
+			cast_on := Target (character, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+			if(!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return 0;
+			endif
+			if (!GetVital (cast_on, "Life"))
+				SendSysMessage (character, "That is not a valid target!");
+				return 0;
+			endif
+			parms [3] := cast_on;
+
+			var retvalue := run_script_to_completion (":statmod_spells:strength", parms);
+			if (retvalue)
+				UseCharge (character, wand);
+			endif
+			return;
+
+		"protection":
+			cast_on := Target (character, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+			if(!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return 0;
+			endif
+			if (!GetVital (cast_on, "Life"))
+				SendSysMessage (character, "That is not a valid target!");
+				return 0;
+			endif
+			parms [3] := cast_on;
+
+			var retvalue := run_script_to_completion (":statmod_spells:protection", parms);
+			if (retvalue)
+				UseCharge (character, wand);
+			endif
+			return;
+
+		"nightsight":
+			cast_on := TargetCoordinates (character);
+			if (!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return 0;
+			endif
+			parms [3] := cast_on;
+
+			var retvalue := run_script_to_completion (":misc_spells:nightsight", parms);
+			if (retvalue)
+				UseCharge (character, wand);
+			endif
+			return;
+
+		"heal":
+			cast_on := Target (character, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+			if(!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return 0;
+			endif
+			if (!GetVital (cast_on, "Life"))
+				SendSysMessage (character, "That is not a valid target!");
+				return 0;
+			endif
+			parms [3] := cast_on;
+
+			var retvalue := run_script_to_completion (":misc_spells:gheal", parms);
+			if (retvalue)
+				UseCharge (character, wand);
+			endif
+			SetObjProperty (character, "#useitem", ReadGameClock()+2);
+			return;
+
+		"cure":
+			cast_on := Target (character, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+			if(!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return 0;
+			endif
+			if (!GetVital (cast_on, "Life"))
+				SendSysMessage (character, "That is not a valid target!");
+				return 0;
+			endif
+			parms [3] := cast_on;
+
+			var retvalue := run_script_to_completion (":poison_spells:cure", parms);
+			if (retvalue)
+				UseCharge (character, wand);
+			endif
+			SetObjProperty (character, "#useitem", ReadGameClock()+2);
+			return;
+
+		"resurrection":
+			cast_on := Target (character, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+			if(!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return 0;
+			endif
+			if (!cast_on.dead and cast_on.objtype != UOBJ_CORPSE)
+				SendSysMessage (character, "That is not a valid target!");
+				return 0;
+			endif
+			parms [3] := cast_on;
+
+			var retvalue := run_script_to_completion (":misc_spells:resurrect", parms);
+			if (retvalue)
+				UseCharge (character, wand);
+			endif
+			return;
+		
+		"fireball":
+			cast_on := Target (character, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+			if(!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return 0;
+			endif
+			if (!GetVital (cast_on, "Life"))
+				SendSysMessage (character, "That is not a valid target!");
+				return 0;
+			endif
+			parms [3] := cast_on;
+
+			var retvalue := run_script_to_completion (":damage_spells:fireball", parms);
+			if (retvalue)
+				UseCharge (character, wand);
+			endif
+			SetObjProperty (character, "#useitem", ReadGameClock()+2);
+			return;
+
+		"magicarrow":
+			cast_on := Target (character, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+			if(!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return 0;
+			endif
+			if (!GetVital (cast_on, "Life"))
+				SendSysMessage (character, "That is not a valid target!");
+				return 0;
+			endif
+			parms [3] := cast_on;
+
+			var retvalue := run_script_to_completion (":damage_spells:magicarrow", parms);
+			if (retvalue)
+				UseCharge (character, wand);
+			endif
+			SetObjProperty (character, "#useitem", ReadGameClock()+2);
+			return;
+
+		"lightning":
+			cast_on := Target (character, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+			if(!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return 0;
+			endif
+			if (!GetVital (cast_on, "Life"))
+				SendSysMessage (character, "That is not a valid target!");
+				return 0;
+			endif
+			parms [3] := cast_on;
+
+			var retvalue := run_script_to_completion (":damage_spells:lightning", parms);
+			if (retvalue)
+				UseCharge (character, wand);
+			endif
+			SetObjProperty (character, "#useitem", ReadGameClock()+2);
+			return;
+
+		"flamestrike":
+			cast_on := Target (character, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+			if(!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return 0;
+			endif
+			if (!GetVital (cast_on, "Life"))
+				SendSysMessage (character, "That is not a valid target!");
+				return 0;
+			endif
+			parms [3] := cast_on;
+
+			var retvalue := run_script_to_completion (":damage_spells:fstrike", parms);
+			if (retvalue)
+				UseCharge (character, wand);
+			endif
+			SetObjProperty (character, "#useitem", ReadGameClock()+2);
+			return;
+
+		"summondaemon":
+			cast_on := TargetCoordinates (character);
+			if (!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return;
+			endif
+			SummonCreature (character, "daemon", cast_on, 200);
+			UseCharge (character, wand);
+			SetObjProperty (character, "#useitem", ReadGameClock()+10);
+			return;
+
+		"meteor_swarm":
+			cast_on := Target (character, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+			if(!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return 0;
+			endif
+			if (!GetVital (cast_on, "Life"))
+				SendSysMessage (character, "That is not a valid target!");
+				return 0;
+			endif
+			parms [3] := cast_on;
+
+			var retvalue := run_script_to_completion (":damage_spells:meteor_swarm", parms);
+			if (retvalue)
+				UseCharge (character, wand);
+			endif
+			SetObjProperty (character, "#useitem", ReadGameClock()+2);
+			return;
+
+		"poison":
+			cast_on := Target (character, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+			if(!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return 0;
+			endif
+			if (!GetVital (cast_on, "Life"))
+				SendSysMessage (character, "That is not a valid target!");
+				return 0;
+			endif
+			parms [3] := cast_on;
+
+			var retvalue := run_script_to_completion (":poison_spells:poison", parms);
+			if (retvalue)
+				UseCharge (character, wand);
+			endif
+			SetObjProperty (character, "#useitem", ReadGameClock()+5);
+			return;
+
+		"magicreflection":
+			parms [3] := character;
+			var retvalue := run_script_to_completion (":misc_spells:reflect", parms);
+			if (retvalue)
+				UseCharge (character, wand);
+			endif
+			SetObjProperty (character, "#useitem", ReadGameClock()+2);
+			return;
+
+		"firefield":
+			cast_on := TargetCoordinates (character);
+			if(!cast_on)
+				SendSysMessage (character, "Canceled.");
+				return 0;
+			endif
+			parms [3] := cast_on;
+			
+			if (!CheckLosAt (character, cast_on.x, cast_on.y, cast_on.z) )
+				SendSysMessage (character, "You can't see that!");
+				return;
+			endif
+			
+			sleepms (500);
+			UseCharge (character, wand);
+			ReleaseItem (wand);
+			CreateField (character, cast_on.x, cast_on.y, cast_on.z, "fire", 45, 0, cast_on.realm);
+			return;
+
+		default:
+			SendSysMessage (character, "You should not be getting this message.");
+			return;
+	endcase
+endprogram
+
+
+
+
+///////////////////
+//  uses one of the wands charges
+///////////////////
+
+function UseCharge (character, wand)
+	var charges := GetObjProperty (wand, "charges") - 1;
+	if (!charges or charges < 0)
+		SendSysMessage (character, "The wand runs out of charges!");
+		DestroyItem (wand);
+		return;
+	endif
+	SetObjProperty (wand, "charges", charges);
+	wand.name := wand.desc;
+endfunction
+
+
+
+
+///////////////////
+//  Firework wands
+///////////////////
+
+function DoFireworkEffect (character)
+	var x := character.x + RandomInt (11) - 5;
+	var y := character.y + RandomInt (11) - 5;
+	var light := CreateItemAtLocation (x, y, character.z + 20, 0x1647, 1, character.realm);
+	light.facing := 29;
+	case (RandomInt (5))
+		0:
+			PlayStationaryEffect (x, y, character.z + 20, FX_BLESS_EFFECT, 7, 0x10, 0, character.realm);
+		1:
+			PlayStationaryEffect (x, y, character.z + 20, FX_CURSE_EFFECT, 7, 0x10, 0, character.realm);
+		2:
+			PlayStationaryEffect (x, y, character.z + 20, FX_SPARK_EFFECT, 7, 0x10, 0, character.realm);
+		3:
+			PlayStationaryEffect (x, y, character.z + 20, FX_SPARK_EFFECT, 7, 0x10, 0, character.realm);
+//		4:
+//			PlayStationaryEffect (x, y, character.z + 20, FX_HEAL_EFFECT, 7, 0x10);
+		4:
+			PlayStationaryEffect (x, y, character.z + 20, FX_MARK_EFFECT, 7, 0x10, 0, character.realm);
+	endcase
+	sleepms (100);
+	case (RandomInt (4))
+		0:
+			PlaySoundEffect (character, 0x11c);
+		1:
+			PlaySoundEffect (character, 0x11d);
+		2:
+			PlaySoundEffect (character, 0x11e);
+		3:
+			PlaySoundEffect (character, 0x11f);
+	endcase
+	sleepms (750);
+	DestroyItem (light);
+endfunction

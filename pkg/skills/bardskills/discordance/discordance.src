@@ -1,0 +1,109 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+use vitals;
+
+include "include/client";
+include "include/objtype";
+include "include/eventid";
+include "include/attributes";
+include "include/dotempmods";
+include "../pkg/npcs/npcinfo";
+include "../pkg/skills/bardskills/bard";
+include "../pkg/character/skillcheck/skillcheck";
+
+program bard_discord (character)
+	if (GetObjProperty (character, "#useskill"))
+		if (GetProcess (GetObjProperty (character, "#useskill")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#useskill", GetPid());
+
+	if (!can_sing (character, 1))
+		EraseObjProperty (character, "#useskill");
+        	return;
+	endif
+
+	var instrument := findinstrument(character);
+	if (!instrument)
+        	SendSysmessage (character, "You don't have an instrument to play!");
+		EraseObjProperty (character, "#useskill");
+        	return;
+	endif
+
+	SendSysmessage (character, "Discord what?");
+	var thetarg := Target (character, TGTOPT_CHECK_LOS + TGTOPT_HARMFUL);
+	if (!thetarg)
+		SendSysMessage (character, "Canceled.");
+		EraseObjProperty (character, "#useskill");
+		return;
+	endif
+
+	if (thetarg.dead or !GetVital (thetarg, "Life"))
+		SendSysMessage (character, "Invalid target.");
+		EraseObjProperty (character, "#useskill");
+		return;
+	endif
+
+	if (GetObjProperty (thetarg, "nodiscord") )
+		SendSysMessage (character, "You can't discord that!");
+		EraseObjProperty (character, "#useskill");
+		return;
+	endif
+
+	var discorded := GetObjProperty (thetarg, "#discorded");
+	if (!discorded)
+		discorded := 0;
+	endif
+
+	if (discorded + 45 > ReadGameClock())
+		SendSysMessage (character, "You can't discord that creature again, yet.");
+		EraseObjProperty (character, "#useskill");
+		return;
+	endif
+
+	var elem := GetNpcTemplateElem (thetarg.npctemplate);
+	if (!elem)
+		SendSysMessage (character, "You cannot discord that!");
+		EraseObjProperty (character, "#useskill");
+		return;
+	endif
+
+	var difficulty := 0;
+	if (elem.provoke)
+//		difficulty := -1;
+		difficulty := elem.provoke;
+	else
+		difficulty := 100;
+	endif
+	
+	var resistance := 1;
+	if (difficulty > 120)
+		resistance := (difficulty - 120)/2;
+		difficulty := 120;
+	endif
+	
+	if (CheckSkillWithItem (character, instrument, SKILLID_DISCORDANCE, difficulty )
+			and (PlayNoise(character, instrument, -1, SNDTYPE_DISCORDANCE)))
+
+		SendSysmessage (character, "You discord " + thetarg.name + "!");
+		SetObjProperty (thetarg, "#discorded", ReadGameClock());
+		var casterskill := GetAttribute(character, ATTRIBUTEID_DISCORDANCE) + CINT (GetObjProperty (instrument, "skillbonus"));
+		var duration := casterskill/2;
+		var mod_amount := CINT ((casterskill/5) - resistance);
+		DoTempMod (thetarg, "discordance", mod_amount, duration, "Discordance");
+	else
+		var ev := struct;
+		ev.+ type := EVID_DAMAGED;
+		ev.+ source := character;
+		SendEvent (thetarg, ev);
+		PrintTextAbovePrivate (thetarg, "You enrage " + thetarg.name + "!", character);
+	endif
+
+	detach();
+	sleep (1);
+	EraseObjProperty (character, "#useskill");
+endprogram

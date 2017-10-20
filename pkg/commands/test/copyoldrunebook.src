@@ -1,0 +1,3 @@
+use uo;program textcmd_target( who)	SendSysmessage( who, "What runebook?");	var runebook := Target( who );	if (runebook.objtype == 0x16100)		var newbook := CreateItemInBackpack (who, 0x16100, 1);		if (newbook)			var runes := GetObjProperty (runebook, "runedefs");			SetObjProperty (newbook, "runedefs", runes);			SendSysMessage (who, "Success!");			return 1;		endif	endif	SendSysMessage (who, "Failed!");	return 0;endprogram
+
+

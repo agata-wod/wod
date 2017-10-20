@@ -1,0 +1,1 @@
+Options: join: join a group.  quit: quit your group.  message: send a message to your group.  on: everything you say will be sent to your group.  off: turn off sending messages  members: lists members

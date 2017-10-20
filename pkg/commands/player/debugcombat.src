@@ -1,0 +1,16 @@
+use uo;
+use os;
+
+include "include/client";
+
+program debug_combat (character)
+	if (GetObjProperty (character, "#debugcombat"))
+		SendSysMessage (character, "Combat debug messages off");
+		EraseObjProperty (character, "#debugcombat");
+		return;
+	endif
+
+	SendSysMessage (character, "Combat debug messages on");
+	SetObjProperty (character, "#debugcombat", 1);
+
+endprogram

@@ -1,0 +1,37 @@
+use uo;
+use os;
+
+program painting_deed (character, deed)
+	if (!ReserveItem (deed) or !deed.movable)
+		SendSysMessage (character, "You cannot use this right now.");
+		return;
+	endif
+	
+	SendSysMessage (character, "Remember, your choice is final");
+	var select_menu := CreateMenu ("Select a painting:");
+	AddMenuItem (select_menu, 41091, "Winter Wonderland");
+	AddMenuItem (select_menu, 41093, "Van Gogh - Starry Night");
+	AddMenuItem (select_menu, 41095, "Picasso - Enable Saucepan");
+	AddMenuItem (select_menu, 41097, "Dogs Playing Poker");
+	AddMenuItem (select_menu, 41099, "Okeeffe - Blue Morning Glories");
+	AddMenuItem (select_menu, 41101, "Monet - Sunflowers");
+	AddMenuItem (select_menu, 41103, "Lunar View");
+	AddMenuItem (select_menu, 41105, "Horse at Sunset");
+	AddMenuItem (select_menu, 41107, "Castle");
+
+	var selected_item := SelectMenuItem2 (character, select_menu);
+	if (!selected_item.index)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	
+	var theitem := CreateItemInContainer (character.backpack, 0x0EA0, 1);
+	if (!theitem)
+		PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+		return;
+	endif
+	
+	theitem.graphic := selected_item.objtype;
+	theitem.movable := 1;
+	SubtractAmount (deed, 1);
+endprogram

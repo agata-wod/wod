@@ -1,0 +1,21 @@
+use os;
+use uo;
+
+include "include/client";
+
+
+program textcmd_savenow ()
+	syslog ("Forcing manual save");
+	Broadcast ("Saving World State.  This may take up to 60 seconds.", FONT_NORMAL, 30);
+	sleep(1);
+	var res := SaveWorldState ();
+	if (res)
+		SetGlobalProperty( "#:saver:lastsave", ReadGameClock() );
+		Broadcast ("Save finished.", FONT_NORMAL, 30);
+		syslog( "World state saved" );
+	else
+		Broadcast( "Error saving world state!  Oh, the humanity!", FONT_NORMAL, 30 );
+		syslog( "Error saving world state: " + res );
+	endif
+endprogram
+

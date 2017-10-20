@@ -1,0 +1,99 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 8;
+
+program cast_liche (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		return 0;
+	endif
+	
+	if (!CheckSkill (caster, SKILLID_NECROMANCY, 90, 0))
+		SendSysMessage (caster, "Your knowledge proves insufficient to cross to the other side.");
+		return 1;
+	endif
+
+//	if (!CanMod (caster, "poly"))
+//		SendSysMessage (caster, "You cannot cast this spell in your present form!");
+//		return 0;
+//	endif
+
+	SetObjProperty (caster, "death", ReadGameClock() + 3600);
+	//there's still a chance to fail
+	if (RandomInt (12) == 1)
+		PlaySoundEffect (caster, 0x202);
+		PlayObjectCenteredEffect (caster, 0x375a, 1, 0x10);
+		DoDamageByType (caster, caster, CINT (GetVital (caster, "Life")/100)+3, DAMAGETYPE_UNRESISTABLE);
+		return 1;
+	endif
+
+	//some special effects
+	PlaySoundEffect(caster, 0x20a);
+	PlayObjectCenteredEffect (caster, 0x375a, 1, 0x10);
+
+	//calculate the bonus
+	var Critgroup;
+	if (caster_magery < 70)
+		Critgroup := RandomInt(2);
+	elseif (caster_magery < 85)
+		Critgroup := RandomInt(2)+1;
+	elseif (caster_magery < 95)
+		Critgroup := RandomInt(2)+2;
+	else
+		Critgroup := 3;
+	endif
+
+	var caster_med := GetAttribute (caster, ATTRIBUTEID_MEDITATION);
+	var caster_necro := GetAttribute (caster, ATTRIBUTEID_NECROMANCY);
+
+	var newcolor := 1634;
+	var mod_amount := (critgroup*3) + RandomInt(4);
+	if (caster_med + caster_necro > 180)
+		var new_mod_amount := (critgroup*3) + RandomInt(4);
+		if (new_mod_amount > mod_amount)
+			mod_amount := new_mod_amount;
+		endif
+	endif
+
+	var bonusskillval := caster_magery + caster_med + caster_necro - 200;
+	if (bonusskillval > 0)
+		bonusskillval := CINT (bonusskillval/10) + 4;
+		mod_amount := mod_amount + bonusskillval;
+	endif
+
+	var duration := GetModDuration (caster_magery ) * 4 + 3*3600;
+	DoTempMod (caster, "poly", mod_amount, duration, "Lich Spell");
+	DoPersistedMod (caster, "color", newcolor, caster.color, duration, "Lich Spell");
+
+//	Temporarily disabled stuff
+//	DoPersistedMod (caster, "graphic", newgraphic, caster.graphic, duration);
+
+	var weaponone := GetEquipmentByLayer (caster,  LAYER_HAND1);
+	var weapontwo := GetEquipmentByLayer (caster,  LAYER_HAND2);
+	if (weaponone.objtype == 0x1706a or weapontwo.objtype == 0x1706a)
+		return 1;
+	else
+		var staff := CreateItemInContainer (caster.backpack, 0x1706a, 1);
+		if (staff)
+			if (weaponone)
+				moveitemtocontainer(weaponone,caster.backpack);
+			endif
+			if (weapontwo)
+				moveitemtocontainer(weapontwo,caster.backpack);
+			endif
+			if (caster.race == RACE_GARGOYLE)
+				staff.graphic := 0x905;
+				staff.color := 1109;
+			endif
+			EquipItem (caster, staff);
+		endif
+	endif
+	
+	return 1;
+endprogram

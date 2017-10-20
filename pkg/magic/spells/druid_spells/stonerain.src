@@ -1,0 +1,100 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 8;
+
+program tidal_wave ( parms )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+
+	//set them as the script controlers and allow them to cast another spell now
+	SetScriptController (caster);
+	EraseObjProperty (caster, "#castingdruidspell");
+	detach ();
+
+	//save the location of the caster, as its the center of the spell
+	var location_x := caster.x;
+	var location_y := caster.y;
+	var location_z := caster.z;
+	var location_r := caster.realm;
+
+	//this is the rock that gets saves.
+	//rock[1] is the rock objtype
+	//rock[2] is the rock's x position
+	//rock[3] is the rock's y position
+	//rock[4] is the rock's z position
+	//rock[5] is the rock serial number
+	var rock := array{};
+
+	//get the caster's ability in several skills
+	var caster_animallore := CInt (GetAttribute (caster, ATTRIBUTEID_ANIMALLORE) );
+	caster_magery := CInt (GetAttribute (caster, ATTRIBUTEID_MAGERY) );
+//	var caster_meditation := CInt (GetAttribute (caster, ATTRIBUTEID_MEDITATION) );
+	caster_evalint := CInt (GetAttribute (caster, ATTRIBUTEID_INVOCATION) );
+
+	//a few variables based off the caster's skills
+	//var caster_hit_chance := (caster_meditation + caster_animallore)/2;
+	var number_of_rocks := (caster_magery + caster_animallore)/20;
+
+//	var number_of_rocks := 2;
+
+//	var damage_max := (caster_magery + caster_evalint +caster_meditation)/3;
+
+	//a couple of other variables
+	var rock_array := array{};
+	var created_rock;
+	var i;
+	var random_number;
+
+	//now we actually make the rocks
+	for (i := 0; i < number_of_rocks; i := i + 1)
+		random_number := RandomInt (8);
+		case (random_number)
+			0:	rock[1] := 0x1363;
+			1:	rock[1] := 0x1364;
+			2:	rock[1] := 0x1365;
+			3:	rock[1] := 0x1366;
+			4:	rock[1] := 0x1368;
+			5:	rock[1] := 0x1369;
+			6:	rock[1] := 0x136b;
+			7:	rock[1] := 0x136c;
+			default:	rock[1] := 0x1363;
+		endcase;
+
+		rock[2] := location_x + RandomInt (20) - 10;
+		rock[3] := location_y + RandomInt (20) - 10;
+		rock[4] := location_z + 100;
+
+		created_rock := CreateItemAtLocation (CInt(rock[2]), Cint(rock[3]), CInt(rock[4]), CInt(rock[1]), 1, location_r);
+
+		rock[5] := created_rock.serial;
+		rock_array.append (rock);
+	endfor
+
+	for (i := 1; i <= 20; i := i + 1)
+		foreach rock in rock_array
+			created_rock := SystemFindObjectBySerial (rock[5]);
+			DestroyItem (created_rock);
+			rock[4] := rock[4] - 5;
+			created_rock := CreateItemAtLocation (CInt(rock[2]), Cint(rock[3]), CInt(rock[4]), CInt(rock[1]), 1, location_r);
+			rock[5] := created_rock.serial;
+		endforeach
+		sleepms (100);
+	endfor
+
+	sleep (30);
+
+	foreach rock in rock_array
+		created_rock := SystemFindObjectBySerial (rock[5]);
+		DestroyItem (created_rock);
+	endforeach
+	return 1;
+endprogram

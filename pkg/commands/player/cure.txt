@@ -1,0 +1,1 @@
+.cure 1 will cause you to drink a cure potion, if you have one.  .cure 2 will cause you to cast the Cure spell on youself.  .cure 3 will apply a bandage.  All the normal restrictions apply!

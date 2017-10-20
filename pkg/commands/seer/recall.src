@@ -1,0 +1,24 @@
+use uo;
+
+program recall(who)
+
+	SendSysmessage(who, "Select a rune:");
+	var what:= target(who, TGTOPT_NOCHECK_LOS);
+	if (what)
+		var tox := Cint(GetObjProperty( what, "x" ));
+		if ( (!tox) and (tox != 0) )
+			sendsysmessage(who,"That rune isn't marked.");
+			return;
+		endif
+		var toy := Cint(GetObjProperty( what, "y" ));
+		var toz := Cint(GetObjProperty( what, "z" ));
+		var tor := GetObjProperty ( what, "realm" );
+		if (!tor)
+			tor := _DEFAULT_REALM;
+		endif
+		MoveObjectToLocation( who, tox, toy, toz, tor, MOVEOBJECT_FORCELOCATION );
+	else
+		SendSysmessage(who, "Canceled");
+	endif
+
+endprogram

@@ -1,0 +1,46 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 3;
+
+program treeform (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+	var cast_loc := GetSpellCastOn (caster, parms);
+	if (!cast_loc)
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+
+	//allow them to cast another spell now
+	SetScriptController (caster);
+	EraseObjProperty (caster, "#castingdruidspell");
+	detach ();
+	
+	var thecritter, x, y, z;
+	var tries := 0;
+	for i := 1 to 3
+		thecritter := 0;
+		tries := 0;
+		repeat
+			x := cast_loc.x + RandomInt (9) - 4;
+			y := cast_loc.y + RandomInt (9) - 4;
+			z := GetMapInfo(x,y, cast_loc.realm).z;
+			thecritter := CreateNPCfromTemplate (":elementals:firesnake", cast_loc.x, cast_loc.y, cast_loc.z, 0, cast_loc.realm);
+			tries := tries + 1;
+		until (thecritter or tries > 10);
+		if (thecritter)
+			SetObjProperty (thecritter, "casterskill", GetAttribute (caster, ATTRIBUTEID_ANIMALLORE) );
+			SetObjProperty (thecritter, "master", caster.serial);
+		endif
+	endfor
+	return 1;
+endprogram

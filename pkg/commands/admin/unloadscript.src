@@ -1,0 +1,14 @@
+use os;
+use uo;
+use polsys;
+use cfgfile;
+
+program textcmd_unloadcfg (character, filename)
+	var res := Unload_Scripts ( filename );
+	if (res == error)
+		SendSysMessage ( character, "Error unloading script: " + res.errortext );
+	else
+		SendSysMessage ( character, res + " script(s) unloaded." );
+	endif
+
+endprogram

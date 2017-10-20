@@ -1,0 +1,98 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 7;
+
+program tidal_wave ( parms )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+
+	var cast_on;
+	if (parms[1] == "#MOB")
+		cast_on := parms[3];
+	else
+		var cx := caster.x;
+		var cy := caster.y;
+		cast_on := Target (caster);
+		if(!cast_on)
+			SendSysMessage (caster, "Canceled.");
+			EraseObjProperty (caster, "#castingdruidspell");
+			return 0;
+		endif
+
+		if (cast_on.objtype != UOBJ_CORPSE)
+			SendSysMessage (caster, "You can only cast this spell on the corpse of other players.");
+			EraseObjProperty (caster, "#castingdruidspell");
+			return 0;
+		endif
+
+		if (cx != caster.x or cy != caster.y)
+			SendSysMessage (caster,"You've lost your concentration.");
+			EraseObjProperty (caster, "#castingdruidspell");
+			return 0;
+		endif
+
+		if (!CheckLosAt (caster, cast_on.x, cast_on.y, cast_on.z))
+      	  	SendSysMessage (caster, "You can't see that.");
+			EraseObjProperty (caster, "#castingdruidspell");
+			return 0;
+		endif
+	endif
+
+	if (!caster or !cast_on)
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+
+	//allow them to cast another spell now
+	SetScriptController ( caster );
+	EraseObjProperty (caster, "#castingdruidspell");
+	detach ();
+
+	var ghost_serial := GetObjProperty (cast_on, "ghost_serial");
+	if (!ghost_serial)
+		SendSysMessage (caster, "You can only cast this on the corpses of players!");
+		return 0;
+	endif
+
+	var ghost := SystemFindObjectBySerial (ghost_serial);
+	if (!ghost)
+		SendSysMessage (caster, "That player don't seem to be around anymore...");
+		return 0;
+	endif
+
+	foreach mobile in ListMobilesNearLocation (cast_on.x, cast_on.y, cast_on.z, 10, cast_on.realm)
+		if (!IsGood (mobile) )
+			SendSysMessage (caster, "It looks a bit too dangerous here...");
+			return 0;
+		endif
+	endforeach
+
+	if (!ghost.dead)
+		SendSysMessage (caster, "He isn't dead anymore.");
+		return 0;
+	endif
+
+	MoveObjectToLocation( ghost, cast_on.x, cast_on.y, cast_on.z, cast_on.realm, MOVEOBJECT_FORCELOCATION);
+	Resurrect (ghost);
+	ghost.hp := ghost.maxhp;
+	ghost.stamina := ghost.maxstamina;
+	ghost.mana := ghost.maxmana;
+
+	foreach item in ListRootItemsInContainer (cast_on)
+		if (!EquipItem (ghost, item) )
+			MoveItemToContainer (item, ghost.backpack);
+		endif
+	endforeach
+
+	DestroyItem (cast_on);
+	return 1;
+endprogram

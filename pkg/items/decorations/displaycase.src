@@ -1,0 +1,10 @@
+use uo;
+use os;
+
+program view_displaycase (character, displaycase)
+	if (!displaycase.movable)
+		SendViewContainer (character, displaycase);
+	else
+		SendOpenSpecialContainer (character, displaycase);
+	endif
+endprogram

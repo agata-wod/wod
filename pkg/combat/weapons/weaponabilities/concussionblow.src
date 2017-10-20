@@ -1,0 +1,31 @@
+use uo;
+use os;
+use uo;
+use vitals;
+use cliloc;
+use polsys; 
+use math;
+
+include ":weapons:abilityIcons";
+include ":weaponabilities:focus";
+
+
+program ability(parms)
+	// parms[1] = attacker
+	// parms[2] = defender
+	// parms[3] = damage
+	var result := array {};
+	if (ConsumeVital(parms[1], "Mana", GetFocusManaReduction (parms[1], 1500)))
+		SendSysMessageCL (parms[1], 1060165);
+		SendSysMessageCL (parms[2], 1060166);
+		PlaySoundEffect (parms[2], 0x214);
+		PlayObjectCenteredEffectEx (parms[2], 0x377a, 1, 32, 1153, 0, 3, 9949);
+		PlayMovingEffectXYZEx (parms[2].x, parms[2].y, parms[2].z + 10, parms[2].x, parms[2].y, parms[2].z + 20, parms[2].realm, 0x36fe, 1, 0, 1133, 3, 0, 0, 9501, 1, 0);
+		result[3] := 1;
+		var hitspercent := 100 * GetVital (parms[2], "Life") / GetVitalMaximumValue (parms[2], "Life");
+		var manapercent := 100 *  GetVital (parms[2], "Mana") / GetVitalMaximumValue (parms[2], "Mana");
+		result[5] := 10 + min (abs (hitspercent - manapercent), 20);
+		ResetWeaponAbilities (parms[1]);
+	endif
+	return result;
+endprogram

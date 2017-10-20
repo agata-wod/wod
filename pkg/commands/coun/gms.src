@@ -1,0 +1,12 @@
+use uo;
+
+include "include/client";
+
+program textcmd_bcast (who, text)
+	text := who.name + ": " + text;
+	foreach guy in EnumerateOnlineCharacters()
+		if (guy.cmdlevel)
+			SendSysMessage (guy, text, FONT_NORMAL, 30);
+		endif
+	endforeach
+endprogram

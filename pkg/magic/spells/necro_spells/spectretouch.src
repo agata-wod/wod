@@ -1,0 +1,44 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 4;
+
+program cast_spectretouch (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS);
+	if (!cast_on)
+		return 0;
+	endif
+
+	var magery := cint(GetAttribute (caster, ATTRIBUTEID_MAGERY)+ GetAttribute (caster, ATTRIBUTEID_NECROMANCY)/2);
+	var mod_amount := Resisted (caster, cast_on, Cint(GetModAmount( magery )/2) );
+	var duration := GetModDuration ( magery )*10;
+
+	var temp_person := cast_on;
+	cast_on := CheckMagicReflection (caster, cast_on);
+	if (!cast_on)
+		return;
+	endif
+
+	if (cast_on == caster)
+		caster := temp_person;
+	endif
+
+	DoTempMod (cast_on, "cstr", 0 - mod_amount, duration, "Specter's Touch");
+	DoTempMod (caster, "str", mod_amount, duration, "Specter's Touch");
+
+	DoTempMod (cast_on, "cint", 0 - mod_amount, duration, "Specter's Touch");
+	DoTempMod (caster, "int", mod_amount, duration, "Specter's Touch");
+
+	DoTempMod (cast_on, "cdex", 0 - mod_amount, duration, "Specter's Touch");
+	DoTempMod (caster, "dex", mod_amount, duration, "Specter's Touch");
+	return 1;
+endprogram

@@ -1,0 +1,52 @@
+use uo;
+use os;
+
+program SailToDestination(parms)
+
+	var you := parms[1];
+	var sailto := parms[2];
+
+	//sailto:
+	//[1] = x
+	//[2] = y
+	//[3] = z
+	//[4] = duration
+	//[5] = destination name
+	//[6] = cost
+	//[7] = realm
+
+	MoveObjectToLocation( you, 7000, 1558, 3, REALM_BRITANNIA, MOVEOBJECT_FORCELOCATION );
+
+	for i := 1 to cint(sailto[4]);
+		sleep(2);
+		PlaySoundEffect(you,0x13);
+		sleep(2);
+		PlaySoundEffect(you,0x14);
+		if (!StillAboard(you) )
+			EraseObjProperty(you,"sailto");
+			return;
+		endif
+	endfor
+
+	sleep(3);
+
+	if ( StillAboard(you) )
+		var sailtorealm := sailto[7];
+		if (!sailtorealm)
+			sailtorealm := REALM_BRITANNIA;
+		endif
+		MoveObjectToLocation( you, sailto[1], sailto[2], sailto[3], sailtorealm, MOVEOBJECT_FORCELOCATION );
+	endif
+	EraseObjProperty(you,"sailto");
+
+endprogram
+
+function StillAboard( me )
+
+	if ( (me.x >= 6990 and me.x <= 7005) and (me.y >= 1555 and me.y <= 1561 and me.realm == REALM_BRITANNIA ) )
+		return 1;
+	else
+		return 0;
+	endif
+
+endfunction

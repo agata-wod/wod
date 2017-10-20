@@ -1,0 +1,36 @@
+use os;
+use polsys;
+
+program textcmd_sendmulti( who, text )
+	var params := SplitWords( text );
+	if (len(params) < 2)
+		return;
+	endif
+	send_multi(who, params[1], params[2]);
+endprogram
+
+function send_multi(who, multiID, color)
+	const MYCMD := 0xF3;
+
+	var outpkt2 := CreatePacket(MYCMD, 26);
+ 
+//	outpkt2.SetInt16(OFFSET_MSGLEN, outpkt2.GetSize());
+//	outpkt2.SetInt32(OFFSET_SERIAL, who.serial);
+ 
+	outpkt2.SetInt16(1, 1); // always 0x1 on OSI
+	outpkt2.SetInt8(3, 2); // 0x02 = Multi
+	outpkt2.SetInt32(4, 0x40005678); // Serial
+	outpkt2.SetInt16(8, CINT(multiID)); // Graphic
+	outpkt2.SetInt8(10, 0); // graphic offset, 0x00 if multi
+	outpkt2.SetInt16(11, 1); // amount
+	outpkt2.SetInt16(13, 1); // amount
+	outpkt2.SetInt16(15, who.x); // X
+	outpkt2.SetInt16(17, who.y); // Y
+	outpkt2.SetInt8(19, 0xFB); // Z
+	outpkt2.SetInt8(20, 0); // facing, 0x00 if multi
+	outpkt2.SetInt16(21, CINT(color)); // Color!
+	outpkt2.SetInt8(23, 0); // Flags, 0x00 if multi
+	outpkt2.SetInt8(24, 0);
+ 
+	outpkt2.SendPacket(who);
+endfunction

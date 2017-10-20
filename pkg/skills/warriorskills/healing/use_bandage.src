@@ -1,0 +1,79 @@
+use os;
+use uo;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/attributes";
+include "include/dotempmods";
+include "../pkg/skills/warriorskills/healing/healing";
+include "../pkg/character/virtue/virtue";
+
+program use_bandages (healer, bandages)
+	if (!ReserveItem (bandages))
+		SendSysMessage (healer, "You cannot use those right now.");
+		return;
+	endif
+
+	var healtime := GetObjProperty (healer, "#heal");
+	if (healtime and healtime > ReadGameClock () )
+		SendSysMessage (healer, "You must wait until you can use your healing arts again!");
+		return;
+	endif
+
+	SetObjProperty (healer, "#heal", ReadGameClock() + 60);
+	SendSysMessage (healer, "Who would you like to heal?");
+	var patient := Target (healer, TGTOPT_HELPFUL + TGTOPT_CHECK_LOS);
+	if (!patient)
+		SendSysmessage (healer, "Canceled.");
+		EraseObjProperty (healer, "#heal");
+		return;
+	endif
+
+	if (patient.dead)
+		ResurrectPlayer (healer, patient, bandages);
+	elseif (patient.objtype == UOBJ_CORPSE and GetObjProperty (patient, "master"))
+		var thenpctemplate := GetObjProperty (patient, "npctemplate");
+		if (thenpctemplate and thenpctemplate ["guard"])
+			TryToResurrectHenchman (healer, patient, bandages);
+		else
+			ResurrectPet (healer, patient, bandages);
+		endif
+	elseif (!patient.npctemplate)
+		HealPatient (healer, patient, bandages);
+	elseif (patient.graphic == 400 or patient.graphic == 401 or patient.graphic == 605 or patient.graphic == 606 or patient.graphic == 666 or patient.graphic == 667)
+		HealPatient (healer, patient, bandages);
+	elseif (patient.script["tamed"])
+		if (GetObjProperty (patient, "summoned") )
+			SendSysMessage (healer, "And exactly how do you plan to heal that?");
+			EraseObjProperty (healer, "#heal");
+			return;
+		endif
+
+		var masterserial := GetObjProperty (patient, "master");
+		if (!masterserial)
+			SendSysMessage (healer, "You can't heal that.");
+			EraseObjProperty (healer, "#heal");
+			return;
+		elseif (masterserial == healer.serial)
+			HealPatient (healer, patient, bandages);
+			EraseObjProperty (healer, "#heal");
+			return;
+		endif
+
+		var master := SystemFindObjectBySerial (masterserial);
+		if (master and Distance (master, patient) < 10)
+			HealPatient (healer, patient, bandages);
+			EraseObjProperty (healer, "#heal");
+			return;
+		endif
+		SendSysMessage (healer, "It looks rather skittish...");
+		EraseObjProperty (healer, "#heal");
+		return;
+	else
+		SendSysMessage (healer, "You can't heal that.");
+		EraseObjProperty (healer, "#heal");
+	endif
+   
+endprogram

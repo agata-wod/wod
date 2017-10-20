@@ -1,0 +1,40 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 3;
+
+program telekinesis (parms, spellid)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms);
+	cast_on := cast_on.item;
+	if (!cast_on)
+		return 0;
+	endif
+
+	if (cast_on.npctemplate or cast_on.account)
+		PrintTextAbovePrivate (caster, "You cannot will it to move.", caster);
+		return 1;
+	endif
+
+	if (cast_on.multi)
+		SendSysmessage (caster, "You cannot use that on items inside houses.");
+		return 1;
+	endif
+
+	PlaySoundEffect (caster, SFX_SPELL_TELEKINESIS);
+	if (MoveItemToContainer (cast_on, caster.backpack))
+		PrintTextAbovePrivate (caster, "You pick up the item with your mind.", caster);
+	else
+		PrintTextAbovePrivate (caster, "You cannot will it to move.", caster);
+	endif
+	return 1;
+endprogram
+

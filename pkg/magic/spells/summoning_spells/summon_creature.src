@@ -1,0 +1,86 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 5;
+
+program cast_summon( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_loc := GetSpellCastOn (caster, parms);
+	if (!cast_loc)
+		return 0;
+	endif
+
+	var critgroup;
+	var npc_template;
+
+	if (caster_magery < 70)
+		Critgroup := RandomInt(1);
+	elseif (caster_magery < 80)
+		Critgroup := RandomInt(1)+1;
+	elseif (caster_magery < 90)
+		Critgroup := RandomInt(1)+2;
+	else
+		Critgroup := 3;
+	endif
+	
+	var critter := RandomInt(8);
+
+	case (critgroup)
+		0:
+		case (critter)
+			0:	npc_template := "chicken";
+			1:	npc_template := "cat";
+			2:	npc_template := "slime";
+			3:	npc_template := "sheep";
+			4:	npc_template := "pig";
+			5:	npc_template := "dog";
+			6:	npc_template := "grat";
+			7:	npc_template := "mongbat";
+		endcase
+		1:
+		case (critter)
+			0:	npc_template := "eagle";
+			1:	npc_template := "horse";
+			2:	npc_template := "headless";
+			3:	npc_template := "cow";
+			4:	npc_template := "gorilla";
+			5:	npc_template := "panther";
+			6:	npc_template := "gremlin";
+			7:	npc_template := "deer";
+		endcase
+		2:
+		case (critter)
+			0:	npc_template := "bull";
+			1:	npc_template := "bear";
+			2:	npc_template := "frostwolf";
+			3:	npc_template := "gheart";
+			4:	npc_template := "hildisvini";
+			5:	npc_template := "blackbear";
+			6:	npc_template := "alligator";
+			7:	npc_template := "spider";
+		endcase
+		3:
+		case (critter)
+			0:	npc_template := "imp";
+			1:	npc_template := "alligator";
+			2:	npc_template := "spider";
+			3:	npc_template := "harpy";
+			4:	npc_template := "grizzly";
+			5:	npc_template := "giant_serpent";
+			6:	npc_template := "direwolf";
+			7:	npc_template := "polar";
+		endcase
+	endcase
+
+	var duration := 20 + (caster_magery * 2);
+	SummonCreature (caster, npc_template, cast_loc, duration);
+	return 1;
+endprogram

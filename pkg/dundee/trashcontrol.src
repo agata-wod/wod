@@ -1,0 +1,48 @@
+use os;
+use uo;
+use basic;
+use cfgfile;
+
+include "include/eventid";
+include ":contextMenus:contextMenus";
+
+const FLUSH_TIME_SECONDS := 300;
+
+program TrashControl (trash)
+	SetObjProperty (trash, "PID", GetPID());
+	SetObjProperty (trash, "#nextflush", ReadGameClock() + FLUSH_TIME_SECONDS);
+	SetObjProperty (trash, "#nextspam", ReadGameClock());
+	var ev;
+	while (trash)
+		ev := wait_for_event (60);
+		if (ev)
+			if (ev.type == EVID_CONTEXT_MENU)
+				if (ev.result == eCMR_Clear)
+					EmptyTrash(trash, ev.source);
+					SetObjProperty (trash, "#nextflush", ReadGameClock() + FLUSH_TIME_SECONDS);
+					continue;
+				endif
+			endif
+		endif
+		if (GetObjProperty (trash, "#nextflush") < ReadGameClock())
+			if (trash.item_count > 1)
+				EmptyTrash(trash);
+			endif
+			SetObjProperty (trash, "#nextflush", ReadGameClock() + FLUSH_TIME_SECONDS);
+		endif
+		
+	endwhile
+endprogram
+
+function EmptyTrash(trash, who := 0)
+	Run_Script (":dundee:trash", array { trash, who });
+endfunction
+
+
+
+function ProcessEvent (byref ev)
+			return 1;
+		endif
+	endif
+	return 0;
+endfunction

@@ -1,0 +1,35 @@
+use uo;
+use os;
+
+program readnote(me, note)
+
+	if (note.graphic == 0x99f)
+		sendsysmessage(me,"You find a note!");
+		note.graphic := 0x14f0;
+	endif
+
+	var layout := array {
+		"nodispose",
+		"page 0",
+		"gumppic 0 0 " + cstr(cint(0x27)),
+		"text 0 30 1355 0"
+	};
+
+	var data := array { "" };
+	var message := array { "" };
+
+	if (!GetObjProperty(note,"note"))
+		sendsysmessage(me,"nothing to read here!");
+	else
+		message := GetObjProperty(note,"note");
+	endif
+
+	var i;
+	for ( i:=1; i <= len(message); i:=i+1 )
+		layout[ len(layout)+1 ] := "text 40 " + cstr(15 + (20*i)) + " 1355 " + cstr(i);
+		data[ len(data)+1 ] := message[i];
+	endfor
+
+	SendDialogGump( me, layout, data );
+
+endprogram

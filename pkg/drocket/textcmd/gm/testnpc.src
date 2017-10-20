@@ -1,0 +1,23 @@
+use uo;
+use os;
+
+CONST THE_NPCTEMPLATE := ":orcs:orcdragondefender";
+
+program test_createnpc (character, text)
+	if (text)
+	endif
+	var targetted := TargetCoordinates (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	
+	var theparms := struct;
+	theparms.+name := "Bob the NPC";
+	
+	var thenpc := CreateNPCFromTemplate (THE_NPCTEMPLATE, targetted.x, targetted.y, targetted.z, theparms, targetted.realm);
+	if (!thenpc)
+		SendSysMessage (character, "Error creating NPC: " + thenpc.errortext);
+		return;
+	endif
+endprogram

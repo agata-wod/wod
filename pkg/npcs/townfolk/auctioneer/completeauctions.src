@@ -1,0 +1,63 @@
+include "../pkg/npcs/townfolk/auctioneer/auctioneer";
+
+program complete_auctions ()
+	if (GetGlobalProperty ("#checkingauctions"))
+		var aucpid := GetGlobalProperty ("#checkingauctions");
+		if (GetProcess (aucpid))
+			return;
+		endif
+	endif
+	SetGlobalProperty ("#checkingauctions", GetPid());
+
+	foreach category in ListCategoryNames ()
+		var category_box := find_or_create_item (storage, category, UOBJ_BANKBOX);
+		foreach item in ListRootItemsInContainer (category_box)
+			CheckItemForClosing (item);
+		endforeach
+	endforeach
+
+	EraseGlobalProperty ("#checkingauctions");
+endprogram
+
+
+function CheckItemForClosing (item)
+	var endtime := GetObjProperty (item, "endtime");
+	if (!endtime or endtime < ReadGameClock())
+		Syslog ("Ending auction for " + item.desc);
+		//see if it sold
+		var buyer := GetObjProperty (item, "current_high_bidder");
+		var seller := GetObjProperty(item, "selleracctname");
+		if (!buyer)
+			//Nope.  Put it back in the seller's bankbox.
+			var sellerbank := FindBankBox (seller);
+			if (MoveItemToContainer (item, sellerbank))
+				AddTransactionMessage (seller, item.desc + " did not sell");
+				EraseAllProperties (item);
+			endif
+		else
+			//Put it in the buyer's bankbox
+			var buyerbank := FindBankBox (buyer);
+			if (MoveItemToContainer (item, buyerbank))
+				var price := GetObjProperty (item, "minbid");
+				if (!price)
+					price := 0;
+				endif
+				AddAmountToGoldHeld (buyer, (0-price));
+
+				//subtract commission from money the seller gets
+				var commission := CINT (CalculateCommision (price));
+				AddAmountToGoldHeld (seller, (price - commission));
+
+				AddTransactionMessage (seller, item.desc + " sold for " + price);
+				AddTransactionMessage (buyer, "You bought " + item.desc + " for " + price);
+				EraseAllProperties (item);
+			endif
+			
+		endif
+	endif
+endfunction
+
+
+
+
+

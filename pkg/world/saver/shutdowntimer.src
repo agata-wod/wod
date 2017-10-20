@@ -1,0 +1,127 @@
+///////////////////
+//  This script causes the server to restart after its been up for a predetermined amount of time.  This is useful
+//  because if the server is up for too long, it tends to crash.  Just change the value of the constant 
+//  RESTART_TIMER_HOURS to how long you want the server to stay up between restart to whatever value you 
+//  want (in hours)  If set equal to 0, the timer will be disabled.  The actual time that the server will
+//  go will go until restart is 2 hours longer than what you set the variable to.
+///////////////////
+
+Const RESTART_TIMER_HOURS := 31;
+
+use uo;
+use os;
+include "include/client";
+include "include/wodinc";
+
+program server_restart_timer ()
+	if (!RESTART_TIMER_HOURS)
+		return;
+	endif
+	
+	var timecounter := 0;
+	SetGlobalProperty ("#serveruptimecounter", timecounter);
+
+	while (1)
+		sleep (3600);
+		timecounter := timecounter + 1;
+		SetGlobalProperty ("#serveruptimecounter", timecounter);
+
+		if (timecounter > RESTART_TIMER_HOURS)
+			StartRestartCountdown ();
+		endif
+	endwhile;
+endprogram
+
+
+
+
+function StartRestartCountdown ()
+	EraseGlobalProperty ("#delayserverrestart");
+	SendGMErrorMessage ("Server restart in 1 hour.", 1);
+	sleep (600);
+	if (GetGlobalProperty ("#delayserverrestart"))
+		EraseGlobalProperty ("#delayserverrestart");
+		return;
+	endif
+	
+	SendGMErrorMessage ("Server restart in 50 minutes.", 1);
+	sleep (600);
+	if (GetGlobalProperty ("#delayserverrestart"))
+		EraseGlobalProperty ("#delayserverrestart");
+		return;
+	endif
+
+	SendGMErrorMessage ("Server restart in 40 minutes.", 1);
+	sleep (600);
+	if (GetGlobalProperty ("#delayserverrestart"))
+		EraseGlobalProperty ("#delayserverrestart");
+		return;
+	endif
+
+	SendGMErrorMessage ("Server restart in 30 minutes.", 1);
+	sleep (600);
+	if (GetGlobalProperty ("#delayserverrestart"))
+		EraseGlobalProperty ("#delayserverrestart");
+		return;
+	endif
+
+	SendGMErrorMessage ("Server restart in 20 minutes.", 1);
+	sleep (600);
+	if (GetGlobalProperty ("#delayserverrestart"))
+		EraseGlobalProperty ("#delayserverrestart");
+		return;
+	endif
+
+	Broadcast ("Restarting the Server in 15 minutes", FONT_NORMAL, 30);
+	sleep (600);
+	if (GetGlobalProperty ("#delayserverrestart"))
+		EraseGlobalProperty ("#delayserverrestart");
+		return;
+	endif
+
+	Broadcast ("Restarting the Server in 10 minutes", FONT_NORMAL, 30);
+	sleep (300);
+	if (GetGlobalProperty ("#delayserverrestart"))
+		EraseGlobalProperty ("#delayserverrestart");
+		return;
+	endif
+
+	SetGlobalProperty ("#restartingserver", 1);
+
+	Broadcast ("Restarting the Server in 5 minutes", FONT_NORMAL, 30);
+	sleep (60);
+
+	Broadcast ("Restarting the Server in 4 minutes", FONT_NORMAL, 30);
+	sleep (60);
+
+	Broadcast ("Restarting the Server in 3 minutes", FONT_NORMAL, 30);
+	sleep (60);
+
+	Broadcast ("Restarting the Server in 2 minutes", FONT_NORMAL, 30);
+	sleep (60);
+
+	Broadcast ("Restarting the Server in 1 minute", FONT_NORMAL, 30);
+	sleep (50);
+
+	Broadcast ("Restarting the Server:", FONT_NORMAL, 30);
+	for i := 1 to 10
+		Broadcast (i, FONT_NORMAL, 30);
+		sleep (1);
+	endfor
+
+	syslog ("Saving World State");
+	Broadcast ("Saving World State.");
+	sleep (1);
+	var res := SaveWorldState ();
+
+	if (res)
+		SetGlobalProperty ("#:saver:lastsave", ReadGameClock());
+		sleep (1);
+		Shutdown ();
+	else
+		Broadcast ("Error saving world state!  Oh, the humanity!");
+		syslog ("Error saving world state: " + res);
+		Broadcast ("Shutdown aborted");
+		syslog ("Shutdown aborted");
+	endif
+endfunction

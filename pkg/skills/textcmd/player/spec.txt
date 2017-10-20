@@ -1,0 +1,1 @@
+.spec allows you to select your specializations, which will determine your skillcaps and statcaps.  See the manual for more info.  Choose a default greeting for when you are offline.

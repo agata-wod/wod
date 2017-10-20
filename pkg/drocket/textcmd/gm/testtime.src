@@ -1,0 +1,9 @@
+use uo;
+use os;
+
+include "include/clock";
+
+program testtime (character)
+	SendSysMessage (character, "Readable time is " + GetTimeofDay());
+	SendSysMessage (character, "Playtime month is " + GetCurrentPlaytimeMonth());
+endprogram

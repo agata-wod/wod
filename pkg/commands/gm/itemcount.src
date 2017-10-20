@@ -1,0 +1,22 @@
+use uo;
+use os;
+
+program count_items_in_area (speaker, text)
+
+	if (text == "show")
+		foreach item in ListItemsNearLocation (speaker.x, speaker.y, speaker.z, 10, speaker.realm )
+			PrintTextAbovePrivate (item, "I'm an item:" + item.desc + " " + item.objtype, speaker);
+		endforeach
+		return;
+	endif
+
+	var range := CINT (text);
+	if (!range)
+		range := 25;
+	endif
+
+	var near_items := ListItemsNearLocation (speaker.x, speaker.y, speaker.z, range, speaker.realm );
+	var total_items := len (near_items);
+	SendSysMessage (speaker, "Total items within "+range+" squares: " + total_items);
+
+endprogram

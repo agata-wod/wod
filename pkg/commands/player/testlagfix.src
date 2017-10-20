@@ -1,0 +1,14 @@
+use uo;
+use os;
+
+program testlagfix (character)
+	if (GetObjProperty (character, "#testlagfix"))
+		EraseObjProperty (character, "#testlagfix");
+		SendSysMessage (character, "Testlagfix Disabled.  Next time you log in, pushthrough should work correctly.");
+	else
+		SetObjProperty (character, "#testlagfix", 1);
+		SendSysMessage (character, "Testlagfix enabled.  Next time you log in, pushthrough will be disabled.");
+	endif
+
+endprogram
+

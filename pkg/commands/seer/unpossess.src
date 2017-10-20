@@ -1,0 +1,11 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/possess";
+
+program textcmd_unpossess( me )
+
+	unpossess(me);
+
+endprogram

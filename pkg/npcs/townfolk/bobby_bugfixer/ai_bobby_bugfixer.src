@@ -1,0 +1,127 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "include/utility";
+include "include/sysevent";
+include "include/eventid";
+include "../pkg/npcs/npcinfo";
+include "../pkg/npcs/npc_util";
+
+var me := Self();
+var next_possible_spam := ReadGameClock ();
+
+program auctioneer_ai()
+	if (!me.backpack)
+		DoDealerOnCreationSetup ();
+	endif
+
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN, 2);
+	
+	var ev;
+	while (me)
+		if (me.hidden)
+			sleep (30);
+			me.hidden := 0;
+		endif
+		
+		ev := wait_for_event (120);
+		if (ev)
+			ProcessEvent (ev);
+		endif
+	endwhile
+endprogram
+
+
+
+
+///////////////////
+//  pretty obvious - processes events picked up in the main AI loop
+///////////////////
+
+function ProcessEvent (byref ev)
+	case (ev.type)
+		EVID_ENGAGED:
+		EVID_DAMAGED:
+			me.hidden := 1;
+			SetVital (me, "Life", GetVitalMaximumValue (me, "Life"));
+		EVID_ENTEREDAREA:
+			if (ev.source.npctemplate)
+				return 0;
+			endif
+
+		EVID_SPEECH:
+			if (ev.source.npctemplate)
+				return 0;
+			endif
+			var evtext := lower(ev.text);
+			if (evtext ["buy"])
+				Say ("Sorry, I don't sell anything.");
+			elseif (evtext ["sell"])
+				Say ("Sorry, I don't buy anything.");
+			elseif (evtext ["bank"])
+				Say ("Nope.");
+			elseif (evtext ["thank you"])
+				Say ("You're welcome.");
+			else
+				if (RandomInt (2))
+					Say ("DEBUG - Oops!");
+				endif
+			endif
+
+		EVID_MERCHANT_BOUGHT:
+			TurnToward (ev.source);
+			return 1;
+
+		EVID_ITEM_GIVEN:
+			TurnToward (ev.source);
+			if (ev.item.objtype == UOBJ_GOLD_COIN)
+				Say ("For me?  Thanks.");
+				sleep (3);
+				Say ("What, you wanted something?");
+				sleep (3);
+				Say ("Fine, take it back.");
+				MoveItemToContainer (ev.item, ((ev.source).backpack));
+				return;
+			endif
+			
+			MoveItemToContainer (ev.item, me.backpack);
+			var parms := array;
+			parms[1] := me;
+			parms[2] := ev.source;
+			parms[3] := ev.item;
+			start_script (":bobby_bugfixer:take_item", parms);
+	endcase
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  called when the NPC is first created, this function names
+//  them and clothes them
+///////////////////
+
+function DoDealerOnCreationSetup()
+	var newpack := CreateItemAtLocation (5288, 1176, 0, UOBJ_BACKPACK, 1, REALM_BRITANNIA);
+	if (!EquipItem (me, newpack))
+		DestroyItem (newpack);
+	endif
+
+	me.gender := 0;
+	me.graphic := 400;
+	me.name := "Bobby Bugfixer";
+	me.title_suffix := ", apprentice scripter";
+	EquipFromTemplate (me, "banker");
+
+	var myhome := array{};
+	myhome[1] := me.x;
+	myhome[2] := me.y;
+	myhome[3] := me.z;
+	myhome[4] := me.realm;
+	SetObjProperty (me, "myhome", myhome);
+endfunction

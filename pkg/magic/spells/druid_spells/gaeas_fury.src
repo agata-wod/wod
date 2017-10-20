@@ -1,0 +1,65 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+include "include/skills";
+include "include/effects";
+var spell_circle := 6;
+
+
+program enduring_renewal (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+	
+	var caster_animallore := GetAttribute (caster, ATTRIBUTEID_ANIMALLORE);
+	if (caster_animallore < 75)
+		SendSysMessage (caster, "The elements do not heed your call");
+		EraseObjProperty (caster, "#castingdruidspell");
+		Fizzle (caster);
+		return 0;
+	endif
+
+	if (!CheckSkill (caster, SKILLID_ANIMALLORE, 80, 0))
+		SendSysMessage (caster, "The elements do not heed your call");
+		EraseObjProperty (caster, "#castingdruidspell");
+		Fizzle (caster);
+		return 0;
+	endif
+
+	var druidstaff := caster.weapon;
+	if (!druidstaff or druidstaff.objtype != UOBJ_DRUID_STAFF)
+		SendSysMessage (caster, "This spell can only be cast on a druid staff!");
+		return;
+	endif
+
+	//allow them to cast another spell now
+	EraseObjProperty (caster, "#castingdruidspell");
+	detach ();
+
+	var duration := (caster_animallore - 50) * 40;
+	if (duration < 300)
+		duration := 300;
+	endif
+	var fury_bonus := CINT ((caster_animallore - 70) / 3) + RandomInt (5);
+	if (fury_bonus < 5)
+		fury_bonus := 5;
+	endif
+
+	SetObjProperty (druidstaff, "#specialweaponeffect", array{"lightning", ReadGameClock() + duration, "Gaea's Fury"});
+	SetObjProperty (druidstaff, "#combat_to_hit_bonus", array{fury_bonus, ReadGameClock() + duration, "Gaea's Fury"});
+	SendSysMessage (caster, "Your weapon crackles with energy");
+	
+	return 1;
+endprogram
+
+
+
+
+

@@ -1,0 +1,35 @@
+use uo;
+use os;
+use util;
+
+program test_text (character)
+	SendSysMessage (character, "Time for a snow storm!");
+	DoSnowStorm ();
+	SendSysMessage (character, "Snow finished");
+endprogram
+
+
+function DoSnowStorm ()
+	SendWeatherPacket ("65021000");
+	sleep (60);
+	SendWeatherPacket ("65024000");
+	sleep (60);
+	SendWeatherPacket ("65027000");
+	sleep (120);
+	SendWeatherPacket ("65024000");
+	sleep (120);
+	SendWeatherPacket ("65020000");
+endfunction
+
+
+
+
+function SendWeatherPacket (weather)
+	SetGlobalProperty ("#weather", weather);
+	foreach player in EnumerateOnlineCharacters()
+		if (player.x < 5120)
+			SendPacket (player, weather);
+		endif
+	endforeach
+endfunction
+

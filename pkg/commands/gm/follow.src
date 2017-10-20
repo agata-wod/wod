@@ -1,0 +1,26 @@
+use uo;
+use os;
+use util;
+
+include "include/client";
+include "include/objtype";
+include "include/eventid";
+
+program bard_provoke (speaker, text)
+	if (text)
+	endif
+	var ev := struct {};
+	ev.+type := EVID_ALL_FOLLOW_CMD;
+	ev.+target := speaker;
+
+	foreach mobile in ListMobilesNearLocation (speaker.x, speaker.y, speaker.z, 20, speaker.realm)
+		if (mobile.script["tamed"])
+			var master := GetObjProperty (mobile, "master");
+			if (master and master == speaker.serial)
+				SendEvent (mobile, ev);
+			endif
+		endif
+	endforeach
+	return;
+
+endprogram 

@@ -1,0 +1,60 @@
+use uo;
+use os;
+
+include "include/wodinc";
+include "include/dotempmods";
+
+program deathvortex (parms);
+	var character := parms [1];
+//	var item := parms [2];
+	
+	var charactergraphic := character.graphic;
+	var charactercolor := character.color;
+
+	if (!character.dead and !character.npctemplate)
+		EraseObjProperty (character, "death");
+		PlaySoundEffect (character, 0x213);
+
+		set_critical(1);
+		var ting, s1, s2, s3, s4, s5;
+		for (ting := 14001; ting < 14013; ting := ting + 1)
+			s1 := CreateItemAtLocation (5672, 321, 0, ting, 1, REALM_BRITANNIA);
+			s2 := CreateItemAtLocation (5669, 324, 0, ting, 1, REALM_BRITANNIA);
+			s3 := CreateItemAtLocation (5670, 328, 0, ting, 1, REALM_BRITANNIA);
+			s4 := CreateItemAtLocation (5675, 327, 0, ting, 1, REALM_BRITANNIA);
+			s5 := CreateItemAtLocation (5676, 322, 0, ting, 1, REALM_BRITANNIA);
+			sleepms (50);
+			DestroyItem (s1);
+			DestroyItem (s2);
+			DestroyItem (s3);
+			DestroyItem (s4);
+			DestroyItem (s5);
+			DoDamageByType (0, character, CINT (GetVital (character, "Life")/1000) + 100, DAMAGETYPE_PHYSICAL);
+		endfor
+
+		s1 := CreateItemAtLocation (5672, 321, 0, ting, 1, REALM_BRITANNIA);
+		s2 := CreateItemAtLocation (5669, 324, 0, ting, 1, REALM_BRITANNIA);
+		s3 := CreateItemAtLocation (5670, 328, 0, ting, 1, REALM_BRITANNIA);
+		s4 := CreateItemAtLocation (5675, 327, 0, ting, 1, REALM_BRITANNIA);
+		s5 := CreateItemAtLocation (5676, 322, 0, ting, 1, REALM_BRITANNIA);
+		PlaySoundEffect (s1, 0x213);
+		PlaySoundEffect (s2, 0x213);
+		PlaySoundEffect (s3, 0x213);
+		PlaySoundEffect (s4, 0x213);
+		PlaySoundEffect (s5, 0x213);
+		sleepms (500);
+		DestroyItem (s1);
+		DestroyItem (s2);
+		DestroyItem (s3);
+		DestroyItem (s4);
+		DestroyItem (s5);
+		set_critical (0);
+		PlaySoundEffect (character, 0x213);
+		sleep (1);
+
+		DoDamageByType (0, character, CINT (GetVital (character, "Life")/100) + 100, DAMAGETYPE_PHYSICAL);
+
+		DoPersistedMod (character, "color", 1, charactercolor, 3600, "Death Vortex");
+		DoPersistedMod (character, "graphic", 0x1a, charactergraphic, 3600, "Death Vortex");
+	endif
+endprogram

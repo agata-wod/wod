@@ -1,0 +1,26 @@
+use os;
+use uo;
+
+include "include/utility";
+
+program rekey( who )
+
+    SendSysmessage( who , "Target a DOOR to rekey." );
+    var lockeditem := Target( who );
+
+    if(! lockeditem)
+       SendSysmessage( who , "Cancelled." );
+       return;
+    endif
+
+    var lockid := AllocLockId();
+
+    SetObjProperty( lockeditem , "lockid" , lockid );
+    
+    var key := CreateItemInBackpack( who , 0x100F , 1 );
+    SetObjProperty( key , "lockid" , lockid );
+
+    SendSysmessage( who , "Created a key in your pack." );
+
+endprogram
+

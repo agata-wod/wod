@@ -1,0 +1,45 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+
+program lastskill( me )
+
+	if (me.dead)
+		sendsysmessage(me, "You be dead!");
+		return;
+	endif
+
+	if (me.paralyzed)
+		SendSysmessage (me, "You are paralyzed and cannot do that.");
+		return;
+	endif
+
+	if (!GetObjProperty(me,"#lastskill"))
+		SetObjProperty(me,"#lastskill",ReadGameClock()+5);
+	elseif ( GetObjProperty(me,"#lastskill") > ReadGameClock() );
+		SendSysMessage(me,"Too soon!");
+		return;
+	else
+		SetObjProperty(me,"#lastskill",ReadGameClock()+5);
+	endif
+
+	var skillid := GetObjProperty(me,"lastskill");
+
+	if (skillid != SKILLID_STEALTH and skillid != SKILLID_HIDING)
+		me.hidden := 0;
+	endif
+
+	if ( (skillid) or (skillid == 0) )
+		var skillmastercfg := ReadConfigFile(":skills:skillmaster");
+		var skillelem := FindConfigElem(skillmastercfg, skillid);
+		if (skillelem.script)
+			start_script(skillelem.script, me);
+		else
+			sendsysmessage (me, "Skill assigned to incorrect script!");
+		endif
+		SetObjProperty(me,"lastskill",skillid);
+	endif
+
+endprogram

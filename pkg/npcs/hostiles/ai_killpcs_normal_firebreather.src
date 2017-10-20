@@ -1,0 +1,117 @@
+use os;
+use uo;
+use npc;
+use util;
+use cfgfile;
+
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/mainloop_killpcs_normal";
+include "../pkg/npcs/main_ai/main/sleepmode_normal";
+include "../pkg/npcs/main_ai/combat/fightmode_normal_default";
+include "../pkg/npcs/main_ai/combat/changeopponent_default";
+include "../pkg/npcs/main_ai/combat/closedistance_default";
+include "../pkg/npcs/main_ai/combat/gethelp_default";
+
+const HALT_THRESHOLD := 8; // how close before he attacks?
+drop_anchor();
+
+program KillPlayers ()
+	if (!me.backpack)
+		DoOnCreationSetup ();
+	endif
+	DoStartupSetup ();
+
+	if (GetObjProperty (me, "frozen"))
+		me.frozen := 1;
+	endif
+
+	post_combat ();
+	main_AI_loop ();
+endprogram
+
+
+function process_combat_event (byref ev)
+	BreathFire (ev.source);
+	if (ev.type == EVID_DAMAGED)
+		if (GetVital (me, "Life") < CINT (GetVitalMaximumValue (me, "Life")/10))
+			EraseObjProperty (me, "#flees");
+			Flee (ev.source);
+		endif
+	endif
+endfunction
+
+
+function in_combat_event_loop (byref opponent)
+	BreathFire (opponent);
+endfunction
+
+function post_combat()
+	ClearEventQueue ();
+	DisableCombatEvents();
+	EnableMainEvents();
+
+	SetWarMode ( 0 );
+	sleep(1);
+	look_around();
+endfunction
+
+function prepare_for_fight (byref opponent)
+	if (opponent)
+	endif
+	ClearEventQueue ();
+	DisableMainEvents();
+	EnableCombatEvents();
+endfunction
+
+function BreathFire (byref opponent)
+	if (Distance (me, opponent) > 3)
+		return;
+	endif
+
+	var nextbreath := GetObjProperty (me, "#lastbreath");
+	if (!nextbreath)
+		SetObjProperty (me, "#lastbreath", ReadGameClock() + 2 + RandomInt (5));
+		return;
+	elseif (nextbreath > ReadGameClock())
+		return;
+	endif
+
+	SetObjProperty (me, "#lastbreath", ReadGameClock() + CINT (RandomInt(10)+10) );
+	var torch := CreateItemInContainer (me.backpack, 0x0a12, 1);
+	EquipItem (me, torch);
+
+	//Different NPC graphics require different animations
+	case (me.graphic)
+		CID_DRAGON_GREY:
+		CID_DRAGON_RED:
+		CID_DRAKE_GREY:
+		CID_DRAKE_RED:
+			PerformAction (me, 0x0c);
+		default:
+			performaction (me, 0x5);
+	endcase
+	PrintTextAbove (me, "*breathes fire*");
+
+	var percent_modifier := CDBL (GetVital (me, "Life")) / CDBL (GetVitalMaximumValue (me, "Life"));
+	var MyTemplateElem := GetNpcTemplateElem (me.npctemplate);
+	var firedamage := GetConfigString (MyTemplateElem, "firedamage");
+	if (!firedamage)
+		firedamage := "4d6";
+	endif
+
+	foreach mobile in ListMobilesNearLocationEx (me.x, me.y, me.z, 5, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, me.realm)
+		if (!mobile.hidden or !GetObjProperty (mobile, "#specialhidden_nodamage"))
+			if (mobile != me and !mobile.npctemplate["humuc"])
+				var dmg := CINT (RandomDiceRoll (firedamage) * percent_modifier);
+				if (!dmg or dmg < 5)
+					dmg := 5;
+				endif
+				PlayMovingEffect (me, mobile, MOVING_EFFECT_FIREBALL, 10, 1, 1);
+				DoDamageByType (me, mobile, dmg, DAMAGETYPE_FIRE);
+			endif
+		endif
+	endforeach
+
+	sleep (1);
+	DestroyItem (torch);
+endfunction

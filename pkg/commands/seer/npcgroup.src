@@ -1,0 +1,39 @@
+use os;
+use uo;
+
+include "include/client";
+include "include/spawn";
+
+
+program textcmd_createnpc (character, parms)
+	if (!parms)
+//		SendSysMessage (character, "usage: .npc [group] [number]");
+//		SendSysMessage (character, "Available groups are:  shabooli");
+//		return;
+	endif
+
+	var npctemplate;
+	for i := 1 to 25
+		case (RandomInt (10))
+			0:	npctemplate := ":shabooli:shabooli";
+			1:	npctemplate := ":shabooli:shabooli";
+			2:	npctemplate := ":shabooli:shabooliwarlock";
+			3:	npctemplate := ":shabooli:shabooliwitchdoctor";
+			4:	npctemplate := ":shabooli:shaboolihunter";
+			5:	npctemplate := ":shabooli:shaboolihunter";
+			6:	npctemplate := ":shabooli:shabooliarcher";
+			7:	npctemplate := ":shabooli:shabooliarcher";
+			8:	npctemplate := ":shabooli:shaboolihunter";
+			9:	npctemplate := ":shabooli:shaboolichieftan";
+		endcase
+		var x := character.x - 10 + RandomInt (20);
+		var y := character.y - 10 + RandomInt (20);
+		var z := GetMapInfo(x,y, character.realm).z;
+		var npc := SpawnNPCAtLocation (npctemplate, x, y, z, 0, character.realm);
+		if (npc == "error")
+			SendSysMessage (character, "Can't create NPC!");
+			return;
+		endif
+	endfor
+
+endprogram

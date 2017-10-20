@@ -1,0 +1,21 @@
+Use uo;
+
+program invulme (me, text)
+	var targetted := me;
+	if (text and text == "target")
+		targetted := Target (me);
+		if (!targetted)
+			SendSysMessage (me, "Canceled.");
+			return;
+		endif
+	endif
+
+	if (targetted.enable( "invul" ) )
+		RevokePrivilege (targetted, "invul" );
+		PrintTextAbovePrivate (targetted, "*Vulnerable*", me);
+	else
+		GrantPrivilege (targetted, "invul");
+		targetted.enable ("invul" );
+		PrintTextAbovePrivate (targetted, "*Invulnerable*", me);
+	endif
+endprogram

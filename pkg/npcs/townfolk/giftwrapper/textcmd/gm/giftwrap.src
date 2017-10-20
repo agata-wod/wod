@@ -1,0 +1,111 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/magicitems";
+
+program giftwrap (character)
+	SendSysMessage (character, "Select the item to wrap:");
+	var targetted := Target (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+
+	if (!ReserveItem (targetted))
+		SendSysMessage (character, "You can't use that right now");
+		return;
+	endif
+	
+	var bowmenu := CreateMenu ("Select the bow color:");
+	AddMenuItem (bowmenu, 0, "Red");
+	AddMenuItem (bowmenu, 0, "Yellow");
+	AddMenuItem (bowmenu, 0, "Blue");
+	AddMenuItem (bowmenu, 0, "Pink");
+	AddMenuItem (bowmenu, 0, "Green");
+	AddMenuItem (bowmenu, 0, "White");
+	AddMenuItem (bowmenu, 0, "Light Blue");
+	AddMenuItem (bowmenu, 0, "Purple");
+	var bow_selection := SelectMenuItem2 (character, bowmenu);
+	if (!bow_selection or !bow_selection.index)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+	
+	var package_objtype := 10290;
+	case (bow_selection.index)
+		1:		package_objtype := 10290;
+		2:		package_objtype := 10291;
+		3:		package_objtype := 10292;
+		4:		package_objtype := 10293;
+		5:		package_objtype := 10294;
+		6:		package_objtype := 10295;
+		7:		package_objtype := 10296;
+		default:	package_objtype := 10297;
+	endcase
+	
+	var packagemenu := CreateMenu ("Select the present color:");
+	AddMenuItem (packagemenu, 0, "Pink");
+	AddMenuItem (packagemenu, 0, "Rose Red");
+	AddMenuItem (packagemenu, 0, "Santa Red");
+
+	AddMenuItem (packagemenu, 0, "Yellow");
+	AddMenuItem (packagemenu, 0, "Gold");
+
+	AddMenuItem (packagemenu, 0, "Light Blue");
+	AddMenuItem (packagemenu, 0, "Blue");
+	AddMenuItem (packagemenu, 0, "Dark Blue");
+
+	AddMenuItem (packagemenu, 0, "Light Green");
+	AddMenuItem (packagemenu, 0, "Green");
+
+	AddMenuItem (packagemenu, 0, "Lavender");
+	AddMenuItem (packagemenu, 0, "Purple");
+
+	AddMenuItem (packagemenu, 0, "White");
+	AddMenuItem (packagemenu, 0, "Black");
+	var package_selection := SelectMenuItem2 (character, packagemenu);
+	if (!package_selection or !package_selection.index)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+	
+	var package_color := 0;
+	case (package_selection.index)
+		1:		package_color := 1202;
+		2:		package_color := 1209;
+		3:		package_color := 38;
+
+		4:		package_color := 53;
+		5:		package_color := 2010;
+
+		6:		package_color := 1322;
+		7:		package_color := 5;
+		8:		package_color := 1336;
+
+		9:		package_color := 1428;
+		10:		package_color := 272;
+
+		11:		package_color := 621;
+		12:		package_color := 613;
+
+		13:		package_color := 0;
+		14:		package_color := 1109;
+		default:	package_color := 0;
+	endcase
+
+	var giftbox := CreateItemInContainer (character.backpack, 0x70b4, 1);
+	if (!giftbox)
+		PrintTextAbovePrivate (character, "*Your backpack is full!*", character);
+		return;
+	endif
+	
+	giftbox.graphic := package_objtype;
+	giftbox.color := package_color;
+	giftbox.name := "a present";
+	MoveItemToContainer (targetted, giftbox);
+	giftbox.locked := 1;
+	giftbox.usescript := ":giftwrapper:open_present";
+endprogram

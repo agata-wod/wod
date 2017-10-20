@@ -1,0 +1,29 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/objtype";
+
+program use_cloth (character, cloth)
+
+	if (!ReserveItem (cloth) )
+		SendSysMessage (character, "You can't use that right now.");
+		return;
+	endif
+
+	if (cloth.amount < 50)
+		SendSysMessage (character, "You need 50 cloth to make a bolt.");
+		return;
+	endif
+
+	var bolts_amount := CInt (cloth.amount/50);
+	var created_bolts := CreateItemInBackpack (character, UOBJ_BOLT_OF_CLOTH, bolts_amount);
+	if (!created_bolts)
+		PrintTextAbovePrivate (character, "*Your backpack is full*", character);
+		return;
+	endif
+
+	SubtractAmount (cloth, bolts_amount*50);
+	SendSysMessage (character, "You bundle the cloth, making " + bolts_amount + " bolts.");
+
+endprogram

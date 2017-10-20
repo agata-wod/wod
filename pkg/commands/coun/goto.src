@@ -1,0 +1,191 @@
+//////////////////////////////////////
+// goto.src -- go to an online player
+//
+// Usage: .goto [playername]
+//        if playername is not given,
+//        a menu will open and prompt
+//        you to choose one.
+//
+//////////////////////////////////////
+
+use uo;
+use os;
+
+include "../pkg/world/weather/weather";
+
+var playercount := 0;
+var pagecount := 1;
+
+var layout := array( 
+
+"page 0",
+"nodispose",
+"gumppic 0 50 2620",
+"gumppic 20 50 2621",
+"gumppic 290 50 2622",
+"gumppic 0 68 2623",
+"gumppic 22 68 2624",
+"gumppic 288 68 2625",
+"gumppic 0 272 2623",
+"gumppic 22 272 2624",
+"gumppic 288 272 2625",
+"gumppic 0 476 2626",
+"gumppic 20 476 2627",
+"gumppic 290 476 2628",
+"gumppic 20 80 2621",    
+
+"text 20 59 40 0",
+"text 260 59 40 1"
+);
+
+var data := array(
+       "Player Name",         //0
+       "Goto"
+);
+
+program textcmd_goto (character, whom)
+	if(!whom)
+		FillInArrays();
+		var result := SendDialogGump( character, layout, data );
+		var name := data[result[0]+2];
+
+		foreach onlinechr in EnumerateOnlineCharacters()
+			if (onlinechr.name == name)
+				if (onlinechr.concealed <= character.cmdlevel)
+					if ( (onlinechr.concealed) and (!character.concealed) )
+						character.concealed := 1;
+					endif
+
+					if(!MoveObjectToLocation( character,onlinechr.x-1,onlinechr.y-1,onlinechr.z,onlinechr.realm,MOVEOBJECT_FORCELOCATION ))
+						MoveObjectToLocation( character,onlinechr.x+1,onlinechr.y+1,onlinechr.z,onlinechr.realm,MOVEOBJECT_FORCELOCATION );
+					endif
+					SetWeatherForPlayer (character);
+					break;
+				endif
+			endif
+		endforeach
+		return;
+	endif
+
+	whom := Lower (whom);
+	var onlinechr := FindOnlinePlayerByName (character, whom);
+	if (!onlinechr)
+		if (CINT (whom))
+			//We can also go by number
+			var players := EnumerateOnlineCharacters();
+			onlinechr := players [CINT (whom)];
+			if (onlinechr)
+				if (onlinechr.concealed <= character.cmdlevel)
+					if (onlinechr.concealed and !character.concealed)
+						character.concealed := 1;
+					endif
+					if (!MoveObjecttoLocation(character, onlinechr.x-1, onlinechr.y-1, onlinechr.z, onlinechr.realm, MOVEOBJECT_FORCELOCATION))
+						MoveObjecttoLocation(character, onlinechr.x+1, onlinechr.y+1, onlinechr.z, onlinechr.realm, MOVEOBJECT_FORCELOCATION);
+					endif
+					SetWeatherForPlayer (character);
+				endif
+				return;
+			endif
+		endif
+		SendSysMessage (character, "Unable to find player");
+		return;
+	endif
+	if (onlinechr.concealed <= character.cmdlevel)
+		if (onlinechr.concealed and !character.concealed)
+			character.concealed := 1;
+		endif
+
+if(!MoveObjectToLocation( character,onlinechr.x-1,onlinechr.y-1,onlinechr.z,onlinechr.realm,MOVEOBJECT_FORCELOCATION ))
+     MoveObjectToLocation( character,onlinechr.x+1,onlinechr.y+1,onlinechr.z,onlinechr.realm,MOVEOBJECT_FORCELOCATION );
+		endif
+		SetWeatherForPlayer (character);
+	endif
+endprogram
+
+
+function FillInArrays()
+
+    var players := EnumerateOnlineCharacters();
+    var datalen;
+    var layoutlen;
+    var prev_y := cint(80);
+    var datindx;
+    var buttonret := 1;
+
+    layout[GetLayoutLength()+1] := "page " + pagecount;
+    if( len(EnumerateOnlineCharacters()) > 19)
+        layout[GetLayoutLength()+1] := "button 285 465 2648 2647 0 " + (pagecount + 1);
+    endif
+    foreach player in players
+      if (player.concealed <= 1 )
+        playercount := playercount + 1;
+
+        datalen := GetDataLength();
+        layoutlen := GetLayoutLength();
+
+        datindx := datalen+1;
+        data[datindx] := player.name;
+        if( playercount == 20 or playercount == 39 or playercount == 58 or playercount == 77 or playercount == 96)
+
+            pagecount := pagecount + 1;
+            layout[GetLayoutLength()+1] := "page " + pagecount;
+            prev_y := 80;
+            //add page turners
+
+            layout[GetLayoutLength()+1] := "button 285 85 2650 2651 0 " + (pagecount - 1);
+            if( len(EnumerateOnlineCharacters()) > playercount + 19)
+                layout[GetLayoutLength()+1] := "button 285 465 2648 2647 0 " + (pagecount + 1);
+            endif
+        endif
+
+        layout[GetLayoutLength()+1] := ("text 20 " + cstr(prev_y + 20) + " 40 " + datalen);
+        layout[GetLayoutLength()+1] := ("button 260 " + cstr(prev_y + 20) + " 2640 2641 1 0 " + buttonret);
+
+        prev_y := prev_y + 20;
+        buttonret := buttonret + 1;
+     endif
+    endforeach
+
+endfunction
+
+
+function GetLayoutLength();
+    return (len(layout));
+endfunction
+
+function GetDataLength();
+    return (len(data));
+endfunction
+
+
+
+
+///////////////////
+//  Tries to find the best match of an online character based on the provided name
+///////////////////
+
+function FindOnlinePlayerByName (character, name)
+	//Try to find an exact match first
+	foreach onlinechr in EnumerateOnlineCharacters()
+		if (lower (onlinechr.name) == name)
+			if (!GetObjProperty (onlinechr, "private"))
+				return onlinechr;
+			elseif (character.cmdlevel)
+				return onlinechr;
+			endif
+		endif
+	endforeach
+	
+	//Then try to find someone who's name is at least close
+	foreach onlinechr in EnumerateOnlineCharacters()
+		var thename := lower (onlinechr.name);
+		if (thename[name])
+			if (!GetObjProperty (onlinechr, "private"))
+				return onlinechr;
+			elseif (character.cmdlevel)
+				return onlinechr;
+			endif
+		endif
+	endforeach
+	return 0;
+endfunction

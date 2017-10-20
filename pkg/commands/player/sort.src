@@ -1,0 +1,331 @@
+use uo;
+use os;
+use util;
+use basic;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/itemtypes";
+include "include/utility";
+
+var bag;
+
+program inventorylist (character, textline)
+	if (lower (textline) == "help")
+		SendSysMessage (character, "SORT:  Helpful command for sorting through your backpack");
+		SendSysMessage (character, "By itself, it provides a list of items in your backpack from which you");
+		SendSysMessage (character, "can select one to bring up to the top level of your backpack.");
+		SendSysMessage (character, "Options are:");
+		SendSysMessage (character, "bag - Allows you to look through a bag other than your main backpack");
+		SendSysMessage (character, "regs - Sorts all of your reagents into the selected bag");
+		SendSysMessage (character, "gems - Sorts all of your gems into the selected bag");
+		SendSysMessage (character, "ammo - Sorts arrows and bolts into the selected bag");
+		SendSysMessage (character, "potions - Sorts all of stackable potions into the selected bag");
+		SendSysMessage (character, "bank - Stacks all stackable items in a selected bag with items in your bankbox");
+		return;
+	endif
+
+	case (lower (textline))
+		"reagents":
+		"regs":
+		"gems":
+		"ammo":
+		"potions":
+			SortStuffIntoBag (character, textline);
+			return;
+		"bag":
+			SendSysMessage (character, "Select a bag of stuff to sort:");
+			bag := Target (character);
+			if (!bag)
+				SendSysMessage (character, "Canceled.");
+				return;
+			elseif (bag == character)
+				bag := character.backpack;
+			elseif (bag.locked == 1)
+				SendSysMessage (character, "That container is locked!");
+				return;
+			elseif (!InInventory (character.backpack, bag) )
+				SendSysMessage (character, "That isn't in your inventory!");
+				return;
+			endif
+		"bank":
+			SortBank (character);
+			return;
+		default:
+			if (textline)
+				SendSysMessage (character, "Unknown .sort option");
+				SendSysMessage (character, "Use '.sort help' for more information about this command");
+				return;
+			endif
+			bag := character.backpack;
+	endcase
+
+	var menuname := "Inventory of " + cstr(character.name);
+	var allitems := InventoryListing (character);
+	var itemnamelist := dictionary;
+	foreach item in allitems
+		itemnamelist[item.desc] := item.objtype;
+	endforeach
+
+	var itemnum := 1;
+	var selection := array{ };
+	repeat
+		var inventorymenu := createmenu(menuname);
+		var i;
+		for ( i := itemnum; i <= itemnum+19; i := i + 1 )
+			if ( i <= allitems.size() )
+				AddMenuItem (inventorymenu, 0, allitems[ i ].desc);
+			endif
+		endfor
+
+		if ( allitems.size() > (itemnum+19) )
+			AddMenuItem (inventorymenu, 0, "NEXT PAGE");
+		endif
+		selection := SelectMenuItem2(character, inventorymenu);
+		if (!selection)
+			SendSysMessage( character, "Canceled" );
+			return;
+		endif
+		if ( selection.index == 21 )
+			itemnum := itemnum + 20;
+		else
+			var selecteditem := (selection.index + (itemnum-1) );
+			if (!selecteditem) return; endif
+			MoveTheJunk( character, itemnamelist[ allitems[ selecteditem ].desc ], 
+				allitems[ selecteditem ].desc  );
+			return;
+		endif
+	until (selection.index != 21);
+
+endprogram
+
+function InventoryListing (character)
+	var someitems := array{ };
+	var objtypelist := dictionary;
+	var include_item, thecontainer;
+	foreach item in EnumerateItemsInContainer (bag)
+		//make sure that the item isn't in a locked chest
+		include_item := 1;
+		thecontainer := item;
+		repeat
+			thecontainer := thecontainer.container;
+			if (thecontainer.locked)
+				include_item := 0;
+			elseif (thecontainer.objtype == UOBJ_SPELLBOOK)
+				include_item := 0;
+			endif
+		until (!thecontainer or thecontainer == bag);
+		
+		if (include_item)
+			if (!objtypelist.exists( item.objtype ))
+				someitems.append (item);
+				objtypelist[item.objtype] := item.objtype;
+			endif
+		endif
+	endforeach
+	
+	if (bag == character.backpack)
+		var hair := GetEquipmentByLayer  (character, LAYER_HAIR );
+		var beard := GetEquipmentByLayer (character, LAYER_BEARD);
+		var mount := GetEquipmentByLayer (character, LAYER_MOUNT);
+		var backpack := character.backpack;
+		foreach item in ListEquippedItems (character);
+			if (item != hair and item != beard and item != backpack and item != mount )
+				someitems.append (item);
+			endif
+		endforeach
+	endif	
+
+	return someitems;
+endfunction
+
+function MajorInventoryListing ( character )
+
+	var allitems := EnumerateItemsInContainer (bag);
+	if ( bag == character.backpack )
+		var hair := GetEquipmentByLayer( character, LAYER_HAIR );
+		var beard := GetEquipmentByLayer( character, LAYER_BEARD );
+		var backpack := character.backpack;
+		var mount := GetEquipmentByLayer( character, LAYER_MOUNT );
+		foreach item in ListEquippedItems( character );
+			if (item != hair and item != beard and item != backpack and item != mount )
+				allitems.append( item );
+			endif
+		endforeach
+	endif
+
+	var someitems := array{ };
+	foreach item in allitems
+		if ( item.container.objtype != 0xEFA )
+			someitems.append( item );
+		endif
+	endforeach
+
+	return someitems;
+
+endfunction
+
+function MoveTheJunk( character, objtype, itemdesc )
+
+	SendSysMessage( character, "Moving " + itemdesc + " to the toplevel of your pack" );
+
+	var allitems := MajorInventoryListing( character );
+
+	foreach item in allitems
+		if (!reserveitem( item ))
+			SendSysMessage( character, "Canceled" );
+			return;
+		endif
+		if ( item.objtype == objtype )
+			If (!IsStackableOld( item ) )
+				MoveItemToContainer( item, character.backpack );
+			else
+				var amt := item.amount;
+				var objtype := item.objtype;
+				if (DestroyItem( item ))
+					CreateItemInContainer( character.backpack, objtype, amt );
+				endif
+			endif
+		endif
+	endforeach
+				
+endfunction
+
+function IsStackableOld( item )
+	set_critical(1);
+	var container := item.container;
+	if (!item.container) return 0; endif
+	var stackable := 0;
+	var it := CreateItemInContainer( container, item.objtype, 2 );
+	if (!it)
+		stackable := 0;
+	else
+		SubtractAmount( it, 2 );
+		stackable := 1;
+	endif
+	set_critical(0);
+	return stackable;
+endfunction
+
+///////////////////
+//  sorts all items of the selected type into a given bag
+///////////////////
+
+function SortStuffIntoBag (character, sorttype)
+	bag := Target (character);
+	if (bag == character)
+		bag := character.backpack;
+	elseif (!InInventory (character.backpack, bag) )
+		SendSysMessage (character, "That isn't in your inventory!");
+		return;
+	endif
+
+	var objtypes := GetGroupObjtypes (sorttype);
+	if (!objtypes)
+		SendSysMessage (character, "Unknown option.");
+		return;
+	endif
+
+	foreach item in EnumerateItemsInContainer (character.backpack)
+		if (item.objtype in objtypes)
+			if (item.container != bag)
+				if (CreateItemInContainer (bag, item.objtype, item.amount) )
+					DestroyItem (item);
+				endif
+			endif
+		endif
+	endforeach
+
+	SendSysMessage (character, "Done sorting!");
+endfunction
+
+
+
+
+///////////////////
+//  figure out the objtypes of the items that should be stacked
+///////////////////
+
+function GetGroupObjtypes (sorttype)
+	var thestuff := array;
+	case (sorttype)
+		"reagents":
+		"regs":
+			for i := 0x0f78 to 0x0f91
+				thestuff.append (i);
+			endfor
+			return thestuff;
+		"gems":
+			for i := 0x0f0f to 0x0f30
+				thestuff.append (i);
+			endfor
+			return thestuff;
+		"ammo":
+			thestuff := {0x0f3f, 0x1bfb, 0x16051};
+			return thestuff;
+		"potions":
+			for i := 0xDC01 to 0xDC17
+				thestuff.append (i);
+			endfor
+			thestuff.append (0xdce6);
+			thestuff.append (0x709e);
+			return thestuff;
+	endcase
+	return 0;
+endfunction
+
+
+
+
+function SortBank (character)
+	var found_banker := 0;
+	foreach mobile in ListMobilesNearLocation (character.x, character.y, character.z, 10, character.realm)
+		if (mobile.npctemplate ["banker"])
+			found_banker := 1;
+		endif
+	endforeach
+	
+	if (!found_banker)
+		SendSysMessage (character, "You must be closer to a banker to do this!");
+		return;
+	endif
+
+	SendSysMessage (character, "Select a bag of stuff to sort into your bankbox:");
+	bag := Target (character);
+	if (!bag)
+		SendSysMessage (character, "Canceled.");
+		return;
+	elseif (bag == character)
+		bag := character.backpack;
+	elseif (!InInventory (character.backpack, bag) )
+		SendSysMessage (character, "That isn't in your inventory!");
+		return;
+	endif
+	
+	var bankbox := FindBankBox (character.acctname);
+	if (!bankbox)
+		SendSysMessage (character, "Unable to find a bankbox!  That ain't good...");
+		return;
+	endif
+
+	foreach item in ListRootItemsInContainer (bag)
+		if (ReserveItem (item))
+			if (IsStackableItem(item) and item.objtype != UOBJ_GOLD_COIN)
+				foreach more_item in EnumerateItemsInContainer (bankbox)
+					if (more_item.objtype == item.objtype)
+						if (more_item.container.objtype != UOBJ_SPELLBOOK and more_item.container.objtype != UOBJ_TRASHBARREL)
+							if (AddAmount (more_item, item.amount))
+								DestroyItem (item);
+								break;
+							endif
+						endif
+					endif
+				endforeach
+			endif
+		endif
+	endforeach
+	SendSysMessage (character, "Done!");
+endfunction
+
+

@@ -1,0 +1,229 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/string";
+include "include/eventid";
+include "include/attributes";
+include "../pkg/npcs/npcinfo";
+
+program tame_creature (character)
+	if (GetObjProperty (character, "#useskill"))
+		if (GetProcess (GetObjProperty (character, "#useskill")))
+			PrintTextAbovePrivate (character, "I am already performing another action.", character);
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#useskill", GetPid());
+
+	SendSysMessage (character, "What do you want to tame?");
+	var thecreature := Target (character, TGTOPT_CHECK_LOS);
+	if (!thecreature)
+		SendSysmessage (character, "Canceled.");
+		return;
+	endif 
+
+	if (Distance (character, thecreature) > 4)
+		SendSysmessage (character, "You're too far away to tame that!");
+		return;
+	endif
+	
+	if (!GetVital (thecreature, "Life"))
+		SendSysmessage (character, "How do you expect to tame that?");
+		return;
+	endif
+	
+	if (thecreature.acctname)
+		SendSysmessage (character, "I don't think " + thecreature.name + " would appreciate that.");
+		return;
+	endif
+
+	if (!CheckLoSAt (character, thecreature.x, thecreature.y, thecreature.z) )
+		SendSysMessage (character, "You can't see that!");
+		return;
+	endif
+
+	if (GetObjProperty (thecreature, "untamable") )
+		SendSysMessage (character, "You can't tame that!");
+		return;
+	endif
+
+	//temp code for server event
+	if ( getobjproperty (thecreature, "diseased") )
+		SendSysmessage (character, "That creature is diseased!");
+		return;
+	endif
+
+	var elem := GetNpcTemplateElem (thecreature.npctemplate);
+	if (!elem)
+		SendSysmessage (character, "You can't tame that!");
+		return;
+	endif
+
+	var difficulty := CINT (GetConfigInt(elem, "tameskill"));
+	if (!difficulty)
+		SendSysmessage (character, "You can't tame that!");
+		return;
+	endif
+
+	if (thecreature.script["tamed"])
+		SendSysmessage (character, "That creature looks pretty tame already.");
+		return;
+	endif
+
+	if ( GetAttribute (character, ATTRIBUTEID_TAMING) < (difficulty-20) )
+		SendSysmessage (character, "You have no chance of taming this creature!");
+		return;
+	endif
+	
+	if (CheckIfOverPetCount (character, thecreature))
+		SendSysMessage (character, "Looks like you already have your hands full.");
+		return;
+	endif
+
+	if ( CheckSkill (character, SKILLID_ANIMALLORE, difficulty, 0) )
+		if (thecreature.warmode)
+			PrintTextAbove (thecreature, character.name + " has calmed the beast!");
+			var ev := struct;
+			ev.+type := EVID_PEACEMADE;
+			ev.+source := character;
+			sendevent (thecreature, ev);
+		endif
+	else
+		if ( IsABadAss (thecreature) )
+			if (RandomInt (20) != 1 )
+				PrintTextAbove(thecreature,character.name + " has angered the beast!");
+				var ev := struct;
+				ev.+type := EVID_DAMAGED;
+				ev.+source := character;
+				sendevent (thecreature, ev);
+				return;
+			endif
+		endif
+	endif
+
+	var thename := TruncateArticle (thecreature.name);
+	PrintTextAbove (character, "What a nice " + thename);
+	sleep(3);
+	if (Distance(character, thecreature) > 5)
+		SendSysmessage (character, "You're too far away to continue taming.");
+		return;
+	endif
+
+	PrintTextAbove (character, "I've always wanted a " + thename + " like you.");
+	sleep(3);
+	if (Distance(character, thecreature) > 5)
+		SendSysmessage (character, "You're too far away to continue taming.");
+		return;
+	endif
+
+	PrintTextAbove(character, thename + ", will you be my friend?");
+	sleep(3);
+	if (Distance(character, thecreature) > 5)
+		SendSysmessage (character, "You're too far away to continue taming.");
+		return;
+	endif
+
+	if (thecreature.script["tamed"])
+		SendSysmessage (character, thecreature.name + " belongs to someone else!");
+		return;
+	endif
+
+	if (CheckSkill (character, SKILLID_TAMING, difficulty, 0))
+		SendSysmessage (character, "You successfully tame the " + thename);
+		SetObjProperty (thecreature, "master", character.serial);
+		thecreature.script := "::tamed";
+		RestartScript (thecreature);
+	else
+		SendSysmessage (character, "You failed to tame the creature.");
+	endif
+endprogram
+
+
+function IsABadAss (critter)
+	var myscript := GetNpcTemplateElem(critter.npctemplate).script;
+	case (critter.objtype)
+		0xc:
+		0x3d:
+		0x3c:
+		0x3b:
+		0xf3:
+		0xf4:
+		0xf6:
+		0xa9:
+			return 1;
+		0xc8:	
+			if ( myscript["firebreather"])
+				return 1;
+			endif
+	endcase
+	return 0;
+endfunction
+
+
+
+///////////////////
+//  checks how many pets they have, and releases some if there's too many
+///////////////////
+
+function CheckIfOverPetCount (character, newmob)
+	var pets := 0;
+	foreach mob in ListMobilesNearLocation (character.x, character.y, character.z, 15, character.realm)
+		if (mob.script["tamed"] and (GetObjProperty (mob, "master") == character.serial) )
+			if (!GetObjProperty (mob, "summoned"))
+				pets := pets + GetPetCountOfNPC (mob);
+			endif
+		endif
+	endforeach
+	pets := pets + GetPetCountOfNPC (newmob);
+	
+	var mymaxpets := 5;
+	if (GetAttribute (character, ATTRIBUTEID_TAMING) >= 98)
+		mymaxpets := 9;
+	elseif (GetAttribute (character, ATTRIBUTEID_TAMING) >= 78)
+		mymaxpets := 7;
+	endif	
+
+	if (pets > mymaxpets)
+		return 1;
+	endif
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  Figures out how much a given pet is worth, in terms of 'pet points'
+///////////////////
+
+function GetPetCountOfNPC (mob)
+	var mobelem := GetNpcTemplateElem (mob.npctemplate);
+//	var mobstr := GetAttribute (mob, "Strength");
+	var tameskill := CINT (mobelem.tameskill);
+	if (!tameskill)
+		return 7;
+	endif
+
+	if (tameskill <= 60)
+		return 1;
+	elseif (tameskill <= 70)
+		return 2;
+	elseif (tameskill <= 80)
+		return 3;
+	elseif (tameskill <= 90)
+		return 4;
+	elseif (tameskill <= 100)
+		return 5;
+	elseif (tameskill <= 110)
+		return 6;
+	else
+		return 7;
+	endif
+
+	return 1;
+endfunction
+
+

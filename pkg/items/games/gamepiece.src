@@ -1,0 +1,37 @@
+use os;
+use uo;
+
+include "include/utility";
+
+program use_gamepiece (character, gamepiece)
+	var gameboard := gamepiece.container;
+	var contserial := GetObjProperty (gamepiece, "sole_container_serial");
+	
+	//make sure its in the right board
+	if (!gameboard or gameboard.serial != contserial)
+		var realgameboard := SystemFindObjectBySerial (contserial, SYSFIND_SEARCH_OFFLINE_MOBILES + SYSFIND_SEARCH_STORAGE_AREAS);
+		if (!realgameboard)
+			DestroyItem (gamepiece);
+			return;
+		endif
+		
+		if (!MoveItemToContainer (gamepiece, realgameboard))
+			DestroyItem (gamepiece);
+			return;
+		endif
+		return;
+	endif
+	
+	//king for checkerboard
+	if (gameboard.objtype == 0x70b0)
+		case (gamepiece.graphic)
+			0x3584:	gamepiece.graphic := 0x3589;
+			0x3589:	gamepiece.graphic := 0x3584;
+			0x358b:	gamepiece.graphic := 0x3590;
+			0x3590:	gamepiece.graphic := 0x358b;
+		endcase
+		return;
+	endif
+
+	SendSysMessage (character, "I can't think of a way to use that.");
+endprogram

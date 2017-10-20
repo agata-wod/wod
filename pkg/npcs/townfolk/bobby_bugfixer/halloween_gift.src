@@ -1,0 +1,54 @@
+use uo;
+use os;
+
+include "include/objtype";
+include "include/accounts";
+
+program give_halloween_gift (parms)
+	var bobby := parms[1];
+	var player := parms[2];
+	if (!bobby or !player)
+		return;
+	endif
+	
+	set_critical (1);
+	if (GetAccountProperty (player.acctname, "halloween_2013"))
+		PrintTextAbove (bobby, "I'm sorry, but I can only give you one.");
+		return;
+	endif
+
+	var gift := CreateItemInBackpack (player, UOBJ_BAG);
+	if (!gift)
+		PrintTextAbove (bobby, "Your backpack is full.  Come back later.");
+		return;
+	endif
+	gift.color := 43;
+	gift.name := "Happy Halloween 2013!";
+	
+	var subgift := CreateItemInContainer (gift, 0x2882, 1);	//ghost cutout
+	subgift.movable := 1;
+	subgift := CreateItemInContainer (gift, 0x2850, 1);	//jack-o-lantern
+	subgift := CreateItemInContainer (gift, 0x09d0, 2);	//2 apples
+	subgift := CreateItemInContainer (gift, 0x09c8, 1);	//apple cider
+	subgift.name := "a jug of spicy apple cider";
+	
+	for i := 1 to 5
+		subgift := CreateItemInContainer (gift, 0x17059, 1);
+		subgift.usescript := ":alchemy:special_potion";
+		subgift.name := "an unusual potion";
+		subgift.graphic := 6212;
+	endfor
+	SetAccountProperty (player.acctname, "halloween_2013", 1);
+
+	PrintTextAbove (bobby, "Happy Halloween!");
+	
+	var total_gifts := GetObjProperty (bobby, "total_gifts");
+	if (!total_gifts)
+		total_gifts := 0;
+	endif
+	total_gifts := total_gifts + 1;
+	SetObjProperty (bobby, "total_gifts", total_gifts);
+	
+	set_critical (0);
+
+endprogram

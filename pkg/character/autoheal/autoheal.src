@@ -1,0 +1,373 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+Const DRINK_SOUND := 0x32;
+Const SOUND_EFFECT_HEAL	:= 0x1f3; 
+Const SOUND_EFFECT_CURE	:= 0x1e1;
+Const EFFECT_SPARKLE  := 0x374a;
+
+include "include/client";
+include "include/magic";
+include "include/poison";
+include "include/utility";
+include "include/dotempmods";
+include "include/newperformaction";
+
+program Autoheal (character)
+	var old_maxhp := GetVitalMaximumValue (character, "Life");
+	var autoheal_options := GetObjProperty (character, "autoheal_options");
+	if (!autoheal_options or len (autoheal_options) < 7)
+		SendSysMessage (character, "You can set your autoheal options with .options");
+		autoheal_options := {3, 3, 3, 3, 3, 3, 1};
+	elseif (!autoheal_options or len (autoheal_options) < 7)
+		SendSysMessage (character, "Autoheal options reset.");
+		autoheal_options := {3, 3, 3, 3, 3, 3, 1};
+	endif
+
+	var spellthreshhold := (autoheal_options[1]-1) * CINT (old_maxhp/4);
+	var potionthreshhold := (autoheal_options[2]-1) * CINT (old_maxhp/4);
+	var bandagethreshhold := (autoheal_options[3]) * CINT (old_maxhp/4);
+	if (autoheal_options[3] == 1)
+		bandagethreshhold := 0;
+	elseif (autoheal_options[3] == 4)
+		bandagethreshhold := old_maxhp - 100;
+	endif
+
+	var curespellthreshhold := (autoheal_options[4]-1) * CINT (old_maxhp/2);
+	var curepotionthreshhold := (autoheal_options[5]-1) * CINT (old_maxhp/2);
+	var curebandagethreshhold := (autoheal_options[6]-1) * CINT (old_maxhp/2);
+
+	while (character)
+		if (GetObjProperty (character, "#ChangedOptions") or old_maxhp != GetVitalMaximumValue (character, "Life"))
+			old_maxhp := GetVitalMaximumValue (character, "Life");
+			autoheal_options := GetObjProperty (character, "autoheal_options");
+			if (!autoheal_options or len (autoheal_options) < 7)
+				SendSysMessage (character, "Autoheal options reset.");
+				autoheal_options := {3, 3, 3, 3, 3, 3, 1};
+			endif
+
+			spellthreshhold := (autoheal_options[1]-1) * CINT (old_maxhp/4);
+			potionthreshhold := (autoheal_options[2]-1) * CINT (old_maxhp/4);
+			bandagethreshhold := (autoheal_options[3]) * CINT (old_maxhp/4);
+			if (autoheal_options[3] == 1)
+				bandagethreshhold := 0;
+			elseif (autoheal_options[3] == 4)
+				bandagethreshhold := old_maxhp - 100;
+			endif
+
+			curespellthreshhold := (autoheal_options[4]-1) * CINT (old_maxhp/2);
+			curepotionthreshhold := (autoheal_options[5]-1) * CINT (old_maxhp/2);
+			curebandagethreshhold := (autoheal_options[6]-1) * CINT (old_maxhp/2);
+			EraseObjProperty (character, "#ChangedOptions");
+		endif
+
+		if (!character.dead)
+			if (!autoheal_options[7] or !character.hidden)
+				if (character.poisoned)
+					if (GetVital (character, "Life") <= curepotionthreshhold)
+						DrinkCure (character);
+					endif
+					if (character.poisoned)
+						if (GetVital (character, "Life") <= curespellthreshhold)
+							CastSpell (character, 11, ":poison_spells:cure", 0x1F37);
+						endif
+						if (character.poisoned)
+							if (GetVital (character, "Life") < curebandagethreshhold)
+								UseBandage (character);
+							endif
+						endif
+					endif
+				endif
+
+				if (GetVital (character, "Life") < bandagethreshhold)
+					UseBandage (character);
+				endif
+
+				if (GetVital (character, "Life") <= potionthreshhold)
+					DrinkHeal (character);
+				endif
+
+				if (GetVital (character, "Life") <= spellthreshhold)
+					CastSpell (character, 29, ":misc_spells:gheal", 0x1F49);
+				endif
+			endif
+		endif
+		sleep (5);
+	endwhile	
+endprogram
+
+function DrinkHeal (byref character)
+	if (CINT (GetObjProperty (character, "#potion")) > ReadGameClock()  )
+        	return 0;
+	endif
+	var item := FindItemInContainerOfObjtype (character.backpack, UOBJ_GREATER_HEAL_POTION);
+	if (item)
+		character.hidden := 0;
+		PlaySoundEffect (character, DRINK_SOUND);
+		NewPerformAction(character, NPA_ANIM_EAT);
+		var heal_amount := RandomDiceRoll("5d12+3");
+		HealDamage(character, heal_amount);
+		CreateItemInContainer (item.container, UOBJ_EMPTY_BOTTLE, 1);
+		SubtractAmount (item, 1);
+		PlaySoundEffect( character,  SOUND_EFFECT_HEAL );
+		SetObjProperty (character, "#potion", (ReadGameClock() + 20));
+		return 1;
+	endif
+	
+	item := FindItemInContainerOfObjtype (character.backpack, UOBJ_HEAL_POTION);
+	if (item)
+		character.hidden := 0;
+		PlaySoundEffect (character, DRINK_SOUND);
+		NewPerformAction(character, NPA_ANIM_EAT);
+		var heal_amount := RandomDiceRoll("3d12+3");
+		HealDamage(character, heal_amount);
+		CreateItemInContainer (item.container, UOBJ_EMPTY_BOTTLE, 1);
+		SubtractAmount (item, 1);
+		PlaySoundEffect( character,  SOUND_EFFECT_HEAL );
+		SetObjProperty (character, "#potion", (ReadGameClock() + 20));
+		return 1;
+	endif
+	
+	item := FindItemInContainerOfObjtype (character.backpack, UOBJ_LIGHT_HEAL_POTION);
+	if (item)
+		character.hidden := 0;
+		PlaySoundEffect (character, DRINK_SOUND);
+		NewPerformAction(character, NPA_ANIM_EAT);
+		var heal_amount := RandomDiceRoll("2d12+3");
+		HealDamage(character, heal_amount);
+		CreateItemInContainer (item.container, UOBJ_EMPTY_BOTTLE, 1);
+		SubtractAmount (item, 1);
+		PlaySoundEffect( character,  SOUND_EFFECT_HEAL );
+		SetObjProperty (character, "#potion", (ReadGameClock() + 20));
+		return 1;
+	endif
+	return 0;
+
+endfunction
+
+function CastSpell (byref character, spellid, spell, scrollid)
+	if (GetManaCostBySpellID (spellid) > CINT (GetVital (character, "Mana")/100))
+		return 0;
+	endif
+
+	//search for a scroll in the main backpack first.  If we have it, use that to cast the spell
+	var scroll := FindObjtypeInContainer (character.backpack, scrollid);
+	if (scroll)
+		if (GetAttribute (character, ATTRIBUTEID_MAGERY) < (GetSpellDifficulty (spellid) - 40) )
+			return 0;
+		endif
+		character.hidden := 0;
+		var weaponone := GetEquipmentByLayer (character, LAYER_HAND1);
+		if (weaponone)
+			var weaponcfg := ReadConfigFile (":weapons:itemdesc");
+			var blockvalue := CINT (weaponcfg[weaponone.objtype].blockcircle);
+			if ( blockvalue and blockvalue < 9)
+				MoveItemToContainer (weaponone, character.backpack);
+			endif
+		endif
+		var weapontwo := GetEquipmentByLayer (character, LAYER_HAND2);
+		if (weapontwo)
+			var weaponcfg := ReadConfigFile (":weapons:itemdesc");
+			var blockvalue := CINT (weaponcfg[weapontwo.objtype].blockcircle);
+			if ( blockvalue and blockvalue < 9)
+				MoveItemToContainer (weapontwo, character.backpack);
+			endif
+		endif
+
+		NewPerformAction (character, NPA_ANIM_SPELL, NPA_SPELL_DIRSPELL, NPA_DIRSPELL_SUB);
+		SpeakPowerWords (character, spellid);
+		if (!CheckSkill (character, SKILLID_MAGERY, (GetSpellDifficulty (spellid)-20), 0))
+			PlaySoundEffect (character, 0x005d);
+			PlayObjectCenteredEffect (character, 0x3735, 0x0a, 0x1e);
+			sleep(2);
+			if (!character.dead)
+				if (weaponone)
+					EquipItem (character, weaponone);
+				endif
+				if (weapontwo)
+					EquipItem (character, weapontwo);
+				endif
+			endif
+			sleep (1);
+			return 0;
+		else
+//			if (!ConsumeSpellManaCost (character, GetSpellCircleBySpellID (spellid)))
+			if (!ConsumeSpellManaCostByID (character, spellid))
+				return 0;
+			endif
+			var parms := array;
+			parms[1] := "#MOB";
+			parms[2] := character;
+			parms[3] := character;
+			sleep(2);
+			start_script (spell, parms);
+			sleep(1);
+			if (!character.dead)
+				if (weaponone)
+					EquipItem (character,weaponone);
+				endif
+				if (weapontwo)
+					EquipItem (character,weapontwo);
+				endif
+			endif
+			SubtractAmount (scroll, 1);
+			return 1;
+		endif
+	endif
+
+	if ( GetAttribute (character, ATTRIBUTEID_MAGERY) < (GetSpellDifficulty( spellid ) - 20) )
+		return 0;
+	endif
+
+	var spellbook := FindObjtypeInContainer (character.backpack, UOBJ_SPELLBOOK);
+	if (!spellbook)
+		return 0;
+	endif
+
+//	var hasspell;
+//	foreach item in EnumerateItemsInContainerOfObjtype (spellbook, scrollid)
+//		hasspell := item;
+//		break;
+//	endforeach
+	if (!spellbook.HasSpell(spellid))
+		return 0;
+	endif			
+
+	if (ConsumeReagents (character, spellid))
+		character.hidden := 0;
+		var weaponone := GetEquipmentByLayer (character, LAYER_HAND1);
+		if (weaponone)
+			var weaponcfg := ReadConfigFile (":weapons:itemdesc");
+			var blockvalue := CINT (weaponcfg[weaponone.objtype].blockcircle);
+			if ( blockvalue and blockvalue < 9)
+				MoveItemToContainer (weaponone, character.backpack);
+			endif
+		endif
+		var weapontwo := GetEquipmentByLayer (character, LAYER_HAND2);
+		if (weapontwo)
+			var weaponcfg := ReadConfigFile (":weapons:itemdesc");
+			var blockvalue := CINT (weaponcfg[weapontwo.objtype].blockcircle);
+			if ( blockvalue and blockvalue < 9)
+				MoveItemToContainer (weapontwo, character.backpack);
+			endif
+		endif
+
+		NewPerformAction (character,NPA_ANIM_SPELL, NPA_SPELL_DIRSPELL, NPA_DIRSPELL_SUB);
+		SpeakPowerWords (character, spellid);
+		if (!CheckSkill (character, SKILLID_MAGERY, GetSpellDifficulty (spellid), 0))
+			PlaySoundEffect (character, 0x005d);
+			PlayObjectCenteredEffect (character, 0x3735, 0x0a, 0x1e);
+			sleep (2);
+			if (!character.dead)
+				if (weaponone)
+					EquipItem(character,weaponone);
+				endif
+				if (weapontwo)
+					EquipItem(character,weapontwo);
+				endif
+			endif
+			sleep(1);
+			return 0;
+		else
+			if (!ConsumeSpellManaCostByID (character, spellid))
+				return 0;
+			endif
+			var parms := array;
+			parms[1] := "#MOB";
+			parms[2] := character;
+			parms[3] := character;
+			sleep(2);
+			start_script( spell, parms );
+			sleep(1);
+			if (!character.dead)
+				if (weaponone)
+					EquipItem(character,weaponone);
+				endif
+				if (weapontwo)
+					EquipItem(character,weapontwo);
+				endif
+			endif
+			return 1;
+		endif
+	else
+		return 0;
+	endif
+
+endfunction
+
+function DrinkCure (byref character)
+	if (CINT (GetObjProperty (character, "#potion")) > ReadGameClock() )
+        	return 0;
+	endif
+	var plevel := GetPoisonLevel (character);
+	if (!plevel)
+		return 1;
+	endif
+	
+	var item := FindItemInContainerOfObjtype (character.backpack, UOBJ_GREATER_CURE_POTION);
+	if (item)
+		character.hidden := 0;
+		PlaySoundEffect (character, DRINK_SOUND);
+		if ((RandomInt(20)+1) > RandomInt(plevel) )
+			PlayObjectCenteredEffect (character, EFFECT_SPARKLE, 10, 10);
+			CurePoison (character, SOUND_EFFECT_CURE, "Cured!");
+		endif
+		SetObjProperty (character, "#potion", (ReadGameClock() + 20));
+		CreateItemInContainer (item.container, UOBJ_EMPTY_BOTTLE, 1);
+		SubtractAmount (item, 1);
+		return 1;
+	endif
+	
+	item := FindItemInContainerOfObjtype (character.backpack, UOBJ_CURE_POTION);
+	if (item)
+		character.hidden := 0;
+		PlaySoundEffect (character, DRINK_SOUND);
+		if ((RandomInt(12)+1) > RandomInt(plevel) )
+			PlayObjectCenteredEffect (character, EFFECT_SPARKLE, 10, 10);
+			CurePoison (character, SOUND_EFFECT_CURE, "Cured!");
+		endif
+		SetObjProperty (character, "#potion", (ReadGameClock() + 20));
+		CreateItemInContainer (item.container, UOBJ_EMPTY_BOTTLE, 1);
+		SubtractAmount (item, 1);
+		return 1;
+	endif
+
+	item := FindItemInContainerOfObjtype (character.backpack, UOBJ_LESSER_CURE_POTION);
+	if (item)
+		character.hidden := 0;
+		PlaySoundEffect (character, DRINK_SOUND);
+		if ((RandomInt(8)+1) > RandomInt(plevel) )
+			PlayObjectCenteredEffect (character, EFFECT_SPARKLE, 10, 10);
+			CurePoison (character, SOUND_EFFECT_CURE, "Cured!");
+		endif
+		SetObjProperty (character, "#potion", (ReadGameClock() + 20));
+		CreateItemInContainer (item.container, UOBJ_EMPTY_BOTTLE, 1);
+		SubtractAmount (item, 1);
+		return 1;
+	endif
+	return 0;
+endfunction
+
+function UseBandage (byref character)
+	if (CINT(GetObjProperty (character, "#heal")) > readgameclock())
+        	return 0;
+	endif
+
+	var parms := array{ };
+	parms[1] := character;
+	parms[2] := character;
+
+	foreach item in EnumerateItemsInContainer (character.backpack)
+		if ( item.objtype == 0x0e21)
+			character.hidden := 0;
+			parms[3] := item;
+			start_script (":healing:dohealing",parms);
+			return 1;
+		endif
+	endforeach
+
+	SendSysMessage (character, "You don't have any bandages!");
+	return 0;
+endfunction

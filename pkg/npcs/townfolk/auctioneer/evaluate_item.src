@@ -1,0 +1,134 @@
+use os;
+use uo;
+use cfgfile;
+
+include "include/client";
+include "include/gumps";
+include "include/skills";
+
+program evaluate_item (parms)
+	var player := parms[1];
+	var item := parms[2];
+	
+	if (!player or !item)
+		return;
+	endif
+	
+	if (GetObjProperty (player, "#auction_evaluate_gump"))
+		if (GetProcess (GetObjProperty (player, "#auction_evaluate_gump")))
+			return;
+		endif
+	endif
+	SetObjProperty (player, "#auction_evaluate_gump", GetPid());
+
+	sleepms (100);
+	var thestring := "";
+	if (item.maxhp)
+		var damage_desc := "terrible";
+		var item_hp_percentage := CINT ( (item.hp * 100) / item.maxhp );
+		if (item_hp_percentage > 99)
+			damage_desc := "perfect";
+		elseif (item_hp_percentage > 90)
+			damage_desc := "good";
+		elseif (item_hp_percentage > 80)
+			damage_desc := "acceptable";
+		elseif (item_hp_percentage > 70)
+			damage_desc := "fair";
+		elseif (item_hp_percentage > 40)
+			damage_desc := "poor";
+		endif
+	
+		var status_desc := "very badly worn";
+		var total_damage := CINT (GetObjProperty (item, "total_damage"));
+		if (!total_damage)
+			status_desc := "brand new";
+		else
+			var percentage := 100 - CINT (((item.maxhp - total_damage)*100)/item.maxhp);
+			if (!percentage or percentage < 5)
+				status_desc := "virtually new";
+			elseif (percentage < 25)
+				status_desc := "relatively new";
+			elseif (percentage < 50)
+				status_desc := "somewhat worn";
+			elseif (percentage < 75)
+				status_desc := "rather worn";
+			endif
+		endif
+		thestring := thestring + "Status: " + status_desc + "<br>";
+		thestring := thestring + "Condition: " + damage_desc + "<br>";
+	endif
+
+	if (item.ar_mod)
+		thestring := thestring + "AR Bonus: " + item.ar_mod + "<br>";
+	endif
+	if (item.dmg_mod)
+		thestring := thestring + "Damage Bonus: " + item.dmg_mod + "<br>";
+	endif
+
+	if (GetObjProperty (item, "str"))
+		var stat_bonus := GetObjProperty (item, "str");
+		thestring := thestring + "Strength Bonus: " + stat_bonus + "<br>";
+	endif
+	if (GetObjProperty (item, "int"))
+		var stat_bonus := GetObjProperty (item, "int");
+		thestring := thestring + "Intelligence Bonus: " + stat_bonus + "<br>";
+	endif
+	if (GetObjProperty (item, "dex"))
+		var stat_bonus := GetObjProperty (item, "dex");
+		thestring := thestring + "Dexterity Bonus: " + stat_bonus + "<br>";
+	endif
+	
+	if (GetObjProperty (item, "skilladv"))
+		var skillid := GetObjproperty (item, "skilladv");
+		var skillname := GetSkillName (skillid);
+		var skillbonus := GetObjProperty (item, CStr("skill"+skillid));
+		thestring := thestring + "Skill Bonus: +" + skillbonus + " " + skillname + "<br>";
+	endif
+	if (GetObjProperty (item, "protpoison"))
+		var pcharges := GetObjProperty (item, "protpoison");
+		thestring := thestring + "Poison Protection: " + pcharges + " charges<br>";
+	endif
+	
+	if (GetObjProperty (item, "damage_soak_fire"))
+		var pcharges := GetObjProperty (item, "damage_soak_fire");
+		thestring := thestring + "Fire Protection: " + pcharges + " points<br>";
+	endif
+	if (GetObjProperty (item, "damage_soak_cold"))
+		var pcharges := GetObjProperty (item, "damage_soak_cold");
+		thestring := thestring + "Cold Protection: " + pcharges + " points<br>";
+	endif
+	if (GetObjProperty (item, "damage_soak_electrical"))
+		var pcharges := GetObjProperty (item, "damage_soak_electrical");
+		thestring := thestring + "Electrical Protection: " + pcharges + " points<br>";
+	endif
+
+	if (GetObjProperty (item, "charges"))
+		var scharges := GetObjProperty (item, "charges");
+		var itemspellname := GetObjProperty (item, "itemspellname");
+		if (!itemspellname)
+			itemspellname := "Spell";
+		endif
+		thestring := thestring + itemspellname + " Charges: " + scharges + " charges<br>";
+	endif
+	
+	if (GetObjProperty (item, "etherial") )
+		thestring := thestring + "<b>Etherial:</b> (Almost appearing to have a will of their own, etherial items appear for a time to help a cause or a person in need, then tend to vanish as mysteriously as they appeared)<br>";
+	endif
+
+	if (GetObjProperty (item, "flavortext") )
+		var flavortext := GetObjProperty (item, "flavortext");
+		
+		while (flavortext ["  "])
+			flavortext["  "] := " ";
+		endwhile;
+		
+		thestring := thestring + "<b>Description:</b> " + flavortext + "<br>";
+	endif
+
+	if (thestring != "")
+		SendStringAsHtmlWindow (player, thestring, item.desc);
+	else
+		SendSysMessage (player, "There is no information about this item.");
+	endif
+	EraseObjProperty (player, "#auction_evaluate_gump");
+endprogram

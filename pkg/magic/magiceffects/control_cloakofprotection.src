@@ -1,0 +1,17 @@
+use uo;
+use os;
+
+program cloakcontrol (cloak)
+	cloak.equipscript := ":combat:item_equip";
+	cloak.unequipscript := ":combat:item_unequip";
+	sleep (10);
+	var duration := 120;
+	if (GetObjProperty (cloak, "duration"))
+		duration := GetObjProperty (cloak, "duration");
+	endif
+
+	sleep (duration);
+	DestroyItem (cloak);
+
+endprogram
+

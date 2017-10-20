@@ -1,0 +1,239 @@
+use os;
+use uo;
+use npc;
+use basic;
+use cfgfile;
+
+include "include/utility";
+include "include/eventid";
+include "include/magicitems";
+include "include/npcbackpacks";
+include "../pkg/npcs/speech";
+include "../pkg/npcs/npcinfo";
+include "../pkg/npcs/npc_util";
+include "../pkg/npcs/main_ai/setup/setup";
+include "../pkg/npcs/main_ai/main/sleepmode_townfolk";
+
+var next_possible_spam := ReadGameClock ();
+CONST HALT_THRESHOLD := 8;
+
+program merchantai()
+
+	if ( me.name ["<random>"] )
+		DoMerchantOnCreationSetup ();
+	endif
+
+	EnableMainEvents ();
+	SetUpSpeech ();
+	WalkHome ();
+
+	var ev;
+	var mydestx := 0;
+	var mydesty := 0;
+	var steps := 0;
+	var wanders := 60;
+	var next_wander := ReadGameClock();
+
+	while (me)
+		if (me.hidden)
+			me.hidden := 0;
+		endif
+
+		if (readgameclock() > next_wander)
+			if (mydestx != 0)
+				WalkTowardLocation(mydestx, mydesty);
+				if ( (me.x == mydestx and me.y == mydesty) or ( steps > 10 ) )
+					mydestx := 0;
+					SetAnchor ( me.x, me.y, 3, 80 );
+				endif
+			else	
+				wander();
+				wanders := wanders +1;
+			endif
+			next_wander := readgameclock()+2;
+		endif
+
+		if (wanders > 60)
+			wanders :=0;
+			WalkHome();
+			ev := sleepmode();
+		else
+			ev := os::wait_for_event( 2 );
+		endif
+
+		if (ev)
+			if (ProcessEvent (ev, mydestx, mydesty, steps))
+				next_wander := ReadGameClock() + 30;
+			endif
+		endif
+
+	endwhile
+
+endprogram
+
+
+
+
+///////////////////
+//  pretty obvious - processes events picked up in the main AI loop
+///////////////////
+
+function ProcessEvent (byref ev, byref mydestx, byref mydesty, byref steps)
+
+	case (ev.type)
+		EVID_ENGAGED:
+		EVID_DAMAGED:
+			Fight (ev.source);
+		EVID_ENTEREDAREA:
+			if (ev.source.npctemplate)
+				return 0;
+			endif
+
+			if (ReadGameClock() > next_possible_spam)
+				GreetCustomer (ev.source);
+				next_possible_spam := ReadGameClock() + 60;
+			endif
+		EVID_SPEECH:
+			if (ev.source.npctemplate)
+				return 0;
+			endif
+
+			TurnToward (ev.source);
+			var evtext := lower(ev.text);
+			if (evtext["buy"])
+				var parms := array;
+				parms[1] := me;
+				parms[2] := ev.source;
+				parms[3] := ev.source;
+				start_script (":barber:dohairstyle", parms);
+			elseif (evtext["sell"])
+				Say ("Sorry, but I'm not interested.");
+			else
+				check_speech (ev.text, ev.source);
+			endif
+
+		EVID_MERCHANT_BOUGHT:
+			TurnToward (ev.source);
+			return 1;
+
+		EVID_ITEM_GIVEN:
+			TurnToward (ev.source);
+			Say ("No thank you.");
+			MoveItemToContainer (ev.item, ev.source.backpack);
+
+		EVID_ALL_FOLLOW_CMD:
+			mydestx := ev.x;
+			mydesty := ev.y;
+			steps := 0;
+			SetAnchor ( mydestx, mydesty, 3, 80 );
+			WalkTowardLocation (mydestx, mydesty);
+		endcase
+	return 1;
+endfunction
+
+
+
+
+///////////////////
+//  when a player enters the NPCs range, this function makes them
+//  yell a greeting
+///////////////////
+
+function GreetCustomer (byref customer)
+	if (customer.npctemplate or customer.concealed)
+		return;
+	endif
+
+	if (RandomInt (4))
+		return;
+	endif
+
+	TurnToward (customer);
+	case (RandomInt (10) )
+		0:
+			Say ("That look is just so last month.  Let me fix you up with something more modern.");
+		1:
+			Say ("Welcome to my shop!");
+		2:
+			Say ("Let me know if you need help.");
+		3:
+			Say ("Back for another touch-up?");
+		4:
+			Say ("Do you have an appointment?");
+		5:
+			Say ("Can I help you with anything?");
+		6:
+			Say ("You look like you could use some conditioner.");
+		7:
+			Say (customer.name + "!  Its good to see you again.");
+		8:
+			Say ("Look at all those split ends!");
+		9:
+			Say ("Ah, " + customer.name + ", one of my best customers returns!");
+	endcase
+
+endfunction
+
+
+
+
+///////////////////
+//  called when the NPC is first created, this function names
+//  them and clothes them
+///////////////////
+
+function DoMerchantOnCreationSetup()
+
+	var newbackpack := CreateItemAtLocation (5288, 1176, 0, UOBJ_BACKPACK, 1, REALM_BRITANNIA);
+	EquipItem (me, newbackpack);
+
+	me.gender := RandomInt (2);
+	me.graphic := 400+me.gender;
+	me.name := RandomName ( me );
+	me.title_suffix := " the barber";
+
+	me.setstr (randomint (50)+50);
+	me.setdex (randomint (50)+50);
+	me.setint (randomint (50)+50);
+
+	var parms := array;
+	parms[1]:= me;
+	parms[2]:= "rich";
+	start_script ("::/misc/dressme", parms);
+endfunction
+
+
+
+
+///////////////////
+//  causes the merchant to enter fight mode, which starts a seperate AI script
+///////////////////
+
+function Fight (byref opponent)
+
+	SetObjProperty (me, "opponent", opponent.serial);
+	SetObjProperty (me, "oldscript", me.script);
+
+	me.script := ":fight_ai:warrior_fight_ai";
+	RestartScript (me);
+
+endfunction
+
+
+
+
+///////////////////
+//  enables and disables events
+///////////////////
+
+function EnableMainEvents()
+	DisableEvents (SYSEVENT_LEFTAREA + SYSEVENT_DISENGAGED + SYSEVENT_OPPONENT_MOVED );
+	EnableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED, 20);
+	EnableEvents (SYSEVENT_ENTEREDAREA, HALT_THRESHOLD);
+	EnableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN, 3);
+endfunction
+
+function DisableMainEvents()
+	DisableEvents (SYSEVENT_ENGAGED + SYSEVENT_DAMAGED + SYSEVENT_ENTEREDAREA);
+	DisableEvents (SYSEVENT_SPEECH + SYSEVENT_ITEM_GIVEN);
+endfunction

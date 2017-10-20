@@ -1,0 +1,59 @@
+//This program runs when the character logs on, and
+//continues to run, checking everything the player says
+//and, if necessary, performing an action based on what
+//what said
+
+use uo;
+use os;
+
+include "include/eventid";
+include "include/sysevent";
+
+program player_listener (character)
+	var backpack := character.backpack;
+	if (!backpack)
+		SendSysMessage (character, "You have no backpack!  Aaaaaahhhh!");
+		return;
+	endif
+	
+	var oldlistener := GetObjProperty (backpack, "#backpacklistener");
+	if (oldlistener)
+		var oldlistener_process := GetProcess (oldlistener);
+		if (oldlistener_process)
+			oldlistener_process.kill();
+		endif
+	endif
+	SetObjProperty (backpack, "#backpacklistener", GetPid());
+
+	RegisterForSpeechEvents (backpack, 1, LISTENPT_HEAR_GHOSTS);
+
+	var ev, evtext;
+	repeat
+		ev := wait_for_event (120);
+		if (ev and ev.type == EVID_SPEECH)
+			if (ev.source == character)
+				evtext := Lower (ev.text);
+				//henchman resurrection
+				if (character.dead)
+					if (evtext["heal me"])
+						foreach mobile in ListMobilesNearLocation (character.x, character.y, character.z, 8, character.realm)
+							if (mobile.npctemplate)
+								if (GetObjProperty (mobile, "master"))
+									if (GetObjProperty (mobile, "master") == character.serial)
+										SendSysMessage (character, "Sending ev to " + mobile.name);
+										SendEvent (mobile, ev);
+									endif
+								endif
+							endif
+						endforeach
+					endif
+				endif
+			endif
+		endif
+	
+		if (!backpack)
+			SendSysMessage (character, "Your backpack is gone!  Disabling listener.");
+		endif
+	until (!character or !character.ip);
+endprogram
+

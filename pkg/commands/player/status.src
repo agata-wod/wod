@@ -1,0 +1,595 @@
+use uo;
+use os;
+use datafile;
+
+include "include/clock";
+include "include/accounts";
+include "../pkg/guilds/guilds";
+include "../pkg/character/virtue/virtue";
+
+Const BUTTON_OK				:= 99;
+Const BUTTON_NEXT_PAGE			:= 98;
+Const BUTTON_LAST_PAGE			:= 97;
+Const BUTTON_CURRENT_PAGE		:= 96;
+Const BUTTON_HELP				:= 95;
+Const FINAL_PAGE				:= 4;
+
+var blank_gump_layout := array {
+	"nodispose",
+	"page 0",
+	"resizepic 0 20 2620 400 470",
+	"gumppic 65 50 2621",
+	"text 110 29 40 0",
+	"button 352 450 5601 5605 1 0 " + BUTTON_NEXT_PAGE,
+	"button 20 450 5603 5607 1 0 " + BUTTON_LAST_PAGE
+};
+
+var blank_gump_data := array {
+	"Status"
+};
+
+var gump_layout, gump_data;
+
+var current_page := 1;
+
+program display_status (character, text)
+	if (GetObjProperty (character, "#checkstatusgump"))
+		if (GetProcess (GetObjProperty (character, "#checkstatusgump")))
+			SendSysmessage (character, "That gump is already open!");
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#checkstatusgump", GetPid());
+	
+	text := Lower (text);
+	if (text)
+		case (text)
+			"target":
+				ViewOtherPlayerStatus (character);
+				return;
+			"playtime":
+				current_page := 2;
+			"guild":
+				current_page := 3;
+			"other":
+				current_page := 4;
+			default:
+				if (text == "help")
+					SendSysMessage (character, "Displays status information about the player");
+				else
+					SendSysMessage (character, "Invalid option seletion");
+				endif
+				SendSysMessage (character, "Valid options are:");
+				SendSysMessage (character, "target - displays status of target player");
+				SendSysMessage (character, "playtime - opens status gump to playtime information page");
+				SendSysMessage (character, "guild - opens status gump to guild & quest information page");
+				SendSysMessage (character, "other - opens status gump to the misc. information page");
+				return;
+		endcase
+	endif
+
+
+	var gump_return;
+	var done := 0;
+	repeat
+		case (current_page)
+			1:
+				BuildTempModGump (character);
+			2:
+				BuildPlaytimeGump (character);
+			3:
+				BuildGuildAndQuestGump (character);
+			4:
+				BuildOtherInforGump (character);
+			default:
+				SendSysMessage (character, "Error.");
+				return;
+		endcase
+
+		gump_return := SendDialogGump (character, gump_layout, gump_data);
+		if (!gump_return and gump_return[0] != 0)
+			SendSysMessage (character, "You must close other gumps before you can do this.");
+			return;
+		elseif (!gump_return)
+			return;
+		elseif (gump_return[0] == BUTTON_NEXT_PAGE)
+			current_page := current_page + 1;
+			if (current_page > FINAL_PAGE)
+				current_page := 1;
+			endif
+		elseif (gump_return[0] == BUTTON_LAST_PAGE)
+			current_page := current_page - 1;
+			if (current_page <= 0)
+				current_page := FINAL_PAGE;
+			endif
+		endif		
+	until (done);
+		
+	EraseObjProperty (character, "#checkstatusgump");
+endprogram
+
+
+
+
+///////////////////
+//  Displays information about other players
+///////////////////
+
+function ViewOtherPlayerStatus (character)
+	var targetted := Target (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	if (!targetted.acctname and !GetObjProperty (targetted, "master"))
+		SendSysMessage (character, "Invalid target");
+		return;
+	endif
+
+	BuildTempModGump (targetted);
+	var gump_return := SendDialogGump (character, gump_layout, gump_data);
+	if (!gump_return and gump_return[0] != 0)
+		SendSysMessage (character, "You must close other gumps before you can do this.");
+		return;
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  First page, related to tempmods (spells and the like)
+///////////////////
+
+function BuildTempModGump (character)
+	gump_layout := blank_gump_layout;
+	gump_data := blank_gump_data;
+	
+	gump_data[1] := "Status - Stat Mods";
+
+	var current_y := 70;
+	var string_counter := 1;
+	var mod_counter := 0;
+	
+	var tempmods := GetObjProperty (character, "#mods");
+	if (tempmods)
+		foreach submod in tempmods
+			var description := submod[4];
+			if (!description)
+				description := "Unknown";
+			endif
+			
+			var duration := GetShortTimeDesc (submod[3] - ReadGameClock());
+			
+			var amount_desc := submod[2];
+			if (amount_desc)
+				case (submod[1])
+					"str" :	amount_desc := "+" + amount_desc + " Str";
+					"cstr":	amount_desc := amount_desc + " Str";
+					"dex" :	amount_desc := "+" + amount_desc + " Dex";
+					"cdex":	amount_desc := amount_desc + " Dex";
+					"int" :	amount_desc := "+" + amount_desc + " Int";
+					"cint":	amount_desc := amount_desc + " Int";
+					"ar" :	amount_desc := "+" + amount_desc + " AR";
+					"car":	amount_desc := amount_desc + " AR";
+					"all" :	amount_desc := "+" + amount_desc + " Bless";
+					"call":	amount_desc := amount_desc + " Curse";
+					"poly" :	amount_desc := "+" + amount_desc + " Poly";
+					"cpoly":	amount_desc := amount_desc + " Poly";
+					"natures_blessing":	amount_desc := "+" + amount_desc + " Skill";
+					"natures_curse":	amount_desc := "-" + amount_desc + " Skill";
+					default:
+						amount_desc := amount_desc + " Unknown";
+				endcase
+			else
+				amount_desc := "Unknown";
+			endif
+	
+			gump_data.append (description);
+			gump_data.append (amount_desc);
+			gump_data.append (duration);
+			
+			gump_layout.append ("text 20 " + current_y + " 40 " + string_counter);
+			gump_layout.append ("text 200 " + current_y + " 40 " + (string_counter+1));
+			gump_layout.append ("text 300 " + current_y + " 40 " + (string_counter+2));
+			
+			current_y := current_y + 20;
+			string_counter := string_counter + 3;
+			mod_counter := mod_counter + 1;
+		endforeach
+	endif
+	
+	tempmods := GetObjProperty (character, "longtermmods");
+	if (tempmods)
+		foreach submod in tempmods
+			//only certain mods should be listed
+			case (submod[1])
+				"BonusMaxHP":
+				"cBonusMaxHP":
+				"BonusMaxStam":
+				"cBonusMaxStam":
+				"BonusMaxMana":
+				"cBonusMaxMana":
+					var description := submod[4];
+					if (!description)
+						description := "Unknown";
+					endif
+					
+					var duration := GetShortTimeDesc (submod[3] - ReadGameClock());
+					
+					var amount_desc := submod[2];
+					if (amount_desc)
+						case (submod[1])
+							"BonusMaxHP" :		amount_desc := "+" + amount_desc + " MaxHP";
+							"cBonusMaxHP":		amount_desc := amount_desc + " MaxHP";
+							"BonusMaxStam" :	amount_desc := "+" + amount_desc + " MaxStam";
+							"BonusMaxStam":	amount_desc := amount_desc + " MaxStam";
+							"BonusMaxMana" :	amount_desc := "+" + amount_desc + " MaxMana";
+							"BonusMaxMana":	amount_desc := amount_desc + " MaxMana";
+							default:
+								amount_desc := amount_desc + " Unknown";
+						endcase
+					else
+						amount_desc := "Unknown";
+					endif
+
+					gump_data.append (description);
+					gump_data.append (amount_desc);
+					gump_data.append (duration);
+					
+					gump_layout.append ("text 20 " + current_y + " 40 " + string_counter);
+					gump_layout.append ("text 200 " + current_y + " 40 " + (string_counter+1));
+					gump_layout.append ("text 300 " + current_y + " 40 " + (string_counter+2));
+
+					current_y := current_y + 20;
+					string_counter := string_counter + 3;
+					mod_counter := mod_counter + 1;
+			endcase
+		endforeach
+	endif
+	
+	//magic reflect
+	if (GetObjProperty (character, "mr"))
+		gump_data.append ("Magic Reflect");
+		gump_data.append ("   -");
+		gump_data.append (" -");
+		
+		gump_layout.append ("text 20 " + current_y + " 40 " + string_counter);
+		gump_layout.append ("text 200 " + current_y + " 40 " + (string_counter+1));
+		gump_layout.append ("text 300 " + current_y + " 40 " + (string_counter+2));
+
+		current_y := current_y + 20;
+		string_counter := string_counter + 3;
+		mod_counter := mod_counter + 1;
+	endif
+	
+	if (mod_counter == 0)
+		gump_data.append ("You are not under any spell effects");
+		gump_layout.append ("text 20 70 40 1");
+	endif
+	
+	return;
+endfunction
+
+
+
+
+///////////////////
+//  Second page, related to playtime information
+///////////////////
+
+function BuildPlaytimeGump (character)
+	gump_layout := blank_gump_layout;
+	gump_data := blank_gump_data;
+	
+	gump_data[1] := "Status - Online Time";
+
+	var totalplaytime := GetAccountProperty (character.acctname, "online_time");
+	if (!totalplaytime)
+		totalplaytime := 0;
+	endif
+
+	var last_month_string := GetPreviousPlaytimeMonth ();
+	var lastmonthplaytime := GetAccountProperty (character.acctname, last_month_string);
+	if (!lastmonthplaytime)
+		lastmonthplaytime := 0;
+	endif
+
+	var this_month_string := GetCurrentPlaytimeMonth ();
+	var thismonthplaytime := GetAccountProperty (character.acctname, this_month_string);
+	if (!thismonthplaytime)
+		thismonthplaytime := 0;
+	endif
+	
+	var total_place := GetMonthlyOnlineTimeRanking (character.acctname, "online_time");
+	var last_month_place := GetMonthlyOnlineTimeRanking (character.acctname, last_month_string);
+
+	var monthdesc := CSTR (last_month_place + "th place");
+	if (last_month_place == 1)
+		monthdesc := CSTR (last_month_place + "st place");
+	elseif (last_month_place == 2)
+		monthdesc := CSTR (last_month_place + "nd place");
+	elseif (last_month_place == 3)
+		monthdesc := CSTR (last_month_place + "rd place");
+	endif
+
+	var totaldesc := CSTR (total_place + "th place");
+	if (last_month_place == 1)
+		totaldesc := CSTR (total_place + "st place");
+	elseif (total_place == 2)
+		totaldesc := CSTR (total_place + "nd place");
+	elseif (total_place == 3)
+		totaldesc := CSTR (total_place + "rd place");
+	endif
+
+	//Total time
+	gump_layout.append ("text 20 70 40 1");
+	gump_data.append ("Total Online Time:");
+	gump_layout.append ("text 40 90 40 2");
+
+	var total_hours := CINT (totalplaytime/3600);
+	if (total_hours > 1)
+		gump_data.append (total_hours + " hours");
+	else
+		gump_data.append ("1 hour");
+	endif
+
+	gump_layout.append ("text 40 110 40 3");
+	gump_data.append ("Total Ranking: " + totaldesc);
+	
+	//last month
+	gump_layout.append ("text 20 140 40 4");
+	gump_data.append ("Last Month:");
+	gump_layout.append ("text 40 160 40 5");
+	var lmonth_hours := CINT (lastmonthplaytime/3600);
+	if (lmonth_hours > 1)
+		gump_data.append (lmonth_hours + " hours");
+	else
+		gump_data.append ("1 hour");
+	endif
+	gump_layout.append ("text 40 180 40 6");
+	gump_data.append ("Monthly Ranking: " + monthdesc);
+
+	//this month
+	gump_layout.append ("text 20 210 40 7");
+	gump_data.append ("This month:");
+	gump_layout.append ("text 40 230 40 8");
+	gump_data.append (GetTimeDescInHours (thismonthplaytime));
+
+	//last restart
+	gump_layout.append ("text 20 260 40 9");
+	gump_data.append ("Time since last restart:");
+	gump_layout.append ("text 40 280 40 10");
+	var serveruptimecounter := GetGlobalProperty ("#serveruptimecounter");
+	if (!serveruptimecounter)
+		gump_data.append ("< 1 hour");
+	elseif (serveruptimecounter == 1)
+		gump_data.append ("1 hour");
+	else
+		gump_data.append (serveruptimecounter + " hours");
+	endif
+
+	gump_layout.append ("text 20 310 40 11");
+	gump_data.append ("This session:");
+
+	var sessionlength := ReadGameClock() - GetObjProperty (character, "logontime");
+	gump_layout.append ("text 40 330 40 12");
+	gump_data.append (GetTimeDescInHours (sessionlength));
+endfunction
+
+function SecondsToMinutes (amount)
+	amount := amount - (CINT (amount/3600) * 3600);
+	return CINT (amount/60);
+endfunction
+
+
+
+
+///////////////////
+//  Third page, related to guilds and quests
+///////////////////
+
+function BuildGuildAndQuestGump (character)
+	gump_layout := blank_gump_layout;
+	gump_data := blank_gump_data;
+
+	gump_layout[5] := "text 120 29 40 0";
+	gump_data[1] := "Status - Guilds and Quests";
+
+	var players_guild := GetObjProperty (character, "players_guild");
+	if (players_guild)
+		gump_data.append ("Guild: Adventurers Guild");
+		gump_layout.append ("text 20 70 40 1");
+		
+		var guildrank := GetPlayerGuildRank ("adventurers_guild", GetGuildRankingPoints (character, "adventurers_guild"));
+		gump_data.append ("Rank: " + guildrank);
+		gump_layout.append ("text 20 95 40 2");
+		
+		gump_data.append ("To next guild rank:");
+		gump_layout.append ("text 20 120 40 3");
+
+		var percentage_guildrank := CINT ( 10000 * GetGuildPointsRequiredForNextLevel (character) /GetFullGuildPointsRequiredForNextLevel (character));
+	
+		if (percentage_guildrank == 0)
+			gump_data.append ("-");
+		elseif (percentage_guildrank <= 500)
+			gump_data.append ("Almost");
+		elseif (percentage_guildrank <= 1000)
+			gump_data.append ("Close");
+		elseif (percentage_guildrank <= 2000)
+			gump_data.append ("Pretty close");
+		elseif (percentage_guildrank <= 3000)
+			gump_data.append ("Mostly there");
+		elseif (percentage_guildrank <= 4000)
+			gump_data.append ("Still a ways to go");
+		elseif (percentage_guildrank <= 5000)
+			gump_data.append ("Halfway");
+		elseif (percentage_guildrank <= 6000)
+			gump_data.append ("Almost halfway");
+		elseif (percentage_guildrank <= 7000)
+			gump_data.append ("A third of the way there");
+		elseif (percentage_guildrank <= 8000)
+			gump_data.append ("Pretty far to go");
+		elseif (percentage_guildrank <= 9000)
+			gump_data.append ("Long way to go");
+		else
+			gump_data.append ("Just getting started");
+		endif
+		gump_layout.append ("text 160 120 40 4");
+		
+		gump_data.append ("Guild Quest:");
+		gump_layout.append ("text 20 145 40 5");
+		gump_layout.append ("text 30 170 40 6");
+
+		var quest_parms := GetObjProperty (character, "guild_quest");
+		if (!quest_parms)
+			gump_data.append ("None");
+		elseif (quest_parms [7] < ReadGameClock () )
+			gump_data.append ("Expired");
+		else
+			var quest_desc := GetGuildQuestDescription (quest_parms);
+			if (!quest_desc)
+				gump_data.append ("Error getting description.");
+			else
+				gump_data.append (quest_desc);
+			endif
+		endif
+	else
+		gump_data.append ("Guild: None");
+		gump_layout.append ("text 20 70 40 1");
+	endif
+
+	return;
+endfunction
+
+
+
+
+///////////////////
+//  figures out a good way to phrase what the quest is
+///////////////////
+
+function GetGuildQuestDescription (quest_parms)
+	var timeleft := quest_parms[7] - ReadGameClock();
+	var daysleft := CINT (timeleft/86400);
+	if (daysleft < 1)
+		daysleft := 1;
+	endif
+
+	var quest_cfg_file := ReadConfigFile (quest_parms[1]);
+	if (!quest_cfg_file)
+		Syslog ("Can't open adventurers guild quest cfgfile!");
+		return 0;
+	endif
+
+	var chosen_quest := FindConfigElem (quest_cfg_file, quest_parms[2]);
+	if (!chosen_quest)
+		Syslog ("error opening " + quest_parms[2] + " quest in adventurers guild quest cfgfile!");
+		return 0;
+	endif
+
+	if (quest_parms [1] == ":adventurers_guild:quests_heads")
+		var desc_plural := chosen_quest.desc_plural;
+		var thestring := CSTR ("Return with the heads of " + quest_parms[6] + " " + desc_plural + " within " 
+					+ daysleft + " day");
+		if (daysleft > 1)
+			thestring := thestring + "s.";
+		else
+			thestring := thestring + ".";
+		endif
+		return thestring;
+	elseif (quest_parms [1] == ":adventurers_guild:quests_items")
+		var regionname := chosen_quest.dungeonname;
+		var thestring := CSTR ("Find " + quest_parms[5] + " in " + regionname + " within " 
+					+ daysleft + " day");
+		if (daysleft > 1)
+			thestring := thestring + "s.";
+		else
+			thestring := thestring + ".";
+		endif
+		return thestring;
+	endif
+endfunction
+
+
+
+
+
+///////////////////
+//  Fourth page, everything else
+///////////////////
+
+function BuildOtherInforGump (character)
+	gump_layout := blank_gump_layout;
+	gump_data := blank_gump_data;
+
+	gump_layout[5] := "text 110 29 40 0";
+	gump_data[1] := "Status - Other Information";
+
+	gump_data.append ("Hunger:");
+	gump_layout.append ("text 20 70 40 1");
+	var hunger := CINT (GetObjProperty (character, "hunger"));
+	if (hunger >= 9)
+		hunger := 9;
+	elseif (!hunger)
+		hunger := 0;
+	endif
+
+	case (hunger)
+		0:
+			gump_data.append ("You're absolutely stuffed.");
+		1:
+		2:
+		3:
+			gump_data.append ("You're pretty full.");
+		4:
+		5:
+		6:
+			gump_data.append ("You could use a bite to eat...");
+		7:
+		8:
+			gump_data.append ("You're getting pretty hungry...");
+		default: 
+			gump_data.append ("You're absolutely famished!");
+	endcase
+	gump_layout.append ("text 80 70 40 2");
+	
+	gump_data.append ("Virtue:");
+	gump_layout.append ("text 20 95 40 3");
+	gump_data.append (GetPlayerVirtueTitle (character));
+	gump_layout.append ("text 80 95 40 4");
+	gump_data.append ("To next virtue level:");
+	gump_layout.append ("text 30 115 40 5");
+	var percentage_virtue := CINT ( 10000 * GetVirtueRequiredForNextLevel (character) /GetFullVirtueRequiredForNextLevel (character));
+
+	if (percentage_virtue == 0)
+		gump_data.append ("-");
+	elseif (percentage_virtue <= 500)
+		gump_data.append ("Almost");
+	elseif (percentage_virtue <= 1000)
+		gump_data.append ("Close");
+	elseif (percentage_virtue <= 2000)
+		gump_data.append ("Pretty close");
+	elseif (percentage_virtue <= 3000)
+		gump_data.append ("Mostly there");
+	elseif (percentage_virtue <= 4000)
+		gump_data.append ("Still a ways to go");
+	elseif (percentage_virtue <= 5000)
+		gump_data.append ("Halfway");
+	elseif (percentage_virtue <= 6000)
+		gump_data.append ("Almost halfway");
+	elseif (percentage_virtue <= 7000)
+		gump_data.append ("A third of the way there");
+	elseif (percentage_virtue <= 8000)
+		gump_data.append ("Pretty far to go");
+	elseif (percentage_virtue <= 9000)
+		gump_data.append ("Long way to go");
+	else
+		gump_data.append ("Just getting started");
+	endif
+	gump_layout.append ("text 180 115 40 6");
+
+	return;
+endfunction
+

@@ -1,0 +1,28 @@
+use uo;
+use os;
+use vitals;
+
+include "include/client";
+include "include/longtermmods";
+
+program use_statbonus_fountain (character, fountain)
+	if (GetObjProperty (fountain, "statbonustype"))
+		var statbonustype := GetObjProperty (fountain, "statbonustype");
+		var bonusdesc := GetObjProperty (fountain, "statbonusdesc");
+	
+		DoLongTermMod (character, statbonustype, 5, 259200, bonusdesc);
+		case (statbonustype)
+			"BonusMaxHP":
+				SendSysMessage (character, "You suddenly feel...  healthier.");
+			"BonusMaxMana":
+				SendSysMessage (character, "You suddenly feel...  smarter.");
+			"BonusMaxStam":
+				SendSysMessage (character, "You suddenly feel...  stronger.");
+		
+		endcase
+		return;
+	endif
+
+	DoLongTermMod (character, "BonusMaxHP", 5, 259200, "Covetous Fountain");
+	SendSysMessage (character, "You suddenly feel...  healthier.");
+endprogram

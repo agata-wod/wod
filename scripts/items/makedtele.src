@@ -1,0 +1,81 @@
+use os;
+use uo;
+include "../pkg/world/weather/weather";
+
+program walk_on_moongate( mobile, gate )
+
+	set_critical(1);
+	if ( GetObjProperty (mobile, "#justgated") )
+		return;
+	endif
+
+	if (GetObjProperty (gate, "walkonmessage"))
+		SendSysMessage (mobile, GetObjProperty (gate, "walkonmessage"));
+	endif
+
+	if (GetObjProperty (gate, "walkonsound") and !mobile.concealed)
+		PlaySoundEffect (mobile, GetObjProperty (gate, "walkonsound"));
+	endif
+
+	if (GetObjProperty (gate, "dark"))
+		if (mobile.race != RACE_ELF)
+			mobile.SetLightLevel (20, 0);
+		endif
+	endif
+
+	var x := GetObjProperty (gate, "DestX");
+	var y := GetObjProperty (gate, "DestY");
+	var z := GetObjProperty (gate, "DestZ");
+	var rlm := GetObjProperty (gate, "DestR");
+	if (!rlm)
+		rlm := REALM_BRITANNIA;
+	endif
+
+	if (!x or !y)
+		return;
+	endif
+	if(MoveObjectToLocation( mobile, x, y, z, rlm, MOVEOBJECT_NORMAL ))
+		SetWeatherForPlayer (mobile);
+		SetObjProperty (mobile, "#justgated", 1);
+		sleep (1);
+		EraseObjProperty (mobile, "#justgated");
+	endif
+	
+	if (GetObjProperty (gate, "dark"))
+		if (mobile.race != RACE_ELF)
+			mobile.SetLightLevel (20, 0);
+			start_script (":lighting:famine_lighting", mobile);
+		endif
+	endif
+
+	//special gates to T2A snow lands for snowball fights
+	if (GetObjProperty (gate, "makesnowballs"))
+		RemoveSnowballs (mobile);
+		if (mobile.acctname)
+			CreateItemInContainer (mobile.backpack, 0x1705a, 1);
+			CreateItemInContainer (mobile.backpack, 0x1705a, 1);
+			CreateItemInContainer (mobile.backpack, 0x1705a, 1);
+			CreateItemInContainer (mobile.backpack, 0x1705a, 1);
+			CreateItemInContainer (mobile.backpack, 0x1705a, 1);			
+		endif
+	elseif (GetObjProperty (gate, "removesnowballs"))
+		RemoveSnowballs (mobile);
+	endif
+endprogram
+
+
+
+
+function RemoveSnowballs (mobile)
+	foreach item in EnumerateItemsInContainer (mobile.backpack)
+		if (item.objtype == 0x1705a)
+			DestroyItem (item);
+		endif
+	endforeach
+endfunction
+
+
+
+
+
+

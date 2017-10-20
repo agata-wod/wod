@@ -1,0 +1,26 @@
+use uo;
+
+program relock( who )
+
+    SendSysmessage( who , "Target a KEY first." );
+    var key := Target( who );
+    if(! key)
+       SendSysmessage( who , "Cancelled." );
+       return;
+    endif
+
+    SendSysmessage( who , "Target a door or Container now." );
+    var LockedItem := Target( who );
+
+    if(! lockeditem)
+       SendSysmessage( who , "Cancelled." );
+       return;
+    endif
+
+    var lockid := GetObjProperty(key, "lockid");
+
+    SetObjProperty( lockeditem , "lockid" , lockid );
+    
+    SendSysmessage( who , "Changed the item to match that key." );
+
+endprogram

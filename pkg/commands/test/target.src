@@ -1,0 +1,4 @@
+use uo;program textcmd_target( who)    var coords := TargetCoordinates( who );    SendSysmessage( who, "Info: " + coords );
+endprogram
+
+

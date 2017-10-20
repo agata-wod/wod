@@ -1,0 +1,19 @@
+use uo;
+use os;
+
+const FLUSH_TIME_SECONDS := 300;
+
+program onremove_chest (character, container, item, movetype)
+	if (character and item and movetype)
+	endif
+	SetObjProperty (container, "#nextflush", ReadGameClock() + FLUSH_TIME_SECONDS);
+	if (container.item_count > 1)
+		if (GetObjProperty (container, "#nextspam") < ReadGameClock())
+			SetObjProperty (container, "#nextspam", ReadGameClock() + 60);
+			PrintTextAbove (container, "This trash barrel will be cleared in 5 minutes");
+		endif
+	endif
+	container.name := container.desc;
+	return 1;
+endprogram
+

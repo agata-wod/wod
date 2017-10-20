@@ -1,0 +1,44 @@
+//This is called the moongate script, but its actually not:  those use the
+//makedtele script.  These are teleporters made by the gate spell and the like
+
+use os;
+use uo;
+include "include/client";
+
+program walk_on_moongate( mobile, gate )
+
+	if ( (mobile.npctemplate) and ((mobile.graphic == 400 or mobile.graphic == 401)) )
+		return;
+	endif
+
+	var x := GetObjProperty( gate, "GateDestX" );
+	var y := GetObjProperty( gate, "GateDestY" );
+	var z := GetObjProperty( gate, "GateDestZ" );
+	var rlm := GetObjProperty( gate, "GateDestR" );
+
+	if (!gate or GetObjProperty( mobile, "#justgated" ))
+		EraseObjProperty( mobile, "#justgated" );
+		return;
+	endif
+	
+	//occasionally forbid certain people from using the gate.  This is an
+	//array of serials, if set
+	if (GetObjProperty (gate, "#forbidden_gaters"))
+		var forbidden_gaters := GetObjProperty (gate, "#forbidden_gaters");
+		if (mobile.serial in forbidden_gaters)
+			return;
+		endif
+	endif
+	
+	
+	
+   if(MoveObjectToLocation( mobile, x, y, z, rlm, MOVEOBJECT_NORMAL ))
+		if (!mobile.concealed)
+			PlaySoundEffect( mobile, SFX_SPELL_RECALL );
+		endif
+		SetObjProperty( mobile, "#justgated", 1 );
+		sleep(1);
+		EraseObjProperty( mobile, "#justgated" );
+	endif
+
+endprogram

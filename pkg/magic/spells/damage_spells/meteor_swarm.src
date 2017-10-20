@@ -1,0 +1,54 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+var spell_circle := 7;
+
+program cast_meteor( parms, spellid )
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms, spellid))
+		return 0;
+	endif
+	var cast_on := GetSpellCastOn (caster, parms);
+	if (!cast_on)
+		return 0;
+	endif
+	
+	var range := 3;
+	if (GetAttribute (caster, ATTRIBUTEID_MAGERY) > 95)
+		range := range + 1;
+	endif
+
+	if (GetAttribute (caster, ATTRIBUTEID_INVOCATION) > 95)
+		range := range + 2;
+	elseif (GetAttribute (caster, ATTRIBUTEID_INVOCATION) > 75)
+		range := range + 1;
+	endif
+	
+	var dmg := 0;
+	foreach mobile in ListMobilesNearLocationEx (cast_on.x, cast_on.y, cast_on.z, range, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, cast_on.realm)
+		if (!mobile.hidden or !GetObjProperty (mobile, "#specialhidden_nodamage"))
+			dmg := Resisted (caster, mobile, CalcSpellDamageByCircle (spell_circle-1));
+			if (caster.acctname)
+				if (mobile.npctemplate)
+					if (!GetObjProperty (mobile, "master"))
+						dmg := CINT (dmg * 1.5 + 1);
+					endif
+				endif
+			endif
+
+			PlaySoundEffect (mobile , SFX_SPELL_FIREBALL);
+			PlayMovingEffect (caster, mobile, FX_FIREBALL, 5, 1);
+			DoDamageByType (caster, mobile, CINT (dmg/2), DAMAGETYPE_FIRE);
+			sleepms (500);
+			PlaySoundEffect (mobile , SFX_SPELL_FIREBALL);
+			PlayMovingEffect (caster, mobile, FX_FIREBALL, 5, 1);
+			DoDamageByType (caster, mobile, CINT (dmg/2), DAMAGETYPE_FIRE);
+		endif
+    	endforeach
+	return 1;
+endprogram

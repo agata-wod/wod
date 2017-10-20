@@ -1,0 +1,527 @@
+use uo;
+use os;
+use cfgfile;
+
+include "include/client";
+include "include/objtype";
+include "include/gumps";
+include "include/magic";
+include "include/attributes";
+include "include/math";
+include "include/newperformaction";
+
+Const OBJTYPE_RUNE := 0x1F14;
+Const SPELL_CIRCLE := 7;
+
+const X1 := 28;  // Layout starting point definitions
+const X2 := 210; //
+const Y1 := 20;  //
+const Y2 := 115; //
+
+Const RUNE_TILE_OFFSET_X := 30;
+Const TEXT_OFFSET_X := 35;
+Const NAME_TEXT1_OFFSET_X := 60;
+Const NAME_TEXT2_OFFSET_X := 60;
+Const NAME_TEXT1_OFFSET_Y := 0;
+Const NAME_TEXT2_OFFSET_Y := 15;
+Const RENAME_TEXT_OFFSET_Y := 40;
+Const REMOVE_TEXT_OFFSET_Y := 60;
+Const BLUE_BUTTON_OFFSET_X := 20;
+Const GATE_BUTTON_OFFSET_X := 110;
+Const GATE_BUTTON_OFFSET_Y := 40;
+
+var critical_runes := array{ 5,9,13,17,21,25,29 }; //rune numbers that signal a new book page
+
+var runecount := 0;   //this is rune number x
+var pagecount := 1;   //this is page number y
+
+//The normal gump layout array
+var layout := array {
+	"nodispose",
+	"page 0",
+	"gumppic 0 0 500",               //book gump
+	"button 32 236 2462 2461 1 0 1", //add button
+	"button 90 230 4020 4022 1 0 0" //cancel button
+};
+
+//We'll fill this in later
+var data := array { };
+
+
+program runebook( parms )
+	var who := parms[1];
+	var book := parms[2];
+	book.newbie := 1;
+
+	//take the data stored in the book and fill in the gump's data and layout
+	FillInArrays(book);
+
+	var result := SendDialogGump (who, layout, data); //show the client the gump
+	if (!result[0])
+		return;
+	endif
+
+	//normalize the result so we know which rune we're talking about
+	var normalized_result := NormalizeReturnValue (result[0]);
+
+	case (normalized_result)
+		0:	return;													//exit
+		1:	//add a rune
+			if (book.movable)
+				AddRune ( who , book );
+				return;
+			else
+				SendSysMessage (who, "You can't add a rune to a locked down book.");
+				return;
+			endif
+		2:	return;													//nothing
+		3:	//rename a rune
+			if (book.movable)
+				RenameSelectedRune (who, book, result[0]);
+				return;
+			else
+				SendSysMessage (who, "You can't rename runes in locked down books.");
+				return;
+			endif
+		4:	//remove a rune
+			if (book.movable)
+				RemoveRuneFromBook (who, book, result[0]);
+				return;
+			else
+				SendSysMessage (who, "You can't remove runes from locked down books.");
+				return;
+			endif
+		5:	var selected_rune_struct := FindThatRune (book, result[0]);		//cast gate
+			var gate_return := TryToCreateGate ( who , selected_rune_struct );
+			if (!gate_return)
+				return;
+			endif
+		default:
+	endcase
+endprogram
+
+
+
+
+///////////////////
+//  Fills in the data and the layout for the runebook gump
+///////////////////
+
+function FillInArrays(book)
+
+	var i := 1;
+	var datalen;
+	var layoutlen;
+	var line1;
+	var line2;
+	var page_rune_num;
+	var buttonret := 3;
+	var runedefs := GetObjProperty( book, "runedefs" );
+
+	if( runedefs )
+		layout.append( "page " + cstr(pagecount) );                 //first page
+		layout.append( "gumppic 374 200 " + cstr(2224+pagecount) ); //lil page number gump
+
+		foreach runedef in runedefs
+			runecount := runecount + 1;
+			datalen := data.size();
+			layoutlen := layout.size();
+
+			var txt := runedef[1];
+
+			if( len(txt) <= 10 )
+				line1 := txt;
+				line2 := "";
+			else
+				line1 := txt[1,10];  //grab the first ten chars in runedef[1] (rune description)
+				line2 := txt[11,len(txt)-10]; //grab last 10 since we limit descs to 20 chars
+			endif
+			data.append( line1 );
+			data.append( line2 );
+
+			data.append ("Rename");
+			data.append ("Destroy");
+
+			if( runecount in critical_runes )   //we've gone over a page boundary
+				layout.append( "button 356 0 502 502 0 " + cstr(pagecount + 1) ); //add next page button
+				pagecount := pagecount + 1;                                       //we're on a new page now
+				layout.append( "page " + pagecount );                             //and we write that to layout
+ 				layout.append( "gumppic 374 200 " + cstr( 2224 + pagecount ) );   //add the next page number gump
+				layout.append( "button 0 0 501 501 0 " + cstr(pagecount-1) );     //add a prev page button
+			endif
+
+			//let the hardcoding begin!
+			//general layout:
+			// +---------------+
+			// |   1   |   3   |
+			// |       |       |
+			// |   2   |   4   |
+			// +---------------+
+			page_rune_num := i - (pagecount-1) * 4;  //which rune am i on for this page? 1-4?
+
+			//depending on which, i write a tilepic, 2 texts, and 2 buttons tp that quardant.
+			//the offsets make it easy to reposition the objects
+			//yes, only 4 per page, didnt want it getting cluttered.
+			case( page_rune_num )
+				1:	layout.append( "tilepic " + cstr (X1 + RUNE_TILE_OFFSET_X ) + " " + cstr(Y1 + 2 ) + " 7956" );
+					layout.append( "text " + cstr(X1 + NAME_TEXT1_OFFSET_X) + " " + cstr( Y1 + NAME_TEXT1_OFFSET_Y ) + " 0 " + datalen );
+					layout.append( "text " + cstr(X1 + NAME_TEXT2_OFFSET_X) + " " + cstr( Y1 + NAME_TEXT2_OFFSET_Y ) + " 0 " + cstr(datalen+1) );
+					layout.append( "text " + cstr(X1 + TEXT_OFFSET_X) + " " + cstr( Y1 + RENAME_TEXT_OFFSET_Y ) + " 0 " + cstr(datalen+2) );
+					layout.append( "text " + cstr(X1 + TEXT_OFFSET_X) + " " + cstr( Y1 + REMOVE_TEXT_OFFSET_Y ) + " 0 " + cstr(datalen+3) );
+					layout.append( "button " + cstr (X1 + BLUE_BUTTON_OFFSET_X) + " " + cstr (Y1 + RENAME_TEXT_OFFSET_Y + 5) + " 2103 2104 1 0 " + buttonret );
+					buttonret := buttonret + 1;
+					layout.append( "button " + cstr (X1 + BLUE_BUTTON_OFFSET_X) + " " + cstr (Y1 + REMOVE_TEXT_OFFSET_Y + 5) + " 2103 2104 1 0 " + buttonret );
+					buttonret := buttonret + 1;
+					layout.append( "button " + cstr(X1 + GATE_BUTTON_OFFSET_X) + " " + cstr(Y1 + GATE_BUTTON_OFFSET_Y) + " 2291 2291 1 0 " + buttonret );
+          
+				2:	layout.append( "tilepic " + cstr (X1 + RUNE_TILE_OFFSET_X ) + " " + cstr(Y2 + 2 ) + " 7956" );
+					layout.append( "text " + cstr(X1 + NAME_TEXT1_OFFSET_X) + " " + cstr( Y2 + NAME_TEXT1_OFFSET_Y ) + " 0 " + datalen );
+					layout.append( "text " + cstr(X1 + NAME_TEXT2_OFFSET_X) + " " + cstr( Y2 + NAME_TEXT2_OFFSET_Y ) + " 0 " + cstr(datalen+1) );
+					layout.append( "text " + cstr(X1 + TEXT_OFFSET_X) + " " + cstr( Y2 + RENAME_TEXT_OFFSET_Y ) + " 0 " + cstr(datalen+2) );
+					layout.append( "text " + cstr(X1 + TEXT_OFFSET_X) + " " + cstr( Y2 + REMOVE_TEXT_OFFSET_Y ) + " 0 " + cstr(datalen+3) );
+					layout.append( "button " + cstr (X1 + BLUE_BUTTON_OFFSET_X) + " " + cstr (Y2 + RENAME_TEXT_OFFSET_Y + 5) + " 2103 2104 1 0 " + buttonret );
+					buttonret := buttonret + 1;
+					layout.append( "button " + cstr( X1 + BLUE_BUTTON_OFFSET_X) + " " + cstr( Y2 + REMOVE_TEXT_OFFSET_Y + 5) + " 2103 2104 1 0 " + buttonret );
+					buttonret := buttonret + 1;
+					layout.append( "button " + cstr(X1 + GATE_BUTTON_OFFSET_X) + " " + cstr(Y2 + GATE_BUTTON_OFFSET_Y) + " 2291 2291 1 0 " + buttonret );
+
+				3:	layout.append( "tilepic " + cstr (X2 + RUNE_TILE_OFFSET_X ) + " " + cstr(Y1 + 2 ) + " 7956" );
+					layout.append( "text " + cstr(X2 + NAME_TEXT1_OFFSET_X) + " " + cstr( Y1 + NAME_TEXT1_OFFSET_Y ) + " 0 " + datalen );
+					layout.append( "text " + cstr(X2 + NAME_TEXT2_OFFSET_X) + " " + cstr( Y1 + NAME_TEXT2_OFFSET_Y ) + " 0 " + cstr(datalen+1) );
+					layout.append( "text " + cstr(X2 + TEXT_OFFSET_X) + " " + cstr( Y1 + RENAME_TEXT_OFFSET_Y ) + " 0 " + cstr(datalen+2) );
+					layout.append( "text " + cstr(X2 + TEXT_OFFSET_X) + " " + cstr( Y1 + REMOVE_TEXT_OFFSET_Y ) + " 0 " + cstr(datalen+3) );
+					layout.append( "button " + cstr (X2 + BLUE_BUTTON_OFFSET_X) + " " + cstr (Y1 + RENAME_TEXT_OFFSET_Y + 5) + " 2103 2104 1 0 " + buttonret );
+					buttonret := buttonret + 1;
+					layout.append( "button " + cstr( X2 + BLUE_BUTTON_OFFSET_X) + " " + cstr( Y1 + REMOVE_TEXT_OFFSET_Y + 5) + " 2103 2104 1 0 " + buttonret );
+					buttonret := buttonret + 1;
+					layout.append( "button " + cstr(X2 + GATE_BUTTON_OFFSET_X) + " " + cstr(Y1 + GATE_BUTTON_OFFSET_Y) + " 2291 2291 1 0 " + buttonret );
+
+				4:	layout.append( "tilepic " + cstr (X2 + RUNE_TILE_OFFSET_X ) + " " + cstr(Y2 + 2 ) + " 7956" );
+					layout.append( "text " + cstr(X2 + NAME_TEXT1_OFFSET_X) + " " + cstr( Y2 + NAME_TEXT1_OFFSET_Y ) + " 0 " + datalen );
+					layout.append( "text " + cstr(X2 + NAME_TEXT2_OFFSET_X) + " " + cstr( Y2 + NAME_TEXT2_OFFSET_Y ) + " 0 " + cstr(datalen+1) );
+					layout.append( "text " + cstr(X2 + TEXT_OFFSET_X) + " " + cstr( Y2 + RENAME_TEXT_OFFSET_Y ) + " 0 " + cstr(datalen+2) );
+					layout.append( "text " + cstr(X2 + TEXT_OFFSET_X) + " " + cstr( Y2 + REMOVE_TEXT_OFFSET_Y ) + " 0 " + cstr(datalen+3) );
+					layout.append( "button " + cstr (X2 + BLUE_BUTTON_OFFSET_X) + " " + cstr (Y2 + RENAME_TEXT_OFFSET_Y + 5) + " 2103 2104 1 0 " + buttonret );
+					buttonret := buttonret + 1;
+					layout.append( "button " + cstr( X2 + BLUE_BUTTON_OFFSET_X) + " " + cstr( Y2 + REMOVE_TEXT_OFFSET_Y + 5) + " 2103 2104 1 0 " + buttonret );
+					buttonret := buttonret + 1;
+					layout.append( "button " + cstr(X2 + GATE_BUTTON_OFFSET_X) + " " + cstr(Y2 + GATE_BUTTON_OFFSET_Y) + " 2291 2291 1 0 " + buttonret );
+
+			endcase
+
+			buttonret := buttonret + 1;
+			i := i + 1;
+			sleepms(100);
+		endforeach
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  Allows the user to choose a rune to add to the runebook
+///////////////////
+
+function AddRune( who , book )
+
+	SendSysmessage( who , "Target a recall rune for scribing" );
+	var rune := Target( who );
+	if( rune == error or rune.objtype != OBJTYPE_RUNE )
+		SendSysmessage( who , "Cancelled." );
+		return;
+	endif
+
+	if( !GetObjProperty( rune , "x" ) )  //so you cant add any runes marked at x=0, not like there's land to do it on anyway.
+		Sendsysmessage( who , "You can only add marked runes." );
+		return;
+	endif
+
+	var x := GetObjProperty( rune, "x" );
+	var y := GetObjProperty( rune, "y" );
+	var z := GetObjProperty( rune, "z" );
+	var realm := GetObjProperty( rune, "realm" );
+	var rname := rune.desc - "A recall rune for ";
+	var new_rune_struct := array{ rname , x , y , z, realm };
+	//here we add this rune's info to the cprop array
+	var runedefs := GetObjProperty( book , "runedefs" );
+
+	If (checkskill (who, SKILLID_INSCRIPTION, -1, 0) )
+		if (!runedefs)
+			var new_runedefs := array{new_rune_struct};
+			SetObjProperty( book , "runedefs" , new_runedefs );
+		elseif( runedefs.size() == 32 )
+			SendSysmessage( who , "That rune book is full." );
+			return;
+		else
+			runedefs.append( new_rune_struct );
+			SetObjProperty( book , "runedefs" , runedefs );
+		endif
+	else
+		SendSysMessage(who, "You fail to scribe the rune.");
+		PlaySoundEffect (who, 0x005d);
+		PlayObjectCenteredEffect (who, 0x3735, 0x0a, 0x1e);
+	endif
+
+	DestroyItem (rune);
+	PlaySoundEffect(who, 0x50); 
+
+endfunction
+
+
+
+
+///////////////////
+//  takes the value passed to it and returns the mod of 3
+///////////////////
+
+function NormalizeReturnValue( button_num )
+
+	//returns 2 or 3 depending if recall or gate was clicked
+	if( button_num == 1 )
+		return 1;
+	elseif( button_num == 2 )
+		return 2;
+	elseif( button_num == 3 )
+		return 3;               //because the Mod function tests for > not >= 
+	endif
+
+	var mod_ret := Mod( button_num, 3);
+	return (mod_ret + 3);
+
+endfunction
+
+
+
+
+///////////////////
+//  figures out which rune struct we need
+///////////////////
+
+function FindThatRune( book , button_num )
+
+	var runedefs := GetObjProperty( book , "runedefs" );
+	var rune_num := cint( button_num / 3);
+	return( runedefs[rune_num] );
+
+endfunction
+
+
+
+
+///////////////////
+//  Removed the selected rune from the runebook
+///////////////////
+
+function RemoveRuneFromBook (who, book, result)
+
+	var rune_number := cint(result/3);
+
+	var certain := YesNo (who, "Are you sure?");
+
+	if (!certain)
+		return;
+	else
+		var runedefs := GetObjProperty( book , "runedefs" );
+		var number_of_runedefs := len(runedefs);
+		var new_runedefs := array{};
+
+		for i := 1 to number_of_runedefs
+			if (i != rune_number)
+				new_runedefs.append (runedefs[i]);
+			endif
+		endfor
+
+		SetObjProperty (book, "runedefs", new_runedefs);
+	endif
+
+
+
+
+endfunction
+
+
+
+
+///////////////////
+//  allows the user to enter a new name for the rune that was selected
+///////////////////
+
+function RenameSelectedRune (who, book, result)
+
+	var rune_number := cint(result/3);
+
+	//load the rune definitions from the book
+	var runedefs := GetObjProperty( book , "runedefs" );
+	if (!runedefs)
+		return;
+	endif
+
+	//pick out the rune selected
+	var selected_rune := runedefs[rune_number];
+	if (!selected_rune)
+		return;
+	endif
+
+	//request the user to enter a new name
+	var rune_name := RequestInput (who, book, "Please enter a description for this rune. (max 20 characters)" );
+
+	//make sure that they entered a name, and that it's not longer than 20 characters
+	if (!rune_name)
+		SendSysMessage (who, "Canceled.");
+		return;
+	elseif (len(rune_name) > 20)
+		SendSysMessage (who, "The name must be 20 characters or less.");
+		return;
+	else
+		selected_rune[1] := rune_name;
+	endif
+
+	//erase the old rune and insert the new one
+	runedefs.erase (rune_number);
+	runedefs.insert (rune_number, selected_rune);
+	SetObjProperty (book, "runedefs", runedefs);
+endfunction
+
+
+
+
+///////////////////
+//  Tries to create a gate, by either spell or scroll, for the caster
+///////////////////
+
+function TryToCreateGate (caster, parms)
+	//make sure its not someone elses house
+	var locrealm := parms[5];
+	if (!locrealm)
+		locrealm := _DEFAULT_REALM;
+	endif
+	var sign := FindHouseSignAtLocation (parms[2], parms[3], locrealm);
+	if (sign)
+		if (!IsAFriend (sign, caster))
+			SendSysMessage (caster, "You can't gate to there!");
+			return 0;
+		endif
+	endif
+
+	//first we try to find a gate scroll in the character's main backpack
+	var gate_scroll := FindObjtypeInContainer (caster.backpack, 0x1f60);
+	if (!gate_scroll)
+		return TryToCastGateSpell (caster, parms);
+	endif
+
+	var gatemenu := CreateMenu ("How do you want to gate?");
+	AddMenuItem (gatemenu, 0, "Cast Gate Spell");
+	AddMenuItem (gatemenu, 0, "Use Gate Scroll");
+
+	var menu_return := SelectMenuItem2 (caster, gatemenu);
+	if (!menu_return)
+		SendSysMessage (caster, "Canceled.");
+		return 1;
+	endif
+
+	if (menu_return.index == 1)
+		return TryToCastGateSpell (caster, parms);
+	else
+		return TryToUseGateScroll (caster, parms, gate_scroll);
+	endif
+
+endfunction
+
+
+
+
+///////////////////
+//  tries to cast the gate spell
+///////////////////
+
+function TryToCastGateSpell (caster, parms)
+	var target_x := parms[2];
+	var target_y := parms[3];
+	var target_z := parms[4];
+	var target_rlm := parms[5];
+	if (!target_rlm)
+		target_rlm := _DEFAULT_REALM;
+	endif
+
+	SpeakPowerWords (caster, 52);
+	NewPerformAction (caster, NPA_ANIM_SPELL, NPA_SPELL_AREASPELL, NPA_AREASPELL_SUB);
+	sleep(1);
+	if (!CanCastSpell (caster, SPELL_CIRCLE))
+		Fizzle (caster);
+		return 0;
+	endif
+	if (!FreeHands (caster))
+		Fizzle (caster);
+		return 0;
+	endif
+
+	if (!CheckSkill ( caster, SKILLID_MAGERY, GetSpellDifficulty (52), 0 ) )
+		Fizzle (caster);
+		return 0;
+	endif
+
+	if(!ConsumeReagents( caster, 52 ))
+		PrintTextAbovePrivate (caster, "*No reagents!*", caster);
+		Fizzle (caster);
+		return 0;
+	endif
+
+	if(!ConsumeSpellManaCostByID (caster, 52))
+		return 0;
+	endif
+
+	DoGateSpellEffect (caster, target_x, target_y, target_z, target_rlm);
+	return 1;
+
+endfunction
+
+
+
+
+///////////////////
+//  tries to cast gate from the given scroll
+///////////////////
+
+function TryToUseGateScroll (caster, parms, scroll)
+
+	if (GetAttribute (caster, ATTRIBUTEID_MAGERY) + 20 < GetSpellDifficulty (52))
+		SendSysMessage (caster, "You have no chance of using that scroll.");
+		return;
+	endif
+
+	var target_x := parms[2];
+	var target_y := parms[3];
+	var target_z := parms[4];
+	var target_rlm := parms[5];
+	if (!target_rlm)
+		target_rlm := _DEFAULT_REALM;
+	endif
+
+	SpeakPowerWords (caster, 52);
+	NewPerformAction (caster, NPA_ANIM_SPELL, NPA_SPELL_AREASPELL, NPA_AREASPELL_SUB);
+	sleep(1);
+	if (!CanCastSpell (caster, SPELL_CIRCLE - 2))
+		return 0;
+	endif
+	if (!FreeHands (caster))
+		return 0;
+	endif
+
+	if (!CheckSkill (caster, SKILLID_MAGERY, GetSpellDifficulty (52) - 20, 0 ) )
+		return 0;
+	endif
+
+	if(!ConsumeSpellManaCostByID (caster, 52))
+		PrintTextAbovePrivate(caster,"*No mana!*", caster);
+		return 0;
+	endif
+
+	SubtractAmount (scroll, 1);
+	DoGateSpellEffect (caster, target_x, target_y, target_z, target_rlm);
+	return 1;
+
+endfunction
+
+
+

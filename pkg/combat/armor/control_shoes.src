@@ -1,0 +1,11 @@
+//fix the graphic of shoes.  Why?  Because...
+
+use uo;
+use os;
+
+program control_shoes (shoes)
+	if (shoes.graphic == 0x170F)
+		shoes.graphic := 0x1710;
+	endif
+	return;
+endprogram

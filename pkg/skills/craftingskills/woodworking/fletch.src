@@ -1,0 +1,58 @@
+use uo;
+use math;
+use attributes;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+
+program on_fletch ( character, shafts )
+
+	if (!ReserveItem (shafts) )
+		SendSysMessage (character, "I can't use those right now.");
+		return;
+	endif
+
+	var feathers := FindObjtypeInContainer (character.backpack, UOBJ_FEATHER);
+	if (!feathers)
+		SendSysMessage (character, "You need some feathers.");
+		return;
+	endif
+
+	if (!ReserveItem (feathers) )
+		SendSysMessage (character, "You need some feathers.");
+		return;
+	endif
+
+	var fletchmenu := CreateMenu("Flecthing:");
+	AddMenuItem (fletchmenu, 0x0f3f, "arrows");
+	AddMenuItem (fletchmenu, 0x1bfb, "bolts");
+	var choice := SelectMenuItem2 ( character , fletchmenu );
+	if (!choice)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	var num_to_make := Min ( shafts.amount, feathers.amount );
+
+	if (CheckSkill (character, SKILLID_CARPENTRY, 20, 0) )
+		var arrows := CreateItemInBackpack (character, choice.objtype, num_to_make);
+		if (!arrows)
+			PrintTextAbovePrivate (character, "*Your backpack is full*", character);
+			return;
+		endif
+
+		SubtractAmount (shafts, num_to_make);
+		SubtractAmount (feathers, num_to_make);
+		if (arrows.objtype == UOBJ_ARROW)
+			SendSysMessage (character, "You put the arrows in your backpack.");
+		else
+			SendSysMessage (character, "You put the bolts in your backpack.");
+		endif
+	else
+		SubtractAmount ( shafts, 1 );
+		SubtractAmount ( feathers, 1 );
+		SendSysMessage ( character, "You destroy some materials." );
+	endif
+
+endprogram

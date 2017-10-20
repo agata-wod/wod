@@ -1,0 +1,49 @@
+use uo;
+use os;
+use http;
+use datafile;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/string";
+
+program list_character_names ()
+	WriteHTML ("<html><head><title>Character Name List</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+	
+	var charnamedict := dictionary;
+
+	var account, player;
+	foreach acctname in ListAccounts ()
+		account := FindAccount (acctname);
+		if (account)
+			for counter := 1 to 7
+				player := account.GetCharacter (counter);
+				if (player)
+					if (charnamedict.exists (player.name))
+						charnamedict[player.name] := charnamedict[player.name] + 1;
+					else
+						charnamedict.insert (player.name, 1);
+					endif
+				endif
+			endfor
+		endif
+	endforeach
+	
+	
+	WriteHTML ("<ul>");
+	foreach key in (charnamedict.keys())
+		WriteHTML ("<li>" + key);
+		if (charnamedict[key] > 1)
+			WriteHTML (" (" + charnamedict[key] + ")");
+		endif
+		WriteHTML ("</li>");
+	endforeach
+	WriteHTML ("</ul>");
+
+	WriteHTML ("</body></html>");
+endprogram
+
+
+

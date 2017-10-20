@@ -1,0 +1,67 @@
+use uo;
+use os;
+
+include "include/gumps";
+
+program play_games (character, text)
+	unload_scripts (":games:blackjack");
+
+	if (GetObjProperty (character, "#playing_games"))
+		if (GetProcess (GetObjProperty (character, "#playing_games")))
+			SendSysmessage (character, "You're already playing a game!");
+			return;
+		endif
+	endif
+	SetObjProperty (character, "#playing_games", GetPID());
+
+	if (text)
+		text := Lower (text);
+		if (text == "jacks" or text == "jacks or better" or text == "vp" or text == "video poker")
+			start_script (":games:poker_jacks_or_better", character);
+			return;
+		elseif (text == "bj" or text == "blackjack")
+			start_script (":games:blackjack", character);
+			return;
+		else
+			if (!text["help"])
+				SendSysMessage (character, "Unknown game.");
+			endif
+			var thestring := ".GAMES:<p>  Accesses assorted games.";
+			thestring := thestring + "<p>Possible options:";
+			thestring := thestring + "<br>.GAMES JACKS - Jacks of Better Video Poker";
+			thestring := thestring + "<br>.GAMES BLACKJACK - Single-player Blackjack";
+			SendStringAsHtmlWindow (character, thestring, ".GAMES help");
+			EraseObjProperty (character, "#playing_games");
+			return;
+		endif
+	endif
+	
+	var game_selection := Array {
+		"Jacks or Better",
+		"Blackjack"
+	};
+	var thegame := DisplayMenuSelectionGump (character, "Pick a Game", game_selection);
+	if (!thegame)
+		SendSysMessage (character, "Canceled");
+		return;
+	endif
+	
+	thegame := game_selection[thegame];
+	case (thegame)
+		"Jacks or Better":
+			start_script (":games:poker_jacks_or_better", character);
+		"Blackjack":
+			start_script (":games:blackjack", character);
+		default:
+			SendSysMessage (character, "Canceled.");
+			EraseObjProperty (character, "#playing_games");
+			return;
+	endcase
+	
+endprogram
+
+
+
+
+
+

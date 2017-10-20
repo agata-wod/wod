@@ -1,0 +1,67 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/eventid";
+include "include/attributes";
+
+program skill_stealth (hider)
+	if (GetObjProperty (hider, "#useskill"))
+		if (GetProcess (GetObjProperty (hider, "#useskill")))
+			PrintTextAbovePrivate (hider, "I am already performing another action.", hider);
+			return;
+		endif
+	endif
+//	SetObjProperty (hider, "#useskill", GetPid());
+
+	if (GetAttribute (hider, ATTRIBUTEID_HIDING) <= 70)
+		PrintTextAbovePrivate (hider, "You are not good enough at Hiding to do that", hider);
+		return;
+	endif
+
+	if (hider.warmode)
+		PrintTextAbovePrivate (hider, "You cannot stealth while in War Mode.", hider);
+		return;
+	endif
+
+	var mount := GetEquipmentByLayer (hider, 25);
+	if (mount)
+		PrintTextAbovePrivate (hider, "You cannot stealth while mounted.", hider);
+		return;
+	endif
+
+	if (!hider.hidden)
+		PrintTextAbovePrivate (hider, "You must be hidden to use stealth", hider);
+		return;
+	endif
+
+	var skill := GetAttribute (hider, ATTRIBUTEID_STEALTH);
+	var steps := CINT (skill / 10) + 1;
+	if (skill > 80)
+		steps := steps + 10;
+	elseif ( skill > 60 )
+		steps := steps + 5;
+	endif	
+
+	if (CheckSkill (hider, SKILLID_STEALTH, -1, 0 ))
+        	hider.stealthsteps := steps;
+        	PrintTextAbovePrivate( hider, "You are now moving stealthily", hider );    
+    	else
+        	hider.hidden := 0;
+        	PrintTextAbovePrivate (hider, "You have revealed yourself!", hider);    
+	endif
+
+	detach();
+
+	var ev := struct;
+	ev.+type := EVID_ENTEREDAREA;
+	ev.+source := hider;
+
+	while (hider.hidden)
+		sleepms(500);
+	endwhile
+
+	foreach critter in ListMobilesNearLocation (hider.x, hider.y, hider.z, 10, hider.realm)
+		SendEvent(critter, ev);
+	endforeach
+endprogram

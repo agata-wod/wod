@@ -1,0 +1,35 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/math";
+
+Const EFFECT_SPARKLE := 0x373a;
+Const SOUND_EFFECT_RES := 0x215;
+
+program virtuewalkon( parms );
+
+	var who := parms[1];
+	var item := parms[2];
+
+	if (who.npctemplate) return; endif
+
+	var shrine:= getobjproperty(item,"shrine");
+	if (!shrine ) return; endif
+
+	var shrineflag := getobjproperty(who,"shrines");
+	if (!shrineflag) shrineflag := 0; endif
+	if (!FlagCheck(shrineflag, shrine))
+		PrintTextAbovePrivate(who,"You ponder...", who);
+	else
+		PrintTextAbovePrivate(who,"You know...", who);
+	endif
+	sleep(2);
+	var codex := ReadConfigFile(":dundee:codex");
+	var elem := FindConfigElem(codex, shrine);
+	var thoughts := GetConfigStringArray(elem,"text");
+	PrintTextAbovePrivate(who,thoughts[ RandomInt(len(thoughts))+1 ],who);
+
+endprogram

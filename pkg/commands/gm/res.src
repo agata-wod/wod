@@ -1,0 +1,20 @@
+use uo;
+
+program textcmd_res( speaker )
+    var tgt := TargetCoordinates( speaker );
+    if (tgt.mobile)
+        if (tgt.mobile.dead)
+            Resurrect( tgt.mobile );
+	    if (!GetObjProperty(tgt.mobile,"toadmode"))
+		tgt.mobile.graphic := tgt.mobile.trueobjtype;
+		tgt.mobile.color := tgt.mobile.truecolor;
+	    else
+		tgt.mobile.graphic := 0x51;
+		tgt.mobile.color := 1425;
+	    endif
+        else
+            SendSysMessage( speaker, "But that's not dead!" );
+        endif
+
+    endif
+endprogram

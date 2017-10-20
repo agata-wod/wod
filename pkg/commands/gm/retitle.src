@@ -1,0 +1,106 @@
+use uo;
+use attributes;
+
+program textcmd_change_title (character, text)
+	if (!text)
+		var optionmenu := CreateMenu ("Select an option:");
+		AddMenuItem (optionmenu, 0, "Change prefix title");
+		AddMenuItem (optionmenu, 0, "Change suffix title");
+		AddMenuItem (optionmenu, 0, "Change race title");
+		AddMenuItem (optionmenu, 0, "Change guild title");
+		var selection := SelectMenuItem2 (character, optionmenu);
+		if (!selection)
+			SendSysMessage (character, "Canceled");
+			return;
+		endif
+		case (selection.index)
+			1:
+				SendSysMessage (character, "Shortcut is:  '.retitle prefix [new_title]'");
+				var title := SendTextEntryGump (character, "Enter the new title:", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+				text := "prefix " + title;
+			2:
+				SendSysMessage (character, "Shortcut is:  '.retitle suffix [new_title]'");
+				var title := SendTextEntryGump (character, "Enter the new title:", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+				text := "suffix " + title;
+			3:
+				SendSysMessage (character, "Shortcut is:  '.retitle race [new_title]'");
+				var title := SendTextEntryGump (character, "Enter the new title:", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+				text := "race " + title;
+			4:
+				SendSysMessage (character, "Shortcut is:  '.retitle guild [new_title]'");
+				var title := SendTextEntryGump (character, "Enter the new title:", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+				text := "guild " + title;
+			default:
+				SendSysMessage (character, "WTF?");
+				return;
+		endcase
+	endif
+
+	var splitted := SplitWords (text);
+	var command_word := Lower (splitted [1]);
+	if (!command_word)
+		SendSysMessage (character, "Error finding new title");
+		return;
+	endif
+
+	var new_title := text[(find(text, " ", 1)+1), len(text)];
+	if (new_title == command_word or !new_title)
+		new_title := "";
+	endif
+
+	case (command_word)
+		"prefix":
+		"suffix":
+		"race":
+		"guild":
+			//This is just here to split up the case statement
+			var stlgadd := 1;
+			if (stlgadd)
+			endif
+		default:
+			SendSysMessage (character, "Invalid option selected.  Use .retitle by itself to find valid options.");
+			return;
+	endcase
+
+	var targetted := Target (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	if (!GetAttribute (targetted, "Strength"))
+		SendSysMessage (character, "Invalid target.");
+		return;
+	endif
+	
+	case (command_word)
+		"prefix":
+			if (new_title)
+//				targetted.title_prefix := new_title + " ";
+				targetted.title_prefix := new_title;
+			else
+				targetted.title_prefix := "";
+			endif
+		"suffix":
+			if (new_title)
+//				targetted.title_suffix := ", " + new_title;
+				targetted.title_suffix := new_title;
+			else
+				targetted.title_suffix := "";
+			endif
+		"race":
+			if (new_title)
+				targetted.title_race := new_title;
+			else
+				targetted.title_race := "";
+			endif
+		"guild":
+			if (new_title)
+				targetted.title_guild := new_title;
+			else
+				targetted.title_guild := "";
+			endif
+		default:
+			SendSysMessage (character, "Invalid option selected.  Use .retitle by itself to find valid options.");
+			return;
+	endcase
+endprogram

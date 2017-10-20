@@ -1,0 +1,200 @@
+use uo;
+use os;
+
+
+program torch( character , item )
+	case (item.graphic)
+		//regular torch
+		0x0f64:	item.graphic := 0xa12;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x0a12:	item.graphic := 0x0f64;
+
+		//a lantern
+		0x0a18:	item.graphic := 0xa15;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x0a15:	item.graphic := 0xa18;
+
+		//another lantern
+		0x0a1d:	item.graphic := 0xa1a;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x0a1a:	item.graphic := 0xa1d;
+
+		//yet another lantern
+		0x0a25:	item.graphic := 0xa22;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x0a22:	item.graphic := 0xa25;
+
+		//single candle candlabra
+		0x0a26:	item.graphic := 0xb1a;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x0b1a:	item.graphic := 0xa26;
+
+		//small candlabra
+		0x0a27:	item.graphic := 0xb1d;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x0b1d:	item.graphic := 0xa27;
+
+		//large candlabra
+		0x0a29:	item.graphic := 0xb26;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x0b26:	item.graphic := 0xa29;
+
+		//small candle
+		0x0a28:	item.graphic := 0xa0f;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x0a0f:	item.graphic := 0xa28;
+
+		//short fat candle
+		0x142f:	item.graphic := 0x142c;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x142c:	item.graphic := 0x142f;
+
+		//medium candle
+		0x1433:	item.graphic := 0x1430;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x1430:	item.graphic := 0x1433;
+
+		//tall skinny candle
+		0x1437:	item.graphic := 0x1434;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x1434:	item.graphic := 0x1437;
+
+		//skull candle
+		0x1853:	item.graphic := 0x1854;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x1854:	item.graphic := 0x1853;
+
+		//square lamppost
+		0x0b21:	item.graphic := 0x0b20;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x0b20:	item.graphic := 0x0b21;
+
+		//round lamppost
+		0x0b23:	item.graphic := 0x0b22;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x0b22:	item.graphic := 0x0b23;
+
+		//fancy lamppost
+		0x0b25:	item.graphic := 0x0b24;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x0b24:	item.graphic := 0x0b25;
+
+		//wall scone on left
+		0x09fb:	item.graphic := 0x09fd;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x09fd:	item.graphic := 0x09fb;
+
+		//wall scone on right
+		0x0a00:	item.graphic := 0x0a02;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x0a02:	item.graphic := 0x0a00;
+
+		//wall torch on left
+		0x0a05:	item.graphic := 0x0a07;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x0a07:	item.graphic := 0x0a05;
+
+		//wall torch on right
+		0x0a0a:	item.graphic := 0x0a0c;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x0a0c:	item.graphic := 0x0a0a;
+
+		//Candle of Love
+		0x1c16:	item.graphic := 0x1c14;
+				PlaySoundEffect (item, 0x226);
+				item.facing := 29;
+		0x1c14:	item.graphic := 0x1c16;
+
+		//hourglass
+		0x1810:	item.graphic := 0x1811;
+		0x1811:	item.graphic := 0x1810;
+
+		//jack-o-lantern
+		0xa038:	item.graphic := 0xa039;
+				item.facing := 29;
+				PlaySoundEffect (item, 0x226);
+		0xa039:	item.graphic := 0xa038;
+				item.facing := 29;
+
+		0xa03c:	item.graphic := 0xa03d;
+				item.facing := 29;
+				PlaySoundEffect (item, 0x226);
+		0xa03d:	item.graphic := 0xa03c;
+				item.facing := 29;
+				
+		//shoji lantern
+		0x24bc:	item.graphic := 0x24bb;
+				item.facing := 29;
+				PlaySoundEffect (item, 0x226);
+		0x24bb:	item.graphic := 0x24bc;
+
+		//paper lantern
+		0x24be:	item.graphic := 0x24bd;
+				item.facing := 29;
+				PlaySoundEffect (item, 0x226);
+		0x24bd:	item.graphic := 0x24be;
+		
+		//statue lantern
+		0x24c0:	item.graphic := 0x24bf;
+				item.facing := 29;
+				PlaySoundEffect (item, 0x226);
+		0x24bf:	item.graphic := 0x24c0;
+
+		//red hanging lantern
+		0x24c2:	item.graphic := 0x24c1;
+				item.facing := 29;
+				PlaySoundEffect (item, 0x226);
+		0x24c1:	item.graphic := 0x24c2;
+
+		0x24c4:	item.graphic := 0x24c3;
+				item.facing := 29;
+				PlaySoundEffect (item, 0x226);
+		0x24c3:	item.graphic := 0x24c4;
+				
+		//white hanging lantern
+		0x24c6:	item.graphic := 0x24c5;
+				item.facing := 29;
+				PlaySoundEffect (item, 0x226);
+		0x24c5:	item.graphic := 0x24c6;
+
+		0x24c8:	item.graphic := 0x24c7;
+				item.facing := 29;
+				PlaySoundEffect (item, 0x226);
+		0x24c7:	item.graphic := 0x24c8;
+				
+		//round paper lantern
+		0x24ca:	item.graphic := 0x24c9;
+				item.facing := 29;
+				PlaySoundEffect (item, 0x226);
+		0x24c9:	item.graphic := 0x24ca;
+		
+		//gargish candelabra
+		0x4039:	item.graphic := 0x40be;
+				item.facing := 29;
+				PlaySoundEffect (item, 0x226);
+		0x40be:	item.graphic := 0x4039;
+		
+		default:
+			SendSysMessage (character, "You don't know how to use that.");
+			return;
+	endcase
+endprogram

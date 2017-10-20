@@ -1,0 +1,67 @@
+use uo;
+use os;
+use util;
+
+include "include/string";
+
+program checketherialitems (character)
+	SendSysMessage (character, "Target an item to make etherial:");
+	var targetted := Target (character);
+	if (!targetted)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+
+	var allserials := GetGlobalProperty ("etherialitems");
+	if (!allserials)
+		allserials := dictionary;
+	endif
+	
+	if (allserials.exists(targetted.serial))
+		SendSysMessage (character, "This item is no longer etherial");
+		allserials.erase (targetted.serial);
+		return;
+	endif
+	
+	var msg, flavortext := "";
+	msg := SendTextEntryGump (character, "Enter this item's name:", TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+	if (!msg)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	SetObjProperty (targetted, "tname", msg);
+	SetObjProperty (targetted, "etherialname", msg);
+	
+	var newitem := CreateItemAtLocation (character.x, character.y, character.x, targetted.objtype, 1, character.realm);
+	if (newitem)
+		targetted.name := CSTR ("a magic " + TruncateArticle (newitem.desc));
+		DestroyItem (newitem);
+	endif
+	
+	var previous_line := "Enter the text to add:";
+	repeat
+		msg := SendTextEntryGump (character, previous_line,
+			TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "Enter a blank line to end");
+		if (msg)
+			previous_line := msg;
+			flavortext := flavortext + " " + msg;
+		endif
+	until (!msg);
+	if (!flavortext)
+		SendSysMessage (character, "Canceled.");
+		return;
+	endif
+	SetObjProperty (targetted, "flavortext", flavortext);
+
+	allserials := GetGlobalProperty ("etherialitems");
+	if (!allserials)
+		allserials := dictionary;
+	endif
+	
+	SendSysMessage (character, "This item is now an etherial item");
+	allserials.insert (targetted.serial, 1);
+	SetGlobalProperty ("etherialitems", allserials);
+	SetObjProperty (targetted, "etherial", 1);
+	SetObjProperty (targetted, "questitem", 1);
+	SetObjProperty (targetted, "returntime", ReadGameClock() + 3600);
+endprogram

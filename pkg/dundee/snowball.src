@@ -1,0 +1,200 @@
+use uo;
+use os;
+use util;
+use vitals;
+
+include "include/client";
+include "include/wodinc";
+include "include/newperformaction";
+
+CONST LIMITED_AREA := 1;
+
+//Maximimum snowballs a player can have.  Set to 0 to remove limit
+Const MAX_SNOWBALLS := 5;
+
+program snowball (player, what)
+	if (!reserveitem (what))
+		SendSysMessage (player, "You can't use this right now!");
+		return;
+	endif
+	player.hidden := 0;
+
+	//Only throw snowballs in the snowball fight region
+	if (LIMITED_AREA)
+		if (!player.cmdlevel)
+			if (player.realm != REALM_BRITANNIA)
+				SendSysMessage (player, "The snowball melts when you touch it.");
+				DestroyItem (what);
+				return;
+			elseif(player.x < 5720)
+				SendSysMessage (player, "The snowball melts when you touch it.");
+				DestroyItem (what);
+				return;
+			elseif(player.y < 2250 or player.y > 2600)
+				SendSysMessage (player, "The snowball melts when you touch it.");
+				DestroyItem (what);
+				return;
+			elseif (player.x < 5760)
+				SendSysMessage (player, "You're not allowed to throw snowballs in the entry area!");
+				return;
+			endif
+		endif
+	endif
+
+	var where := TargetCoordinates (player);
+	if (!where)
+		SendSysMessage (player, "Canceled.");
+		return;
+	endif
+
+	//Only throw snowballs in the snowball fight region
+	if (LIMITED_AREA)
+		if (!player.cmdlevel)
+			if (player.realm != REALM_BRITANNIA)
+				SendSysMessage (player, "The snowball melts when you touch it.");
+				DestroyItem (what);
+				return;
+			elseif(player.x < 5720)
+				SendSysMessage (player, "The snowball melts when you touch it.");
+				DestroyItem (what);
+				return;
+			elseif(player.y < 2250 or player.y > 2600)
+				SendSysMessage (player, "The snowball melts when you touch it.");
+				DestroyItem (what);
+				return;
+			elseif (where.x < 5760)
+				SendSysMessage (player, "You're not allowed to throw snowballs at people in the entry area!");
+				return;
+			endif
+		endif
+	endif
+	
+	if (!CheckLosAt (player, where.x, where.y, where.z) )
+		SendSysMessage (player, "You can't see that!");
+		return;
+	endif	
+
+	SetScriptController (0);
+	Detach ();
+	NewPerformAction (player, NPA_ANIM_ATTACK, NPA_ATTACK_2HMACE);
+	DestroyItem (what);
+
+
+	var mob;
+	if (where.mobile)
+		mob := where.mobile;
+		var d := distance (player, mob);
+		var c := randomint(25)+2;
+		if (d < c)
+			if (!mob.npctemplate)
+				set_critical (1);
+				var poisoned := mob.poisoned;
+				var mobcrim := mob.criminal;
+				var playercrim := player.criminal;
+				mob.SetPoisoned(1);
+				mob.SetPoisoned(poisoned);
+				player.setcriminal(playercrim);
+				mob.setcriminal(mobcrim);
+				set_critical(0);
+//				var score := GetObjProperty( player, "#snowball" );
+//				if (!score) score := 0; endif
+//				score := score + 1;
+//				SendSysMessage( player, "Score: " + score, FONT_NORMAL, MESSAGE_COLOR_GOOD);
+//				SetObjProperty( player, "#snowball", score );
+				
+				
+				//when the player gets hit 3 times, send them back to the entry area
+				var score := GetObjProperty (mob, "#snowball");
+				if (!score) score := 0; endif
+				score := score + 1;
+				if (score >= 3)
+					MoveObjectToLocation( mob, 5748, 2327, 3, realm := _DEFAULT_REALM, MOVEOBJECT_NORMAL );
+					EraseObjProperty (mob, "#snowball");
+					foreach item in EnumerateItemsInContainer (mob.backpack)
+						if (item.objtype == 0x705a)
+							DestroyItem (item);
+						endif
+					endforeach
+					score := 0;
+				elseif (score == 1)
+					SendSysMessage (mob, "First hit!", FONT_NORMAL, MESSAGE_COLOR_BAD);
+				elseif (score == 2)
+					SendSysMessage (mob, "Second hit (one more and you're out)", FONT_NORMAL, MESSAGE_COLOR_BAD);
+				endif
+				SetObjProperty( mob, "#snowball", score );
+			elseif (mob.npctemplate ["snowballdude"])
+				SetObjProperty (mob, "#noregen", 1);
+				DoDamageByType (0, mob, CINT (GetVital (mob, "Life")/100) + 100, DAMAGETYPE_PHYSICAL);
+			elseif (mob.npctemplate ["snowninja"])
+				var score := GetObjProperty (mob, "#snowball");
+				if (!score) score := 0; endif
+				score := score + 1;
+				if (score >= 3)
+					SetObjProperty (mob, "#noregen", 1);
+					DoDamageByType (0, mob, CINT (GetVital (mob, "Life")/100) + 100, DAMAGETYPE_PHYSICAL);
+				else
+					SetObjProperty( mob, "#snowball", score );
+				endif
+			endif
+			PrintTextAbovePrivate( mob, "*"+ player.name + " hits you with a snowball!*", mob );
+			PrintTextAbovePrivate( mob, "*You hit "+ mob.name + " with a snowball!*", player );
+			if ( mob.graphic == 400 or mob.graphic == 401 )
+				NewPerformAction(mob, NPA_ANIM_HIT);
+			endif
+		else
+			mob := 0;
+		endif
+	endif
+
+	var snow := CreateItemAtLocation ( where.x, where.y, where.z, 0x122D, 1, where.realm );
+	if ( mob )
+		PlaySoundEffect(snow,0x138);
+	else
+		PlaySoundEffect(snow,0x12e);
+	endif
+	snow.color := 1153;
+	snow.name := "snow";
+	detach();
+	sleep (15);
+	snow.color := 1154;
+	snow.name := "slush";
+	sleep (15);
+	snow.color := 1152;
+	snow.name := "water";
+	sleep (15);
+	DestroyItem( snow );
+	
+	if (MAX_SNOWBALLS)
+		var snowball_count := 0;
+		foreach item in EnumerateItemsInContainer (player.backpack)
+			if (item.objtype == 0x1705a)
+				snowball_count := snowball_count + 1;
+			endif
+		endforeach
+		if (snowball_count >= MAX_SNOWBALLS)
+			return;
+		endif
+	endif
+
+	//Only remake snowballs in the snowball fight region
+	if (LIMITED_AREA)
+		if (player.realm != REALM_BRITANNIA)
+			return;
+		elseif(player.x < 5720)
+			return;
+		elseif(player.y < 2250 or player.y > 2600)
+			return;
+		elseif (player.x < 5760)
+			return;
+		endif
+	endif
+	
+	var snowball := CreateItemInContainer (player.backpack, 0x705a, 1);
+	snowball.newbie := 1;
+	snowball.movable := 0;
+
+
+//	start_script(":dundee:throwball", { player, where } );
+//	DestroyItem (what);
+
+endprogram

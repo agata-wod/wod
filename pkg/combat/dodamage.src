@@ -1,0 +1,294 @@
+use uo;
+use os;
+use vitals;
+
+include "include/client";
+include "include/wodinc";
+include "include/effects";
+include "../pkg/npcs/npcinfo";
+
+program do_damage (parms)
+	var attacker := parms[1];
+	var damaged_mobile := parms [2];
+	var base_damage := parms[3];
+	var damage_type := parms[4];
+	
+	if (!damaged_mobile)
+		return CreateError ("Damaged mobile does not exist!");
+	endif
+	
+	//if the damage is unresistable, don't bother doing any extra work
+	if (damage_type == DAMAGETYPE_UNRESISTABLE)
+		ApplyRawDamage (damaged_mobile, base_damage);
+		return;
+	endif
+ 
+	if (damaged_mobile.concealed)
+		SendSysMessage (damaged_mobile, "Canceling damage from " + attacker.name + " because you are concealed.");
+		return;
+	endif
+
+	//don't reveal hidden pets of offline players
+	if (damaged_mobile.hidden)
+		if (GetObjProperty (damaged_mobile, "#specialhidden_nodamage"))
+			if (!GetObjProperty (damaged_mobile, "guardkill"))
+				return;
+			endif
+		endif
+	endif
+
+	//special quest thing
+	if (attacker and attacker.npctemplate == ":drocket:snowninja")
+		if (GetVital (damaged_mobile, "Life") < base_damage*100)
+			MoveObjectToLocation( damaged_mobile, 5748, 2327, 3, realm := REALM_BRITANNIA, MOVEOBJECT_NORMAL );
+			EraseObjProperty (damaged_mobile, "#snowball");
+			SetVital (damaged_mobile, "Life", GetVitalMaximumValue (damaged_mobile, "Life"));
+
+			broadcastsound();
+			case (RandomInt (6))
+				0:	broadcast ("A snow ninja totally cuts off " + damaged_mobile.name + "'s head!", FONT_NORMAL, 48);
+				1:	broadcast ("A snow ninja demonstrates his Real Ultimate Power on  " + damaged_mobile.name, FONT_NORMAL, 48);
+				2:	broadcast ("A snow ninja flips out on " + damaged_mobile.name, FONT_NORMAL, 48);
+				3:	broadcast ("A snow ninja doesn't think twice and kills " + damaged_mobile.name, FONT_NORMAL, 48);
+				4:	broadcast ("A snow ninja, being very careful and precise, kills " + damaged_mobile.name, FONT_NORMAL, 48);
+				5:	broadcast ("A snow ninja kills " + damaged_mobile.name + ", which is braggable", FONT_NORMAL, 48);
+			endcase
+			return;
+		endif
+	endif
+
+	//if the attacker is set, set the script controller and add the attacker to the hitlist (if they're a
+	//player or player-controlled mobile
+	if (IsResponsibleAttackArea (attacker))
+		SetScriptController (attacker);
+		AddToHitList (attacker, damaged_mobile);
+	else
+		SetScriptController (0);
+	endif
+
+	//some items absorb all of the damage of a given type
+	if (ProtectedFromDamage (damaged_mobile, damage_type ))
+		return;
+	endif
+
+	
+	//Some other items absorb a small amount
+	var damage_absorb := CalculateDamageAbsorbByType (damaged_mobile, damage_type);
+	if (damage_absorb)
+		base_damage := base_damage - damage_absorb;
+	endif
+ 
+	//some NPCs are strong against some types of damage, and take half damage
+	if (StrongVersusDamageType (damaged_mobile, damage_type) )
+		base_damage := CINT (base_damage/2);
+	elseif (WeakVersusDamageType (damaged_mobile, damage_type) )
+		base_damage := CINT (base_damage*1.5);
+	endif
+	
+	//Count guard damage
+	if (attacker.npctemplate and attacker.npctemplate["guard"])
+		if (damaged_mobile.npctemplate and !GetObjProperty (damaged_mobile, "master"))
+			if (!GetObjProperty (attacker, "master"))
+				var guard_damage := CINT (GetObjProperty (damaged_mobile, "#guard_damage"));
+				if (!guard_damage)
+					guard_damage := 0;
+				endif
+				guard_damage := guard_damage + base_damage;
+				SetObjProperty (damaged_mobile, "#guard_damage", guard_damage);
+			endif
+		endif
+	endif
+
+	//actually do the damage
+	ApplyRawDamage (damaged_mobile, base_damage);
+endprogram
+
+
+
+
+///////////////////
+//  Some areas and circumstances shouldn't get flagged
+///////////////////
+
+function IsResponsibleAttackArea (attacker)
+	if (!attacker or attacker == "nocaster")
+		return 0;
+	endif
+	
+	if (attacker.concealed)
+		return 0;
+	endif
+	
+	if (attacker.x > 1380 and attacker.x < 1420)
+		if (attacker.y > 3725 and attacker.y < 3760)
+			return 0;
+		endif
+	endif
+
+	return 1;
+endfunction
+
+
+
+function broadcastsound()
+	foreach char in enumerateonlinecharacters()
+		PlaySoundEffectPrivate( char, 0x101, char );
+	endforeach
+endfunction
+
+
+
+
+///////////////////
+//  Figures out if the target is protected from a certain kind of magical damage
+///////////////////
+
+function ProtectedFromDamage (character, type)
+	var resistit := 0;
+	var charges := 0;
+	foreach item in ListEquippedItems (character)
+		if (GetObjProperty (item, "resistance"))
+			resistit := GetObjproperty (item, "resistance");
+			if (resistit == type or resistit == "all")
+				case (type)
+					DAMAGETYPE_COLD:
+						charges := item.resist_cold_mod;
+					DAMAGETYPE_FIRE:
+						charges := item.resist_fire_mod;
+					DAMAGETYPE_ELECTRICAL:
+						charges := item.resist_energy_mod;
+				endcase
+				if (charges > 0)
+					charges := charges - 1;
+					PrintTextAbove (item, "*" + item.desc + " absorbs the magical energy!*" );
+					case (type)
+						DAMAGETYPE_COLD:
+							item.resist_cold_mod := charges;
+						DAMAGETYPE_FIRE:
+							item.resist_fire_mod := charges;
+						DAMAGETYPE_ELECTRICAL:
+							item.resist_energy_mod := charges;
+					endcase
+					return 1;
+				endif
+			endif
+		endif
+	endforeach
+
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  determines if the given NPC is strong versus a type of magic damage
+///////////////////
+
+function StrongVersusDamageType (damaged_mobile, damage_type)
+	if (!damaged_mobile.npctemplate)
+		return 0;
+	endif
+	if (damaged_mobile.npctemplate["guard"] or damaged_mobile.script["humuc"])
+		return 0;
+	endif
+	
+	var MyTemplateElem := GetNpcTemplateElem (damaged_mobile.npctemplate);
+	if (!MyTemplateElem)
+		return 0;
+	endif
+
+	case (damage_type)
+		DAMAGETYPE_FIRE:
+			if (MyTemplateElem.fire and MyTemplateElem.fire == "strong")
+				PlayObjectCenteredEffect (damaged_mobile, EFFECT_RESIST, 10, 10);
+				return 1;
+			endif
+		DAMAGETYPE_COLD:
+			if (MyTemplateElem.cold and MyTemplateElem.cold == "strong")
+				PlayObjectCenteredEffect (damaged_mobile, EFFECT_RESIST, 10, 10);
+				return 1;
+			endif
+		DAMAGETYPE_ELECTRICAL:
+			if (MyTemplateElem.electrical and MyTemplateElem.electrical == "strong")
+				PlayObjectCenteredEffect (damaged_mobile, EFFECT_RESIST, 10, 10);
+				return 1;
+			endif
+	endcase
+	return 0;
+endfunction
+
+
+
+
+///////////////////
+//  determines if the given NPC is weak versus a type of magic damage
+///////////////////
+
+function WeakVersusDamageType (damaged_mobile, damage_type)
+	if (!damaged_mobile.npctemplate)
+		return 0;
+	endif
+	if (damaged_mobile.npctemplate["guard"] or damaged_mobile.script["humuc"])
+		return 0;
+	endif
+	
+	var MyTemplateElem := GetNpcTemplateElem (damaged_mobile.npctemplate);
+	if (!MyTemplateElem)
+		return 0;
+	endif
+
+	case (damage_type)
+		DAMAGETYPE_FIRE:
+			if (MyTemplateElem.fire and MyTemplateElem.fire == "weak")
+				PlayObjectCenteredEffect (damaged_mobile, EFFECT_FIZZLE, 10, 10);
+				return 1;
+			endif
+		DAMAGETYPE_COLD:
+			if (MyTemplateElem.cold and MyTemplateElem.cold == "weak")
+				PlayObjectCenteredEffect (damaged_mobile, EFFECT_FIZZLE, 10, 10);
+				return 1;
+			endif
+		DAMAGETYPE_ELECTRICAL:
+			if (MyTemplateElem.electrical and MyTemplateElem.electrical == "weak")
+				PlayObjectCenteredEffect (damaged_mobile, EFFECT_FIZZLE, 10, 10);
+				return 1;
+			endif
+	endcase
+	return 0;
+endfunction
+
+
+
+///////////////////
+//  Some equipment absorbs a small amount of damage of different types
+///////////////////
+
+function CalculateDamageAbsorbByType (mobile, damage_type)
+	//figure out what property to look for
+	var absorb_prop := "";
+	case (damage_type)
+		DAMAGETYPE_FIRE:
+			absorb_prop := "damage_soak_fire";
+		DAMAGETYPE_COLD:
+			absorb_prop := "damage_soak_cold";
+		DAMAGETYPE_ELECTRICAL:
+			absorb_prop := "damage_soak_electrical";
+		default:
+			return 0;
+	endcase
+
+	var absorb_amount := 0;
+	foreach item in ListEquippedItems (mobile)
+		if (GetObjProperty (item, absorb_prop))
+			absorb_amount := absorb_amount + CINT (GetObjProperty (item, absorb_prop));
+		endif
+	endforeach
+
+	return absorb_amount;			
+endfunction
+
+
+
+
+

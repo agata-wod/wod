@@ -1,0 +1,76 @@
+use uo;
+use cfgfile;
+
+var entry := array{ };
+var prop := struct {};
+prop .+ pname;
+prop .+ pvalue;
+ 
+program recordshot( who , text)
+
+	if (!len(text))
+		SendSysMessage( who, "usage is: .recordshot [shotname]" );
+		return;
+	endif
+
+	var filename := lower( text );
+
+	UnloadConfigFile( filename );
+	var cfg := readconfigfile(filename);
+	if (cfg)
+		SendSysMessage( who, filename + " already exists!" );
+		return;
+	endif
+
+	var coordinates := array{ };
+
+	sendsysmessage(who,"Target the North-West corner of the house (Up!)");
+	var coords := TargetCoordinates(who);
+	coordinates[1]:= coords.x;
+	coordinates[2]:= coords.y;
+
+	sendsysmessage(who,"Target the South-East corner of the house (Down!)");
+	coords := TargetCoordinates(who);
+	coordinates[3]:= coords.x;
+	coordinates[4]:= coords.y;
+
+//	var z;
+	var stuff := array{ };
+	foreach item in ListObjectsInBox(coordinates[1],coordinates[2],
+			-128,coordinates[3],coordinates[4],+128, coords.realm);
+		if ( (!item.acctname) and (!item.npctemplate) )
+			stuff.append( item );
+		endif
+	endforeach
+
+	var itemnum := 0;
+	foreach item in (stuff)
+		itemnum := itemnum + 1;
+		entry := array{ };
+		AddPropertyToElem( "name", item.name );
+		AddPropertyToElem( "desc", item.desc );
+		AddPropertyToElem( "graphic", item.graphic );
+		AddPropertyToElem( "color", item.color );
+		AddPropertyToElem( "objtype", item.objtype );
+		AddPropertyToElem( "x", item.x ); 
+		AddPropertyToElem( "y", item.y );
+		AddPropertyToElem( "z", item.z );
+		AddPropertyToElem( "facing", item.facing );
+		AddPropertyToElem( "movable", item.movable );
+		AddPropertyToElem( "amount", item.amount );
+		AppendConfigFileElem( filename, "Snapshot", itemnum, entry );
+	endforeach
+	UnloadConfigFile( filename );
+
+	SendSysMessage( who, itemnum + " items recorded into " + filename + ".cfg");
+
+endprogram
+
+function AddPropertyToElem( propname, propvalue )
+
+	if ( (!propvalue) and (propvalue != 0) ) return; endif
+	prop.name := propname;
+	prop.value := propvalue;
+	entry.append( prop );
+
+endfunction

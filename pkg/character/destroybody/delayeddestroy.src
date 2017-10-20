@@ -1,0 +1,16 @@
+use os;
+use uo;
+
+program delayeddestroy (params)
+	// This function is used to cause a delay before destroying something
+	var item := params[1];
+	Syslog("Destroy script started for " + item.name);
+	var i;
+	for ( i := 1; i < 301; i := i + 1 )
+		sleep(1);
+		Syslog("Destroy script counting: " + i);
+	endfor
+
+	Syslog("Ended destroy script for " + item.name);
+	DestroyItem(item);
+endprogram

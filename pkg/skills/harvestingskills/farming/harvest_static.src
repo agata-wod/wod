@@ -1,0 +1,71 @@
+use uo;
+use os;
+use util;
+use cfgfile;
+use attributes;
+
+include "include/client";
+include "include/objtype";
+include "include/utility";
+include "include/gumps";
+include "include/crafting";
+
+program harvest (parms)
+	var character := parms [1];
+	var plant := parms[2];
+	
+	if (!character or !plant)
+		return;
+	endif
+
+	if (Distance (character, plant) > 3)
+		sendsysmessage (character, "That is too far away!");
+		return;
+	endif
+
+	var difficulty := cint (GetHarvestDifficulty ("wood", plant.x, plant.y, plant.objtype, plant.realm));
+	if (!difficulty)
+		SendSysmessage (character, "There's nothing left to harvest right now.");
+		return;
+	endif
+
+	var plant_cfg_file := ReadConfigFile (":*:itemdesc");
+	if (!plant_cfg_file)
+		SendSysMessage (character, "ERROR: Unable to read farming cfg file!");
+		return;
+	endif
+
+	var product_type := plant_cfg_file[plant.objtype].product;
+	if (!product_type)
+		SendSysMessage (character, "ERROR: Can't find this item in farming cfg file!");
+		return;
+	endif
+
+	//setup some variables
+	var craftingbag := FindCraftingBag (character);
+	var character_x := character.x;
+	var character_y := character.y;
+
+	SendSysMessage (character, "You start harvesting...");
+	repeat
+		PlaySoundEffect (character, SFX_58);
+		PerformAction (character, ANIM_BOW);
+		sleep (2);
+		if (CheckSkill (character, SKILLID_LUMBERJACKING, -1, 0))
+			if (RandomInt (100) == 0)
+				SendSysMessage (character, "You have found some fertile dirt!");
+				CreateItemInContainer (craftingbag, UOBJ_FERTILE_DIRT, 1);
+			endif
+
+			CreateItemInContainer (craftingbag, product_type, 1);
+			SendSysmessage (character, "You put the crops in your pack");
+
+			var harvest_amount := HarvestResource ("wood", plant.x, plant.y, 1, 8, plant.realm);
+			if (!harvest_amount)
+				SendSysmessage (character, "There's nothing left to harvest here.");
+				return;
+			endif
+		endif
+	until ( (character.x != character_x) or (character.y != character_y) );
+endprogram
+

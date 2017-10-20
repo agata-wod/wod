@@ -1,0 +1,346 @@
+use uo;
+use os;
+
+include "include/wodinc";
+include "include/client";
+include "include/objtype";
+include "include/spawn";
+include "include/eventid";
+include "include/effects";
+include "include/attributes";
+include "../pkg/items/doors/doors";
+
+program use_lever (character, lever)
+	var did_something := 0;
+	if (GetObjProperty (lever, "usemessage"))
+		PrintTextAbove (lever, GetObjProperty (lever, "usemessage"));
+	endif
+	if (GetObjProperty (lever, "spawnNPCGuardians"))
+		SpawnNPCsFromSwitch (character, lever);
+		did_something := 1;
+	endif
+	if (GetObjProperty (lever, "doorserial"))
+		OpenDoorFromSwitch (character, lever);
+		did_something := 1;
+	endif
+	if (GetObjProperty (lever, "unlockeditemserial"))
+		UnlockChestFromSwitch (character, lever);
+		did_something := 1;
+	endif
+	if (GetObjProperty (lever, "teleportx"))
+		SwitchTeleporter (character, lever);
+		did_something := 1;
+	endif
+	if (GetObjProperty (lever, "explosion"))
+		var ev := struct{};
+		ev.+type := EVID_ENGAGED;
+		ev.+source := character;
+		PlayStationaryEffect (character.x, character.y, character.z, 0x36b0, 7, 0x10, 0, character.realm);
+		PlaySoundEffect (character, 0x208);
+		foreach critter in ListMobilesNearLocationEx (character.x, character.y, character.z, 5, LISTEX_FLAG_NORMAL + LISTEX_FLAG_HIDDEN, character.realm );
+			if (!GetObjProperty (critter, "#specialhidden_nodamage"))
+				SendEvent (critter, ev);
+				PlayObjectCenteredEffect (critter, 0x36b0, 7, 0x10);
+				var dmg := Randomint(11) + 5;
+				DoDamageByType (0, critter, dmg, DAMAGETYPE_FIRE);
+			endif
+		endforeach
+		DestroyItem (lever);
+	endif
+
+	if (!did_something)
+		SendSysMessage (character, "Hmm, seems broken.");
+	endif
+endprogram
+
+
+
+
+///////////////////
+//  Spawns a number of NPCs
+///////////////////
+
+function SpawnNPCsFromSwitch (character, lever)
+	if (character)
+	endif
+	if (GetObjProperty (lever, "#spawnswitch"))
+		if (GetObjProperty (lever, "#spawnswitch") > ReadGameClock())
+			return;
+		endif
+	endif
+	SetObjProperty (lever, "#spawnswitch", ReadGameClock() + 600);
+
+	var guardian_array := GetObjProperty (lever, "spawnNPCGuardians");
+	if (!guardian_array or !len(guardian_array))
+		return;
+	endif
+
+	foreach guardian_elem in guardian_array
+		var npctemplate := guardian_elem[1];	
+		var thenpc := SpawnNPCInArea (npctemplate, lever.x, lever.y, 4, 20, lever.realm);
+		if (thenpc)
+			thenpc.graphic := guardian_elem[2];
+			thenpc.color := guardian_elem[3];
+			SetObjProperty (thenpc, "color", thenpc.color);
+			thenpc.name := guardian_elem[4];
+			
+			var npc_script := guardian_elem[5];
+			if (npc_script)
+				thenpc.script := npc_script;
+				RestartScript (thenpc);
+			endif
+
+			var npc_str := guardian_elem[6];
+			if (npc_str)
+				SetAttributeBaseValue (thenpc, "Strength", npc_str);
+			endif
+			
+			var npc_dex := guardian_elem[7];
+			if (npc_dex)
+				SetAttributeBaseValue (thenpc, "Dexterity", npc_dex);
+			endif
+
+			var npc_int := guardian_elem[8];
+			if (npc_int)
+				SetAttributeBaseValue (thenpc, "Intelligence", npc_int);
+			endif
+
+			var npc_skills := guardian_elem[9];
+			if (npc_skills)
+				for i := 0 to 48
+					SetAttributeBaseValue (thenpc, GetAttributeIDBySkillID (i), npc_skills[i]*10);
+				endfor
+			endif
+			RecalcVitals (thenpc);
+			
+			thenpc.gender := guardian_elem[10];
+		endif
+	endforeach
+
+endfunction
+
+
+
+
+///////////////////
+//  When the lever is thrown, the door opens for a short amount of time
+///////////////////
+
+function OpenDoorFromSwitch (character, lever)
+	var door_serial := GetObjProperty (lever, "doorserial");
+	var relock_time := GetObjProperty (lever, "relocktime");
+
+	var door := SystemFindObjectBySerial (door_serial);
+	if (!door)
+		SendSysMessage (character, "That doesn't seem to do anything...");
+		return;
+	endif
+
+	var alldoors := array{door};
+	if (door.graphic == door.objtype)
+		set_critical (1);
+		ChangeLeverGraphic (lever, 1);
+		foreach item in ListItemsNearLocation (door.x, door.y, door.z, 1, door.realm)
+			if (item.isa (POLCLASS_DOOR))
+				OpenDoor (item);
+				PlayDoorOpenSound (item);
+				alldoors.append (item);
+			endif
+		endforeach
+		set_critical (0);
+	endif
+
+	if (!relock_time)
+		return;
+	endif
+	
+	var open_time := ReadGameClock();
+	SetObjProperty (door, "#lastopen", open_time );
+
+	sleep (relock_time);
+
+	if (GetObjProperty (door, "#lastopen") == open_time)
+		set_critical (1);
+		foreach item in alldoors
+			CloseDoor (item);
+			PlayDoorCloseSound (item);
+		endforeach
+		ChangeLeverGraphic (lever, 0);
+		EraseObjProperty (door, "#lastopen");
+		set_critical (0);
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  When the lever is thrown, a chest or door unlocks for a short period of time
+///////////////////
+
+function UnlockChestFromSwitch (character, lever)
+	var itemserial := GetObjProperty (lever, "unlockeditemserial");
+	var relock_time := GetObjProperty (lever, "relocktime");
+
+	var item := SystemFindObjectBySerial (itemserial);
+	if (!item)
+		SendSysMessage (character, "That doesn't seem to do anything...");
+		return;
+	endif
+
+	ChangeLeverGraphic (lever, 1);
+	item.locked := 0;
+	var alldoors := array{};
+	if (item.isa (POLCLASS_DOOR))
+		foreach possibledoor in ListItemsNearLocation (item.x, item.y, item.z, 1, item.realm)
+			if (possibledoor.isa (POLCLASS_DOOR))
+				possibledoor.locked := 0;
+				alldoors.append (possibledoor);
+			endif
+		endforeach
+	endif
+
+	if (!relock_time)
+		return;
+	endif
+
+	var open_time := ReadGameClock ();
+	SetObjProperty (item, "#leverswitch", open_time );
+
+	sleep (relock_time);
+	if (GetObjProperty (item, "#leverswitch") == open_time)
+		item.locked := 1;
+		if (item.isa (POLCLASS_DOOR))
+			foreach door in alldoors
+				door.locked := 1;
+			endforeach
+		endif
+		ChangeLeverGraphic (lever, 0);
+		EraseObjProperty (item, "#leverswitch");
+		if (item.isa (POLCLASS_DOOR))
+			CloseDoor (item);
+			PlayDoorCloseSound (item);
+		endif
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  When the lever is thrown, teleports the user
+///////////////////
+
+function SwitchTeleporter (character, lever)
+	var destx := GetObjProperty (lever, "teleportx");
+	var desty := GetObjProperty (lever, "teleporty");
+	var destz := GetObjProperty (lever, "teleportz");
+	var destr := GetObjProperty (lever, "teleportr");
+	if (!destr)
+		destr := _DEFAULT_REALM;
+	endif
+
+	ChangeLeverGraphic (lever, 1);
+	sleep (1);
+	if(MoveObjectToLocation( character, destx, desty, destz, destr, MOVEOBJECT_NORMAL ))
+		if (!character.concealed)
+			PlaySoundEffect (character, SFX_SPELL_RECALL);
+			PlaySoundEffect (lever, SFX_SPELL_RECALL);
+		endif
+	endif
+
+	var open_time := ReadGameClock ();
+	SetObjProperty (lever, "#lastopen", open_time );
+
+	sleep (4);
+	if (GetObjProperty (lever, "#lastopen") == open_time)
+		ChangeLeverGraphic (lever, 0);
+		EraseObjProperty (lever, "#lastopen");
+	endif
+endfunction
+
+
+
+
+///////////////////
+//  When the lever is thrown, teleports the user
+///////////////////
+
+function SpawnSwitchNPC (character, lever)
+	if (lever.container)
+		SendSysMessage (character, "This lever cannot be used inside of a container!");
+		return;
+	endif
+
+	if (GetObjProperty (lever, "#spawnswitch"))
+		if (GetObjProperty (lever, "#spawnswitch") > ReadGameClock())
+			return;
+		endif
+	endif
+	SetObjProperty (lever, "#spawnswitch", ReadGameClock() + 600);
+
+	var npctemplate := GetObjProperty (lever, "npctemplate");
+
+	ChangeLeverGraphic (lever, 1);
+	sleep (1);
+
+	SpawnNPCInArea (npctemplate, lever.x, lever.y);
+
+	var open_time := ReadGameClock ();
+	SetObjProperty (lever, "#lastopen", open_time );
+
+	sleep (9);
+	if (GetObjProperty (lever, "#lastopen") == open_time)
+		ChangeLeverGraphic (lever, 0);
+		EraseObjProperty (lever, "#lastopen");
+	endif
+endfunction
+
+
+
+///////////////////
+//  Changes the graphic of the lever
+///////////////////
+
+function ChangeLeverGraphic (lever, open := 1)
+	case (lever.graphic)
+		0x108d:
+			if (open)
+				lever.graphic := 0x108e;
+			endif
+		0x108e:
+			if (!open)
+				lever.graphic := 0x108d;
+			endif
+	
+		0x108f:
+			if (open)
+				lever.graphic := 0x1090;
+			endif
+		0x1090:
+			if (!open)
+				lever.graphic := 0x108f;
+			endif
+	
+		0x1091:
+			if (open)
+				lever.graphic := 0x1092;
+			endif
+		0x1092:
+			if (!open)
+				lever.graphic := 0x1091;
+			endif
+
+		0x1094:
+			if (open)
+				lever.graphic := 0x1095;
+			endif
+		0x1095:
+			if (!open)
+				lever.graphic := 0x1094;
+			endif
+	endcase
+endfunction
+
+
+

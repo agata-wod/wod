@@ -1,0 +1,88 @@
+use uo;
+use os;
+use http;
+
+include "include/client";
+include "include/clock";
+include "include/accounts";
+
+program count_benson_potions ()
+	WriteHTML ("<html><head><title>Adventurer's Guild Information</title></head>");
+	WriteHTML ("<body bgcolor=\"#dcdeed\">");
+	
+	var month := Lower (QueryParam ("month"));
+	var year := QueryParam ("year");
+	if (!month or !year)
+		WriteHTML ("<form method=GET action=adventurers_guild.ecl>");
+		WriteHTML ("Select a month and year to display information for:<p>");
+		WriteHTML ("<select name=\"month\">");
+		WriteHTML ("<option>January</option>");
+		WriteHTML ("<option>February</option>");
+		WriteHTML ("<option>March</option>");
+		WriteHTML ("<option>April</option>");
+		WriteHTML ("<option>May</option>");
+		WriteHTML ("<option>June</option>");
+		WriteHTML ("<option>July</option>");
+		WriteHTML ("<option>August</option>");
+		WriteHTML ("<option>September</option>");
+		WriteHTML ("<option>October</option>");
+		WriteHTML ("<option>November</option>");
+		WriteHTML ("<option>December</option>");
+		WriteHTML ("</select>");
+		WriteHTML ("<select name=\"year\">");
+		WriteHTML ("<option>2003</option>");
+		WriteHTML ("<option>2004</option>");
+		WriteHTML ("<option>2011</option>");
+		WriteHTML ("<option>2012</option>");
+		WriteHTML ("<option>2013</option>");
+		WriteHTML ("</select>");
+		WriteHTML ("<input id=submit1 name=submit1 type=submit value=Search>");
+		WriteHTML ("</form>");
+		WriteHTML ("<br><a href=adventurers_guild.ecl?month=all&year=all>View complete count</a>");
+	
+		WriteHTML ("</body></html>");
+		return;
+	endif
+
+	var acctinfodf := OpenDataFile (":character:character_data");
+	if (!acctinfodf)
+		acctinfodf := CreateDataFile (":character:character_data");
+		if (!acctinfodf)
+			Syslog ("Error opening character data file!");
+			WriteHTML ("Unable to open or create data file.");
+			WriteHTML ("</body></html>");
+			return;
+		endif
+	endif
+
+	var pointsearchstring;
+	if (month == "all" and year == "all")
+		WriteHTML ("<h3>Total Adventurer's Guild stats</h3>");
+		pointsearchstring := "adventurers_guild_tickets";
+	else
+		WriteHTML ("<h3>Adventurer's Guild stats for " + month +  ", " + year + "</h3>");
+		pointsearchstring := "adventurers_guild_tickets_" + year + "_" + month;
+	endif
+
+	var total_points := 0;
+	WriteHTML ("<table><tr><td>&nbsp</td><td>Points</td></tr>");
+	foreach acctname in ListAccounts ()
+		var tempentry := acctinfodf.FindElement (acctname);
+		if (!tempentry)
+			acctinfodf.CreateElement (acctname);
+			tempentry := acctinfodf.FindElement (acctname);
+		endif
+		var account_points := CINT (tempentry.GetProp (pointsearchstring));
+		total_points := total_points + account_points;
+
+		if (account_points)
+			WriteHTML ("<tr><td>" + acctname + "</td><td>" + account_points + "</td></tr>");
+		endif
+	endforeach
+	WriteHTML ("</table>");
+	WriteHTML ("<p>Total points: " + total_points);
+	WriteHTML ("</body></html>");
+endprogram
+
+
+

@@ -1,0 +1,53 @@
+use os;
+use uo;
+use util;
+use cfgfile;
+
+include "include/client";
+include "include/attributes";
+
+program skillcheck (parms)
+	var who := parms[1];
+	var item := parms[2];
+	var skillid := parms[3];
+	var difficulty := parms[4];
+
+	var attribute := GetAttributeIDBySkillID (skillid);
+	var player_skill := GetAttribute (who, attribute);
+	if (!player_skill)
+		player_skill := 0;
+	endif
+
+	//for non difficulty based tasks, pass difficulty of -1 (the default)
+//	if (difficulty < 0)
+//		difficulty := RandomInt(100)+1;
+//	endif
+	
+	//for skill-enhancing items, setobjproperty(item,"skillbonus",amount) - 
+	//the item will lower the difficulty by that amount:
+	var skillbonus := 0;
+	if (item)
+		if (GetObjProperty (item, "skillbonus"))
+			skillbonus := GetObjProperty (item, "skillbonus");
+			var skillcfg := ReadConfigFile (":skills:skillmaster");
+			SendSysMessage (who,"[+" + skillbonus + "% " + skillcfg[skillid].desc + "]" );
+		endif
+	endif
+	
+	var olddifficulty := difficulty;
+	difficulty := difficulty - skillbonus;
+	if ( difficulty < 1 and olddifficulty > 0)
+		difficulty := 1;
+	endif
+
+	return CheckSkill (who, skillid, difficulty, 0);
+endprogram
+
+function gmreport(text)
+	syslog (text);
+	foreach player in EnumerateOnlineCharacters ()
+		if (IsAGM (player) = 5)
+			SendSysMessage (player, "Regionspawner: " + text);
+		endif
+	endforeach
+endfunction

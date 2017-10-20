@@ -1,0 +1,504 @@
+use os;
+use uo;
+
+include "include/gumps";
+
+
+program sendtojail (gm, text)
+	set_script_option (SCRIPTOPT_CAN_ACCESS_OFFLINE_MOBILES, 1);
+
+	text := Lower (text);
+	if (text)
+		if (text == "me")
+			MoveObjectToLocation( gm, 5281, 1185, 0, REALM_BRITANNIA, MOVEOBJECT_FORCELOCATION );
+			return;
+		elseif (text == "target");
+			SendOnlineCharacterToJail (gm);
+			return;
+		endif
+	endif
+
+	var jailmenu := CreateMenu ("What do you want to do?");
+	AddMenuItem (jailmenu, 0, "Go to jail");
+	AddMenuItem (jailmenu, 0, "Send online character or mobile to jail");
+	AddMenuItem (jailmenu, 0, "Sentence character to jail");
+	AddMenuItem (jailmenu, 0, "Sentence entire account to jail");
+	AddMenuItem (jailmenu, 0, "Release character from jail");
+	AddMenuItem (jailmenu, 0, "Release account from jail");
+	var menuselect := SelectMenuItem2 (gm, jailmenu);
+	if (!menuselect)
+		SendSysMessage (gm, "Canceled");
+		return;
+	endif
+	
+	case (menuselect.index)
+		1:
+			SendSysMessage (gm, "(Shortcut is '.jail me')");
+			MoveObjectToLocation( gm, 5281, 1185, 0, REALM_BRITANNIA, MOVEOBJECT_FORCELOCATION );
+			return;
+		2:
+			SendSysMessage (gm, "(Shortcut is '.jail target')");
+			SendOnlineCharacterToJail (gm);
+			return;
+			
+		3:
+			SentenceCharacterToJail (gm);
+			return;
+		4:
+			SentenceAccountToJail (gm);
+			return;
+		5:
+			ReleaseCharacterToJail (gm);
+			return;
+		6:
+			ReleaseAccountToJail (gm);
+			return;
+	endcase
+
+endprogram
+
+///////////////////
+//  Send an online character to jail
+///////////////////
+
+function SendOnlineCharacterToJail (gm)
+	SendSysMessage (gm, "Who do you wish to send to jail?");
+	SendSysMessage (gm, "Characters sent to jail this way are not automatically released");
+	var targetted := Target (gm, TGTOPT_NOCHECK_LOS);
+	if (!targetted)
+		SendSysMessage (gm, "Canceled");
+		return;
+	endif
+	MoveObjectToLocation( targetted, 5281, 1185, 0, REALM_BRITANNIA, MOVEOBJECT_FORCELOCATION );
+endfunction
+
+
+
+
+///////////////////
+//  Sentences a character to jail for a time period
+///////////////////
+
+function SentenceCharacterToJail (gm)
+	var chrname := SendTextEntryGump (gm, "Enter the character name:" ,
+			TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+	chrname := Lower (chrname);
+	while (chrname ["  "])
+		chrname["  "] := " ";
+	endwhile;
+
+	if (!chrname)
+		SendSysMessage (gm, "Canceled.");
+		return;
+	endif
+
+	var all_characters := array{};
+	var acct, player, playername;
+	var exact_match := 0;
+	foreach acctname in ListAccounts ()
+		acct := FindAccount (acctname);
+		if (acct)
+			for counter := 1 to 7
+				player := acct.GetCharacter (counter);
+				if (player)
+					playername := Lower (player.name);
+					if (playername[chrname])
+						all_characters.append (player);
+					endif
+					if (playername == chrname)
+						exact_match := exact_match + 1;
+					endif
+				endif
+			endfor
+		endif
+	endforeach
+
+	if (!len (all_characters))
+		SendSysMessage (gm, "Unable to find any matching characters.");
+		return;
+	endif
+	
+	var chosen_player;
+	if (exact_match)
+		if (exact_match == 1)
+			foreach player in all_characters
+				playername := Lower (player.name);
+				if (playername == chrname)
+					chosen_player := player;
+				endif
+			endforeach
+				
+			SendSysMessage (gm, "Found one match on account " + chosen_player.acctname);
+			SendSysMessage (gm, "Is this the correct player?");
+			if (!YesNo (gm, "Jail?"))
+				SendSysMessage (gm, "Canceled.");
+				return;
+			endif
+		else
+			var all_exact_matches := array{};
+			foreach player in all_characters
+				playername := Lower (player.name);
+				if (playername == chrname)
+					all_exact_matches.append (player);
+				endif
+			endforeach
+
+			SendSysMessage (gm, "Found " + exact_match + " exact matches.");
+			var jailmenu := CreateMenu ("Select the correct character:");
+			foreach player in all_exact_matches
+				AddMenuItem (jailmenu, 0, player.name + ", account " + player.acctname);
+			endforeach
+			var menuselect := SelectMenuItem2 (gm, jailmenu);
+			if (!menuselect)
+				SendSysMessage (gm, "Canceled");
+				return;
+			endif
+			chosen_player := all_exact_matches[menuselect.index];
+			if (!chosen_player)
+				SendSysMessage (gm, "Error");
+				return;
+			endif
+		endif
+	else
+		SendSysMessage (gm, "Could not find an exact match, but found " + len(all_characters) + " partial matches.");
+		var jailmenu := CreateMenu ("Select the correct character:");
+		foreach player in all_characters
+			AddMenuItem (jailmenu, 0, player.name + ", account " + player.acctname);
+		endforeach
+		var menuselect := SelectMenuItem2 (gm, jailmenu);
+		if (!menuselect)
+			SendSysMessage (gm, "Canceled");
+			return;
+		endif
+		chosen_player := all_characters[menuselect.index];
+		if (!chosen_player)
+			SendSysMessage (gm, "Error");
+			return;
+		endif
+	endif
+	
+	var jailtime := CINT (SendTextEntryGump (gm, "How long should they stay in jail?" ,
+			TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "(In days)"));
+	if (!jailtime)
+		SendSysMessage (gm, "Canceled.");
+		return;
+	endif
+
+	var gump_layout := array {
+		"resizepic 100 100 2600 400 300",
+		"text 140 140 0 0",
+		"text 140 160 0 1",
+		"text 140 180 0 2",
+		"text 140 200 0 3",
+		"resizepic 140 220 3000 320 20",
+		"textentry 140 220 320 20 0 10 10",
+		"resizepic 140 240 3000 320 20",
+		"textentry 140 240 320 20 0 11 11",
+		"resizepic 140 260 3000 320 20",
+		"textentry 140 260 320 20 0 12 12",
+		"resizepic 140 280 3000 320 20",
+		"textentry 140 280 320 20 0 13 13",
+		"resizepic 140 300 3000 320 20",
+		"textentry 140 300 320 20 0 14 14",
+		"resizepic 140 320 3000 320 20",
+		"textentry 140 320 320 20 0 15 15",
+		"button 250 350 243 241 1 0 0",
+		"button 350 350 249 247 1 0 1"
+	};
+	var gump_data := array {
+		"Enter a message to display to the",
+		"jailed character when they log in:",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"You have been jailed for violations",
+		"of the rules of the World of Dreams.",
+		"",
+		"",
+		"",
+		""
+	};
+
+	var gump_return := SendDialogGump (gm, gump_layout, gump_data);
+	if (!gump_return[1])
+		SendSysMessage (gm, "Canceled.");
+		return;
+	endif
+
+	var msg := "";
+	for i := 10 to 15
+		var thisline := gump_return[i] - CSTR (i + ": ");
+		if (thisline)
+			msg := msg + " " + thisline;
+		endif
+	endfor
+
+	SendSysMessage (gm, "Sentencing " + chosen_player.name + ", accountname " + chosen_player.acctname + " for " + jailtime + " days.");
+	if (!YesNo (gm, "Finalize?"))
+		SendSysMessage (gm, "Canceled.");
+		return;
+	endif
+	var jailprop := array{};
+	jailprop [1] := ReadGameClock() + jailtime * 60 * 60 * 24;
+	jailprop [2] := msg;
+
+
+	SetObjProperty (chosen_player, "jailed", jailprop);
+	SendSysMessage (gm, "Finished!");
+endfunction
+
+
+
+
+///////////////////
+//  Sentences an entire account to jail for a period of time
+///////////////////
+
+function SentenceAccountToJail (gm)
+	var acctname := SendTextEntryGump (gm, "Enter the account name:" ,
+			TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+
+	if (!acctname)
+		SendSysMessage (gm, "Canceled.");
+		return;
+	endif
+
+	var acct := FindAccount (acctname);
+	if (!acct)
+		SendSysMessage (gm, "Unable to find account.");
+		return;
+	endif
+
+	var jailtime := CINT (SendTextEntryGump (gm, "How long should they stay in jail?" ,
+			TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "(In days)"));
+	if (!jailtime)
+		SendSysMessage (gm, "Canceled.");
+		return;
+	endif
+
+	var gump_layout := array {
+		"resizepic 100 100 2600 400 300",
+		"text 140 140 0 0",
+		"text 140 160 0 1",
+		"text 140 180 0 2",
+		"text 140 200 0 3",
+		"resizepic 140 220 3000 320 20",
+		"textentry 140 220 320 20 0 10 10",
+		"resizepic 140 240 3000 320 20",
+		"textentry 140 240 320 20 0 11 11",
+		"resizepic 140 260 3000 320 20",
+		"textentry 140 260 320 20 0 12 12",
+		"resizepic 140 280 3000 320 20",
+		"textentry 140 280 320 20 0 13 13",
+		"resizepic 140 300 3000 320 20",
+		"textentry 140 300 320 20 0 14 14",
+		"resizepic 140 320 3000 320 20",
+		"textentry 140 320 320 20 0 15 15",
+		"button 250 350 243 241 1 0 0",
+		"button 350 350 249 247 1 0 1"
+	};
+	var gump_data := array {
+		"Enter a message to display to the",
+		"jailed character when they log in:",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"You have been jailed for violations",
+		"of the rules of the World of Dreams.",
+		"",
+		"",
+		"",
+		""
+	};
+
+	var gump_return := SendDialogGump (gm, gump_layout, gump_data);
+	if (!gump_return[1])
+		SendSysMessage (gm, "Canceled.");
+		return;
+	endif
+
+	var msg := "";
+	for i := 10 to 15
+		var thisline := gump_return[i] - CSTR (i + ": ");
+		if (thisline)
+			msg := msg + " " + thisline;
+		endif
+	endfor
+
+	SendSysMessage (gm, "Sentencing " + acctname + " to jail for " + jailtime + " days.");
+	if (!YesNo (gm, "Finalize?"))
+		SendSysMessage (gm, "Canceled.");
+		return;
+	endif
+	var jailprop := array{};
+	jailprop [1] := ReadGameClock() + jailtime * 60 * 60 * 24;
+	jailprop [2] := msg;
+
+	acct.SetProp ("jailed", jailprop);
+	SendSysMessage (gm, "Finished!");
+endfunction
+
+
+
+
+///////////////////
+//  Sentences a character to jail for a time period
+///////////////////
+
+function ReleaseCharacterToJail (gm)
+	var chrname := SendTextEntryGump (gm, "Enter the character name:" ,
+			TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+	chrname := Lower (chrname);
+	while (chrname ["  "])
+		chrname["  "] := " ";
+	endwhile;
+
+	if (!chrname)
+		SendSysMessage (gm, "Canceled.");
+		return;
+	endif
+
+	var all_characters := array{};
+	var acct, player, playername;
+	var exact_match := 0;
+	foreach acctname in ListAccounts ()
+		acct := FindAccount (acctname);
+		if (acct)
+			for counter := 1 to 7
+				player := acct.GetCharacter (counter);
+				if (player)
+					playername := Lower (player.name);
+					if (playername[chrname])
+						all_characters.append (player);
+					endif
+					if (playername == chrname)
+						exact_match := exact_match + 1;
+					endif
+				endif
+			endfor
+		endif
+	endforeach
+
+	if (!len (all_characters))
+		SendSysMessage (gm, "Unable to find any matching characters.");
+		return;
+	endif
+	
+	var chosen_player;
+	if (exact_match)
+		if (exact_match == 1)
+			foreach player in all_characters
+				playername := Lower (player.name);
+				if (playername == chrname)
+					chosen_player := player;
+				endif
+			endforeach
+				
+			SendSysMessage (gm, "Found one match on account " + chosen_player.acctname);
+			SendSysMessage (gm, "Is this the correct player?");
+			if (!YesNo (gm, "Release?"))
+				SendSysMessage (gm, "Canceled.");
+				return;
+			endif
+		else
+			var all_exact_matches := array{};
+			foreach player in all_characters
+				playername := Lower (player.name);
+				if (playername == chrname)
+					all_exact_matches.append (player);
+				endif
+			endforeach
+
+			SendSysMessage (gm, "Found " + exact_match + " exact matches.");
+			var jailmenu := CreateMenu ("Select the correct character:");
+			foreach player in all_exact_matches
+				AddMenuItem (jailmenu, 0, player.name + ", account " + player.acctname);
+			endforeach
+			var menuselect := SelectMenuItem2 (gm, jailmenu);
+			if (!menuselect)
+				SendSysMessage (gm, "Canceled");
+				return;
+			endif
+			chosen_player := all_exact_matches[menuselect.index];
+			if (!chosen_player)
+				SendSysMessage (gm, "Error");
+				return;
+			endif
+		endif
+	else
+		SendSysMessage (gm, "Could not find an exact match, but found " + len(all_characters) + " partial matches.");
+		var jailmenu := CreateMenu ("Select the correct character:");
+		foreach player in all_characters
+			AddMenuItem (jailmenu, 0, player.name + ", account " + player.acctname);
+		endforeach
+		var menuselect := SelectMenuItem2 (gm, jailmenu);
+		if (!menuselect)
+			SendSysMessage (gm, "Canceled");
+			return;
+		endif
+		chosen_player := all_characters[menuselect.index];
+		if (!chosen_player)
+			SendSysMessage (gm, "Error");
+			return;
+		endif
+	endif
+
+	SendSysMessage (gm, "Releasing " + chosen_player.name + ", accountname " + chosen_player.acctname + ".");
+	if (!YesNo (gm, "Finalize?"))
+		SendSysMessage (gm, "Canceled.");
+		return;
+	endif
+	var jailprop := array{};
+	jailprop [1] := 0;
+	jailprop [2] := "";
+
+	SetObjProperty (chosen_player, "jailed", jailprop);
+	SendSysMessage (gm, "Finished!");
+endfunction
+
+
+
+
+///////////////////
+//  Sentences an entire account to jail for a period of time
+///////////////////
+
+function ReleaseAccountToJail (gm)
+	var acctname := SendTextEntryGump (gm, "Enter the account name:" ,
+			TE_CANCEL_ENABLE, TE_STYLE_NORMAL, 60, "");
+
+	if (!acctname)
+		SendSysMessage (gm, "Canceled.");
+		return;
+	endif
+
+	var acct := FindAccount (acctname);
+	if (!acct)
+		SendSysMessage (gm, "Unable to find account.");
+		return;
+	endif
+
+	SendSysMessage (gm, "Releasing " + acctname + ".");
+	if (!YesNo (gm, "Finalize?"))
+		SendSysMessage (gm, "Canceled.");
+		return;
+	endif
+	var jailprop := array{};
+	jailprop [1] := 0;
+	jailprop [2] := "";
+
+	acct.SetProp ("jailed", jailprop);
+	SendSysMessage (gm, "Finished!");
+endfunction
+
+

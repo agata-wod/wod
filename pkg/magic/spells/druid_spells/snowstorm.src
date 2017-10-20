@@ -1,0 +1,115 @@
+use uo;
+use os;
+use util;
+
+include "include/magic";
+include "include/skills";
+include "include/effects";
+var spell_circle := 7;
+
+program cast_frost_shield (parms)
+	var caster := GetSpellCaster (parms);
+	if (!caster)
+		return 0;
+	endif
+	if (!CheckSuccessfulSpellCast (parms))
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+
+	if (caster != "nocaster")
+		if (!CheckSkill (caster, SKILLID_ANIMALLORE, 90, 0))
+			SendSysMessage (caster, "The elements do not heed your call");
+			EraseObjProperty (caster, "#castingdruidspell");
+			Fizzle (caster);
+			return 0;
+		endif
+	endif
+	
+	var cast_on := GetSpellCastOn (caster, parms);
+	if (!cast_on)
+		EraseObjProperty (caster, "#castingdruidspell");
+		return 0;
+	endif
+	
+	//allow them to cast another spell now
+	EraseObjProperty (caster, "#castingdruidspell");
+	detach ();
+
+	var caster_animallore := GetAttribute (caster, ATTRIBUTEID_ANIMALLORE);
+	if (caster == "nocaster")
+		caster_animallore := 100;	
+	endif
+	
+	var range := CINT (caster_magery/15);
+	if (!range or range < 3)
+		range := 3;
+	endif
+	var duration := CINT (caster_animallore/5);
+	if (duration < 10)
+		duration := 10;
+	endif
+	var dmg := 0;
+	
+	var snowsquall := array{};
+	for i := 1 to (CINT (range*range/4))
+		var tempitem := 
+		tempitem := CreateItemAtLocation (0, 0, 0, 0x1706c, 1, REALM_BRITANNIA);
+		tempitem.graphic := 0x376a;
+		if (RandomInt (3) == 1)
+			tempitem.graphic := 0x375a;
+		endif
+		tempitem.color := 1153;
+		tempitem.name := "snow";
+		snowsquall[i] := tempitem;
+	endfor
+	
+	for i := 1 to duration
+		foreach mobile in ListMobilesNearLocationEx (cast_on.x, cast_on.y, cast_on.z, range, 0x03, cast_on.realm)
+			dmg := DruidResist (caster, mobile, RandomInt (8) + 3);
+			DoDamageByType (caster, mobile, dmg, DAMAGETYPE_COLD);
+			PlaySoundEffect (mobile, 0x15);
+			PlaySoundEffect (mobile, 0x15);
+		endforeach
+		
+		for j := 1 to len (snowsquall)
+			var tempitem := snowsquall[j];
+			if (tempitem)
+				if (i == duration)
+					if (RandomInt (2))
+						DestroyItem (tempitem);
+					endif
+				elseif (RandomInt (2) or !tempitem.x)
+					var effect_x := cast_on.x - range + RandomInt (2*range+2);
+					if (effect_x < cast_on.x-range)
+						effect_x := cast_on.x-range;
+					elseif (effect_x > cast_on.x+range)
+						effect_x := cast_on.x+range;
+					endif
+					
+					var effect_y := cast_on.y - range + RandomInt (2*range+2);
+					if (effect_y < cast_on.y-range)
+						effect_y := cast_on.y-range;
+					elseif (effect_y > cast_on.y+range)
+						effect_y := cast_on.y+range;
+					endif
+					
+					set_critical (1);
+					tempitem.movable := 1;
+					MoveObjectToLocation( tempitem, effect_x, effect_y, cast_on.z+4, cast_on.realm, MOVEOBJECT_FORCELOCATION );
+					tempitem.movable := 0;
+					set_critical (0);
+				endif
+			endif
+		endfor
+
+		sleep (1);
+	endfor
+	
+	foreach item in snowsquall
+		DestroyItem (item);
+	endforeach
+	
+	return 1;
+endprogram
+

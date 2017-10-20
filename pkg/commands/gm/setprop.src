@@ -1,0 +1,122 @@
+use uo;
+use basic;
+use os;
+use attributes;
+use vitals;
+
+program textcmd_setprop (player, text)
+	var props := SplitWords (text);
+	if (!props[1] or !props[2])
+		SendSysmessage (player, "Syntax: .setprop [propname] [amount]");
+		return;
+	endif
+
+	var propname := props[1];
+	var propvalue := props[2];
+	if (CINT (propvalue) or propvalue == "0")
+		propvalue := CINT (propvalue);
+	endif
+
+	SendSysMessage (player, "Select an object" );
+	var item := Target (player, TGTOPT_NOCHECK_LOS);
+	if (!item)
+		SendSysMessage (player, "Canceled.");
+		return;
+	endif
+
+	var oldvalue := DeterminePropertyValue (item, propname, props[2]);
+	if (oldvalue == error)
+		SendSysMessage (player, "Invalid prop name!");
+		return;
+	endif
+
+	if (!SetNewObjectProp (player, item, propname, propvalue, props[2]))
+		SendSysMessage (player, "Invalid prop name!");
+		return;
+	endif
+
+	var newvalue := DeterminePropertyValue (item, propname, props[2]);
+	if (oldvalue == newvalue)
+		SendSysMessage (player, "Property unchanged.");
+	endif
+	SendSysMessage (player, "Old value: " + oldvalue);
+	SendSysMessage (player, "New Value: " + newvalue);
+endprogram
+
+
+
+
+///////////////////
+//  Usually we just use .get_member, but for some options, things are more difficult
+///////////////////
+
+function DeterminePropertyValue (item, propname, text)
+	if (text)
+	endif
+	var retstr := 0;
+	case (propname)
+		"hp":				if (item.npctemplate or item.acctname)
+								retstr := CINT (GetVital (item, "Life")/100);
+							else
+								retstr := item.hp;
+							endif
+		"mana":				retstr := CINT (GetVital (item, "Mana")/100);
+		"stamina":			retstr := CINT (GetVital (item, "Stamina")/100);
+
+		"strength":			retstr := GetAttribute (item, "Strength");
+		"dexterity":			retstr := GetAttribute (item, "Dexterity");
+		"intelligence":		retstr := GetAttribute (item, "Intelligence");
+
+		"strength_mod":		retstr := CINT (GetAttributeTemporaryMod (item, "Strength")/10);
+		"intelligence_mod":		retstr := CINT (GetAttributeTemporaryMod (item, "Intelligence")/10);
+		"dexterity_mod":		retstr := CINT (GetAttributeTemporaryMod (item, "Dexterity")/10);
+		default:
+			retstr := item.get_member (propname);
+	endcase
+	return retstr;
+endfunction
+
+
+
+
+///////////////////
+//  Usually we just use .set_member, but for some options, things are more difficult
+///////////////////
+
+function SetNewObjectProp (player, item, propname, propvalue, text)
+	case (propname)
+		"x":				MoveObjectToLocation      (item , CINT (propvalue), item.y, item.z, item.realm, MOVEOBJECT_FORCELOCATION );
+		"y":				MoveObjectToLocation      (item , item.x, CINT (propvalue), item.z, item.realm, MOVEOBJECT_FORCELOCATION );
+		"z":				MoveObjectToLocation      (item , item.x, item.y, CINT (propvalue), item.realm, MOVEOBJECT_FORCELOCATION );
+		"realm":			MoveObjectToLocation      (item , item.x, item.y, item.z, propvalue, MOVEOBJECT_FORCELOCATION );
+
+		"hp":				if (item.npctemplate or item.acctname)
+								SetVital (item, "Life", CINT (propvalue)*100);
+							else
+								item.hp := CINT (propvalue);
+							endif
+		"mana":				SetVital (item, "Mana", CINT (propvalue)*100);
+		"stamina":			SetVital (item, "Stamina", CINT (propvalue)*100);
+
+		"strength":			var strbonus  := CINT (GetAttributeTemporaryMod (item, "Strength")/10);
+							SetAttributeBaseValue (item, "Strength", CINT (propvalue) - strbonus);
+		"intelligence":		var intbonus  := CINT (GetAttributeTemporaryMod (item, "Intelligence")/10);
+							SetAttributeBaseValue (item, "Intelligence", CINT (propvalue) - intbonus);
+		"dexterity":			var dexbonus  := CINT (GetAttributeTemporaryMod (item, "Dexterity")/10);
+							SetAttributeBaseValue (item, "Dexterity", CINT (propvalue) - dexbonus);
+
+		"strength_mod":		SetAttributeTemporaryMod (item, "Strength", CINT (propvalue)*10);
+		"intelligence_mod":		SetAttributeTemporaryMod (item, "Intelligence", CINT (propvalue)*10);
+		"dexterity_mod":		SetAttributeTemporaryMod (item, "Dexterity", CINT (propvalue)*10);
+		
+		"quality":			item.quality := CDBL (text);
+
+		"cmdlevel":
+			if (CINT (propvalue) <= player.cmdlevel )
+				item.cmdlevel := CINT (propvalue);
+			endif
+		default:
+			return item.set_member(propname, propvalue);
+	endcase
+	return 1;
+endfunction
