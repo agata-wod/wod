@@ -197,12 +197,17 @@ program combat_attack_script (parms)
 	DoDamageByType (attacker, defender, modified_damage, DAMAGETYPE_PHYSICAL);
 	
 	if (!specialparms[4] and GetAttribute (attacker, ATTRIBUTEID_ANATOMY))
-		if (RandomInt (1000) < GetAttribute (attacker, ATTRIBUTEID_ANATOMY))
+		var critical_multiplier := 1 + attacker_weapon_elem.HeavyCritical;
+		if (!critical_multiplier)
+			critical_multiplier := 1;
+		endif
+		var critical_chance := CINT (GetAttribute (attacker, ATTRIBUTEID_ANATOMY) * critical_multiplier);
+		if (RandomInt (1000) < critical_chance)
 			SendSysMessage (attacker, "Critical hit!");
 			if (CheckSkill (attacker, SKILLID_ANATOMY, 80, 0) )
-				DoDamageByType (attacker, defender, modified_damage, DAMAGETYPE_PHYSICAL);
+				DoDamageByType (attacker, defender, CINT (modified_damage * critical_multiplier), DAMAGETYPE_PHYSICAL);
 			else
-				DoDamageByType (attacker, defender, CINT (modified_damage/2), DAMAGETYPE_PHYSICAL);
+				DoDamageByType (attacker, defender, CINT ((modified_damage * critical_multiplier)/2), DAMAGETYPE_PHYSICAL);
 			endif
 		endif
 	endif
