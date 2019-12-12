@@ -378,7 +378,7 @@ function alterpassage(who, item, stt, snd)
         foreach entry in pl
           obj := SystemFindObjectBySerial(CInt(entry));
           obj.movable := 1;
-          MoveObjectToLocation( obj, obj.x, obj.y, obj.z-2, realm := _DEFAULT_REALM, MOVEOBJECT_FORCELOCATION );
+          MoveObjectToLocation( obj, obj.x, obj.y, obj.z-2, _DEFAULT_REALM, MOVEOBJECT_FORCELOCATION );
           obj.movable := 0;
         endforeach
         if(a == 2)
@@ -400,7 +400,7 @@ function alterpassage(who, item, stt, snd)
         foreach entry in pl
           obj := SystemFindObjectBySerial(CInt(entry));
           obj.movable := 1;
-          MoveObjectToLocation( obj, obj.x, obj.y, obj.z+2, realm := _DEFAULT_REALM, MOVEOBJECT_FORCELOCATION );
+          MoveObjectToLocation( obj, obj.x, obj.y, obj.z+2, _DEFAULT_REALM, MOVEOBJECT_FORCELOCATION );
           obj.movable := 0;
         endforeach
         if(a == 2)

@@ -1,4 +1,4 @@
-use os;
+Ôªøuse os;
 use uo;
 
 
@@ -11,8 +11,8 @@ use uo;
 
 function SendStringAsHtmlWindow (who, text, title := "")
 	var data := array {
-		"page 0",    
-		"nodispose", 
+		"page 0",
+		"nodispose",
 		"resizepic 40 40 5054 500 400",
 		"tilepic 56 52 5357",
 		"tilepic 65 49 4032",
@@ -23,7 +23,7 @@ function SendStringAsHtmlWindow (who, text, title := "")
 		title,
 		text
 	};
-  
+
 	return SendDialogGump (who, data, lines);
 endfunction
 
@@ -46,7 +46,7 @@ function YesNo(player, Prompt)
 	var yndata := array {
 		Prompt
 	};
-           
+
 	var res := SendDialogGump (player, ynlayout, yndata);
 
 	if (res)
@@ -106,7 +106,7 @@ function TimedYesNo (player, prompt, time)
 	var data := array {
 		prompt
 	};
-	
+
 	var parms := Array {
 		player,
 		GetPid(),
@@ -138,7 +138,7 @@ function DisplayMenuSelectionGump (character, title, selections)
 	elseif (selections_count == 1)
 		return 1;
 	endif
-	
+
 	var selection_columns := 1;
 	if (selections_count > 45)
 		SendSysMessage (character, "Error:  Too many options to display.");
@@ -160,7 +160,7 @@ function DisplayMenuSelectionGump (character, title, selections)
 		"text 70 59 40 0",
 		"page 1"
 	};
-	
+
 	var MenuSelection_gump_data := array {
 		title
 	};
@@ -218,16 +218,16 @@ function GetStringGumpPixelLength (thestring)
 			"[":
 			"]":
 				charlen := 3;
-	
-	
+
+
 			"b":
 			"c":
 			"e":
 			"j":
 			"o":
 			"t":
-			"î":
-			"ˆ":
+			"‚Äù":
+			"√∂":
 			"(":
 			")":
 			"{":
@@ -243,8 +243,8 @@ function GetStringGumpPixelLength (thestring)
 			"s":
 			"z":
 			"I":
-			"Ñ":
-			"‰":
+			"‚Äû":
+			"√§":
 			"~":
 				charlen := 7;
 			"g":
@@ -253,8 +253,8 @@ function GetStringGumpPixelLength (thestring)
 			"u":
 			"v":
 			"y":
-			"Å":
-			"¸":
+			"¬Å":
+			"√º":
 			" ":
 			"<":
 			">":
@@ -267,7 +267,7 @@ function GetStringGumpPixelLength (thestring)
 			"8":
 			"$":
 			"?":
-			"ﬂ":
+			"√ü":
 			"+":
 				charlen := 9;
 			"k":
@@ -289,10 +289,10 @@ function GetStringGumpPixelLength (thestring)
 			"F":
 			"O":
 			"P":
-			"é":
-			"ƒ":
-			"ô":
-			"÷":
+			"≈Ω":
+			"√Ñ":
+			"‚Ñ¢":
+			"√ñ":
 			"4":
 			"0":
 			"%":
@@ -316,8 +316,8 @@ function GetStringGumpPixelLength (thestring)
 			"":
 				charlen := 13;
 			"K":
-			"ö":
-			"‹":
+			"≈°":
+			"√ú":
 			"U":
 			"Y":
 				charlen := 14;

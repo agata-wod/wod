@@ -83,7 +83,7 @@ endfunction
 
 function get_subLevel(altar)
 	var redSkulls := CInt(GetObjProperty(altar, "lrskull"));
-	
+
 	if(redSkulls<6)
 		return 0;
 	elseif(redSkulls<10)
@@ -176,10 +176,10 @@ function createNextWhiteSkull(altar)
 	else
 		wskulls.append(wskull.serial);
 	endif
-    
+
         PlaySoundEffect(wskull, 0x29);
 	PlayStationaryEffect( wskull.x,wskull.y,wskull.z, 0x3728, 7, 0x10,0,wskull.realm );
-	//PlayStationaryEffect( x, y, z, effect, speed, loop := 0, explode := 0, realm := _DEFAULT_REALM );
+	//PlayStationaryEffect( x, y, z, effect, speed, loop := 0, explode := 0, _DEFAULT_REALM );
 
 	SetObjProperty(altar, "lwskull", lwskull+1);
 	SetObjProperty(altar, "wskulls", wskulls);
@@ -209,7 +209,7 @@ function createNextRedSkull(altar)
 	endif
 	var location := GetRedSkullLocation(altar, lskull+1);
 	var skull := CreateItemAtLocation(location[1], location[2], location[3], 0x1854, 1, altar.realm);
-	
+
 	skull.color:=0x26;
 	skull.movable := 0;
 

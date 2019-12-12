@@ -98,7 +98,7 @@ program textcmd_go( who, text )
         // If name matches, make sure type does as well
         if ((elem.TYPE == "all") || (elem.TYPE == tname))
           // If so, teleport user
-          MoveObjectToLocation( who, elem.x, elem.y, elem.z, realm := _DEFAULT_REALM, MOVEOBJECT_NORMAL );
+          MoveObjectToLocation( who, elem.x, elem.y, elem.z, _DEFAULT_REALM, MOVEOBJECT_NORMAL );
           return;
         endif
       endif

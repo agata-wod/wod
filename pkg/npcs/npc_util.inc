@@ -1,4 +1,4 @@
-include "include/client";
+﻿include "include/client";
 include "include/objtype";
 include "include/effects";
 include "include/wodinc";
@@ -20,7 +20,7 @@ function RandomName (byref me, localized := 0)
 		CID_DAEMON:
 		CID_DAEMON_SWORD:		name_index := 2;
 		CID_DRAGON_RED:
-		CID_DRAGON_GREY: 
+		CID_DRAGON_GREY:
 		CID_DRAGON_RUST:
 		CID_DRAGON_FIRE:
 		CID_DRAGON_CRIMSON:
@@ -151,7 +151,7 @@ function grabloot()
 				if (info > cint(0x405) and info < cint(0x456))
 					break;
 				endif
-	
+
 				if ( item.movable and (item.objtype < UOBJ_STARTHAIR or item.objtype > UOBJ_ENDHAIR)  )
 					RunToItem (item);
 					if ( Distance (me, item) < 2 and MoveItemToContainer (item, me.backpack) )
@@ -185,7 +185,7 @@ function grabloot()
 										SetObjProperty (thingie, "#ignoreit", 1);
 									endif
 								endforeach
-							endif 
+							endif
 						else
 							SetObjProperty (item, "#ignoreit", 1);
 						endif
@@ -263,7 +263,7 @@ function KillMe ()
 		endif
 	endforeach
 
-	MoveObjectToLocation( me, 5288, 1176, 0, realm := REALM_BRITANNIA, MOVEOBJECT_FORCELOCATION );
+	MoveObjectToLocation( me, 5288, 1176, 0, REALM_BRITANNIA, MOVEOBJECT_FORCELOCATION );
 	SetObjProperty (me, "guardkill", 1);
 	ApplyRawDamage (me, CINT (GetVital (me, "Life")/100) + 100);
 endfunction
@@ -296,7 +296,7 @@ function KillNPC (npc)
 		endif
 	endforeach
 
-	MoveObjectToLocation( npc, 5288, 1176, 0, realm := REALM_BRITANNIA, MOVEOBJECT_FORCELOCATION );
+	MoveObjectToLocation( npc, 5288, 1176, 0, REALM_BRITANNIA, MOVEOBJECT_FORCELOCATION );
 	SetObjProperty (npc, "guardkill", 1);
 	RevokePrivilege (npc, "invul");
 	ApplyRawDamage (npc, CINT (GetVital (npc, "Life")/100) + 100);

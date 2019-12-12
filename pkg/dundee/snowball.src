@@ -68,11 +68,11 @@ program snowball (player, what)
 			endif
 		endif
 	endif
-	
+
 	if (!CheckLosAt (player, where.x, where.y, where.z) )
 		SendSysMessage (player, "You can't see that!");
 		return;
-	endif	
+	endif
 
 	SetScriptController (0);
 	Detach ();
@@ -101,14 +101,14 @@ program snowball (player, what)
 //				score := score + 1;
 //				SendSysMessage( player, "Score: " + score, FONT_NORMAL, MESSAGE_COLOR_GOOD);
 //				SetObjProperty( player, "#snowball", score );
-				
-				
+
+
 				//when the player gets hit 3 times, send them back to the entry area
 				var score := GetObjProperty (mob, "#snowball");
 				if (!score) score := 0; endif
 				score := score + 1;
 				if (score >= 3)
-					MoveObjectToLocation( mob, 5748, 2327, 3, realm := _DEFAULT_REALM, MOVEOBJECT_NORMAL );
+					MoveObjectToLocation( mob, 5748, 2327, 3, _DEFAULT_REALM, MOVEOBJECT_NORMAL );
 					EraseObjProperty (mob, "#snowball");
 					foreach item in EnumerateItemsInContainer (mob.backpack)
 						if (item.objtype == 0x705a)
@@ -163,7 +163,7 @@ program snowball (player, what)
 	snow.name := "water";
 	sleep (15);
 	DestroyItem( snow );
-	
+
 	if (MAX_SNOWBALLS)
 		var snowball_count := 0;
 		foreach item in EnumerateItemsInContainer (player.backpack)
@@ -188,7 +188,7 @@ program snowball (player, what)
 			return;
 		endif
 	endif
-	
+
 	var snowball := CreateItemInContainer (player.backpack, 0x705a, 1);
 	snowball.newbie := 1;
 	snowball.movable := 0;

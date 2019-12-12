@@ -501,7 +501,7 @@ function invokegotomenu(who)
   var name := gotodata[gotoresult[0]+2];
   foreach onlinechr in EnumerateOnlineCharacters()
     if(onlinechr.name == name)
-      MoveObjectToLocation( who, onlinechr.x, onlinechr.y, onlinechr.z, realm := _DEFAULT_REALM, MOVEOBJECT_NORMAL );
+      MoveObjectToLocation( who, onlinechr.x, onlinechr.y, onlinechr.z, _DEFAULT_REALM, MOVEOBJECT_NORMAL );
       break;
     endif
   endforeach
@@ -1044,7 +1044,7 @@ function info(who, character, trg)
             SendSysMessage(character, "You were kicked by " + who.name + ".");
             DisconnectClient(character);
           endif
-      20: MoveObjectToLocation( character, 5288, 1176, 0, realm := _DEFAULT_REALM, MOVEOBJECT_NORMAL );
+      20: MoveObjectToLocation( character, 5288, 1176, 0, _DEFAULT_REALM, MOVEOBJECT_NORMAL );
       21: if(!character.isA(POLCLASS_NPC))
             var bankbox := FindBankBox(character);
             SendOpenSpecialContainer(who, bankbox);
@@ -1056,7 +1056,7 @@ function info(who, character, trg)
           else
             SendSysMessage(who, "Only can be used on players.");
           endif
-      23: MoveObjectToLocation( character, who.x, who.y, who.z, realm := _DEFAULT_REALM, MOVEOBJECT_NORMAL );
+      23: MoveObjectToLocation( character, who.x, who.y, who.z, _DEFAULT_REALM, MOVEOBJECT_NORMAL );
       24: SetName(character, RequestInput(who, who.backpack, "Enter a new name."));
     endcase
   endif
@@ -1153,9 +1153,9 @@ function EditStat(who, character, result, trg)
          1: SetBaseStrength(character,val);
          2: SetBaseIntelligence(character,val);
          3: SetBaseDexterity(character,val);
-	 4: MoveObjectToLocation( character, val, character.y, character.z, realm := _DEFAULT_REALM, MOVEOBJECT_NORMAL );
-	 5: MoveObjectToLocation( character, character.x, val, character.z, realm := _DEFAULT_REALM, MOVEOBJECT_NORMAL );
-	 6: MoveObjectToLocation( character, character.x, character.y, val, realm := _DEFAULT_REALM, MOVEOBJECT_NORMAL );
+	 4: MoveObjectToLocation( character, val, character.y, character.z, _DEFAULT_REALM, MOVEOBJECT_NORMAL );
+	 5: MoveObjectToLocation( character, character.x, val, character.z, _DEFAULT_REALM, MOVEOBJECT_NORMAL );
+	 6: MoveObjectToLocation( character, character.x, character.y, val, _DEFAULT_REALM, MOVEOBJECT_NORMAL );
          7: SetHp(character, val);
          9: SetMana(character, val);
         11: SetStamina(character, val);
