@@ -721,8 +721,15 @@ function DoGateSpellEffect (byref caster, destinationx, destinationy, destinatio
 	if (!caster.cmdlevel)
 		if (destinationrealm == REALM_BRITANNIA)
 			if (destinationx > 5118)
-				sendsysmessage (caster, "Blocked!");
-				return 0;
+				if (destinationx < 6143 and destinationy > 2303)
+					// T2A
+				elseif (destinationx > 6913 and destinationx < 7160 and destinationy > 255 and destinationy < 512)
+					//Heartwood
+				else
+					//Dungeons
+					sendsysmessage (caster, "Blocked!");
+					return 0;
+				endif
 			//seal off Buccaneer's Den from outside gates
 			elseif (destinationx > 2560 and destinationx < 2960 and destinationy > 1940 and destinationy < 2340)
 				SendSysMessage (caster, "Your gate spell has somehow been interrupted.");
@@ -756,10 +763,10 @@ function DoGateSpellEffect (byref caster, destinationx, destinationy, destinatio
 			elseif (caster.x > 5240 and caster.x < 5280 and caster.y > 1740 and caster.y < 1780)
 				SendSysMessage (caster, "Your gate spell has somehow been interrupted.");
 				return;
-			elseif (caster.x > 5720 and caster.y > 2250 and caster.y < 2600)
-				SendSysMessage (caster, "Your gate spell has somehow been interrupted.");
-				return;
-			//no gating into the snowball fight area
+			//elseif (caster.x > 5720 and caster.y > 2250 and caster.y < 2600)
+			//	SendSysMessage (caster, "Your gate spell has somehow been interrupted.");
+			//	return;
+			////no gating into the snowball fight area
 			elseif (caster.x > 5260 and caster.x < 5340 and caster.y > 1870 and caster.y < 1940)
 				SendSysMessage (caster, "Your gate spell has somehow been interrupted.");
 				return;
