@@ -12,7 +12,7 @@ program ViewOnlineCharacterList ()
 	WriteHTML ("<body bgcolor=\"#dcdeed\">");
 	
 	if (!len (EnumerateOnlineCharacters()))
-		WriteHTML ("There's no on online.");
+		WriteHTML ("There's no one online.");
 		WriteHTML ("<body></html>");
 		return;
 	endif
