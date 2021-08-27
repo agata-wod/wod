@@ -83,12 +83,12 @@ function RecordHouseSignOwner (sign)
 	else
 		global_prop_name := "#housing_no_owner";
 	endif
-	
+
 	var existing_houses := GetGlobalProperty (global_prop_name);
 	if (!existing_houses)
 		existing_houses := Array {};
 	endif
-	
+
 	if (! (sign.serial in existing_houses))
 		existing_houses.append (sign.serial);
 		SetGlobalProperty (global_prop_name, existing_houses);
@@ -156,9 +156,6 @@ function GetHouseValueByDeed (deed)
 		0x16021: //twostorywood
 		0x16022: //twostorystone
 		0x16026: //largepatiohousedeed
-		0x16020: //largebrickhouse
-		0x16021: //twostorywood
-		0x16022: //twostorystone
 		0x16229: //smalltowerdeed
 		0x1622A: //sandstonepatiohousedeed
 		0x1622B: //twostorylogcabindeed
@@ -297,7 +294,7 @@ function GetMaxSecures( sign )
 	var hvalue := GetHouseValueOfSign (sign);
 	return (hvalue * 10);
 endfunction
-  
+
 
 ///////////////////
 //  counts the number of secured items in the house
@@ -469,13 +466,13 @@ function IsGMLockedDownItem (owner, item)
 	if (!GetObjProperty (item, "gmlockeddown"))
 		return 0;
 	endif
-	
+
 	var price := GetObjProperty (item, "price");
 	if (!price)
 		DestroyItem (item);
 		return 1;
 	endif
-	
+
 	price := CINT (price/2);
 
 	CreateItemInContainer (owner.backpack, UOBJ_GOLD_COIN, price);
