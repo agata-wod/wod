@@ -28,7 +28,7 @@ function IsHair (byref hair)
 
 	case (hair.objtype)
 		0x203b:	//Short Hair
-		0x203c:	//Long Hair 
+		0x203c:	//Long Hair
 		0x203d:	//Pony Tail
 		0x2044:	//MoHawk
 		0x2045:	//Page Boy
@@ -605,7 +605,7 @@ endfunction
 
 function IsMedableArmor (byref armor)
 	var cfg := ReadConfigFile (":*:itemdesc");
-	if ((cfg[armor.objtype].blockcircle) && (cfg[armor.objtype].blockcircle < 6)) 
+	if ((cfg[armor.objtype].blockcircle) && (cfg[armor.objtype].blockcircle < 6))
 		return 0;
 	endif
 	return 1;
@@ -620,7 +620,7 @@ function IsShield (byref shield)
 	elseif (shield.graphic >= 0x4200 and shield.graphic <= 0x420B)
 		return 1;
 	elseif (shield.graphic >= 0x4228 and shield.graphic <= 0x422a)
-		return 1;  
+		return 1;
 	elseif (shield.graphic == 0x422c)
 		return 1;
 	endif
@@ -662,7 +662,7 @@ function IsWoodenShield (byref shield)
 endfunction
 
 function IsStoneShield (byref shield)
-	case shield.graphic)
+	case (shield.graphic)
 		UOBJ_G_LARGE_STONESHIELD:
 		UOBJ_G_LARGE_STONESHIELD2:
 			return 1;
@@ -837,13 +837,13 @@ endfunction
 function IsMusicalInstrument (byref item)
 
 	case(item.objtype)
-		0x17067:   //FLUTE	
+		0x17067:   //FLUTE
 		0x0e9d:    //TAMBORINE
 		0x0e9e:    //TAMBORINE2
 		0x0eb3:    //LUTE
-		0x0eb4:    //LUTE2	
+		0x0eb4:    //LUTE2
 		0x0e9c:    //DRUM
-		0x0eb2:    //HARP	
+		0x0eb2:    //HARP
 		0x0eb1:    //STANDING HARP
 		0x2805:    //BAMBOO FLUTE
 		0x2807:    //BAMBOO FLUTE2
@@ -1047,13 +1047,13 @@ function IsStackableItem (byref item)
 		UOBJ_RAW_LEG_OF_LAMB:
 			return 1;
 	endcase
-	
+
 	set_critical(1);
 	var globalstackdict := GetGlobalProperty ("globalstackdict");
 	if (!globalstackdict)
 		globalstackdict := dictionary;
 	endif
-	
+
 	if (globalstackdict.exists(item.objtype))
 		set_critical(0);
 		return globalstackdict[item.objtype];
