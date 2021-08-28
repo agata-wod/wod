@@ -22,7 +22,7 @@ function MakeLootOnCorpse (corpse, npctemplate)
 	if (!elem)
 		return 0;
 	endif
-  
+
 
 	if (elem.gold)
 		var gold := RandomDiceRoll (elem.gold);
@@ -119,7 +119,7 @@ function MakeSpecifiedLootItem (container, str)
 	var itemname := str[1];
 	var number := RandomDiceRoll (str[2]);
 	var chance := CInt(str[3]);
-  
+
 	if (number > 20)
 		number := 20;
 	endif
@@ -137,7 +137,7 @@ function MakeSpecifiedLootItem (container, str)
           endif
       endif
     endcase
-  
+
 	for i := 1 to number
 		if (RandomInt(100) + 1 <= chance)
 			var item := CreateItemInContainer (container, itemname, 1);
@@ -151,7 +151,7 @@ endfunction
 function FindTopLevelItem( item )
     var res := item.container;
     while(res.container)
-        res := res.container;        
+        res := res.container;
     endwhile
     return res;
 endfunction
@@ -283,13 +283,13 @@ function CreateChristmasPresent (corpse)
 	if (!present)
 		return;
 	endif
-	
+
 	present.color := RandomInt (500) + 1;
 	present.graphic := 10290 + RandomInt (8);
-	
+
         //this variable not used right now
 	//var npcnamegroup := 0;
-        
+
 
 	case (RandomInt (20))
 		0:
@@ -353,7 +353,7 @@ function CreateChristmasPresent (corpse)
 				0:	presentdesc := presentdesc + " the orc warrior";
 				1:	presentdesc := presentdesc + " the orc warrior";
 				2:	presentdesc := presentdesc + " the orc captain";
-				2:	presentdesc := presentdesc + " the Orc Dragon Defender";
+//				2:	presentdesc := presentdesc + " the Orc Dragon Defender";
 				3:	presentdesc := presentdesc + " the Orcish Lord";
 				4:	presentdesc := presentdesc + " the Orcish king";
 				5:	presentdesc := presentdesc + " the archer";
@@ -390,7 +390,7 @@ function CreateChristmasPresent (corpse)
 				6: present.name := "a present for " + RandomNPCName (6) + " the brigand";
 			endcase
 	endcase
-	
-	
+
+
 
 endfunction

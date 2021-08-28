@@ -22,8 +22,8 @@ program skillcheck (parms)
 //	if (difficulty < 0)
 //		difficulty := RandomInt(100)+1;
 //	endif
-	
-	//for skill-enhancing items, setobjproperty(item,"skillbonus",amount) - 
+
+	//for skill-enhancing items, setobjproperty(item,"skillbonus",amount) -
 	//the item will lower the difficulty by that amount:
 	var skillbonus := 0;
 	if (item)
@@ -33,7 +33,7 @@ program skillcheck (parms)
 			SendSysMessage (who,"[+" + skillbonus + "% " + skillcfg[skillid].desc + "]" );
 		endif
 	endif
-	
+
 	var olddifficulty := difficulty;
 	difficulty := difficulty - skillbonus;
 	if ( difficulty < 1 and olddifficulty > 0)
@@ -46,7 +46,7 @@ endprogram
 function gmreport(text)
 	syslog (text);
 	foreach player in EnumerateOnlineCharacters ()
-		if (IsAGM (player) = 5)
+		if (IsAGM (player) == 5)
 			SendSysMessage (player, "Regionspawner: " + text);
 		endif
 	endforeach

@@ -12,17 +12,17 @@ program do_damage (parms)
 	var damaged_mobile := parms [2];
 	var base_damage := parms[3];
 	var damage_type := parms[4];
-	
+
 	if (!damaged_mobile)
 		return CreateError ("Damaged mobile does not exist!");
 	endif
-	
+
 	//if the damage is unresistable, don't bother doing any extra work
 	if (damage_type == DAMAGETYPE_UNRESISTABLE)
 		ApplyRawDamage (damaged_mobile, base_damage);
 		return;
 	endif
- 
+
 	if (damaged_mobile.concealed)
 		SendSysMessage (damaged_mobile, "Canceling damage from " + attacker.name + " because you are concealed.");
 		return;
@@ -40,7 +40,7 @@ program do_damage (parms)
 	//special quest thing
 	if (attacker and attacker.npctemplate == ":drocket:snowninja")
 		if (GetVital (damaged_mobile, "Life") < base_damage*100)
-			MoveObjectToLocation( damaged_mobile, 5748, 2327, 3, realm := REALM_BRITANNIA, MOVEOBJECT_NORMAL );
+			MoveObjectToLocation( damaged_mobile, 5748, 2327, 3, REALM_BRITANNIA, MOVEOBJECT_NORMAL );
 			EraseObjProperty (damaged_mobile, "#snowball");
 			SetVital (damaged_mobile, "Life", GetVitalMaximumValue (damaged_mobile, "Life"));
 
@@ -71,20 +71,20 @@ program do_damage (parms)
 		return;
 	endif
 
-	
+
 	//Some other items absorb a small amount
 	var damage_absorb := CalculateDamageAbsorbByType (damaged_mobile, damage_type);
 	if (damage_absorb)
 		base_damage := base_damage - damage_absorb;
 	endif
- 
+
 	//some NPCs are strong against some types of damage, and take half damage
 	if (StrongVersusDamageType (damaged_mobile, damage_type) )
 		base_damage := CINT (base_damage/2);
 	elseif (WeakVersusDamageType (damaged_mobile, damage_type) )
 		base_damage := CINT (base_damage*1.5);
 	endif
-	
+
 	//Count guard damage
 	if (attacker.npctemplate and attacker.npctemplate["guard"])
 		if (damaged_mobile.npctemplate and !GetObjProperty (damaged_mobile, "master"))
@@ -114,11 +114,11 @@ function IsResponsibleAttackArea (attacker)
 	if (!attacker or attacker == "nocaster")
 		return 0;
 	endif
-	
+
 	if (attacker.concealed)
 		return 0;
 	endif
-	
+
 	if (attacker.x > 1380 and attacker.x < 1420)
 		if (attacker.y > 3725 and attacker.y < 3760)
 			return 0;
@@ -192,7 +192,7 @@ function StrongVersusDamageType (damaged_mobile, damage_type)
 	if (damaged_mobile.npctemplate["guard"] or damaged_mobile.script["humuc"])
 		return 0;
 	endif
-	
+
 	var MyTemplateElem := GetNpcTemplateElem (damaged_mobile.npctemplate);
 	if (!MyTemplateElem)
 		return 0;
@@ -232,7 +232,7 @@ function WeakVersusDamageType (damaged_mobile, damage_type)
 	if (damaged_mobile.npctemplate["guard"] or damaged_mobile.script["humuc"])
 		return 0;
 	endif
-	
+
 	var MyTemplateElem := GetNpcTemplateElem (damaged_mobile.npctemplate);
 	if (!MyTemplateElem)
 		return 0;
@@ -285,7 +285,7 @@ function CalculateDamageAbsorbByType (mobile, damage_type)
 		endif
 	endforeach
 
-	return absorb_amount;			
+	return absorb_amount;
 endfunction
 
 

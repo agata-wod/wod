@@ -12,7 +12,7 @@ include "include/objtype";
 var layout := array {
 	"page 0",
 	"resizepic 0 20 2620 310 470",
-	"gumppic 20 50 2621",    
+	"gumppic 20 50 2621",
 	"text 20 29 40 0",
 	"text 240 29 40 1"
 };
@@ -59,15 +59,15 @@ program textcmd_msg (character, name)
 		SendSysMessage (character, "style - Toggles the style of the text gump");
 		return;
 	endif
-	
+
 	if (GetObjProperty (character, "dotmsgstyle"))
 		style := "old";
 	endif
-	
+
 	if (GetObjProperty (character, "dotmsg_gump_position"))
 		var gumppos := GetObjProperty (character, "dotmsg_gump_position");
 		xpos := gumppos[1];
-		ypos := gumppos[2];	
+		ypos := gumppos[2];
 	endif
 
 
@@ -78,7 +78,7 @@ program textcmd_msg (character, name)
 			SendSysMessage (character, "You must close other gumps before you can do this!");
 			return;
 		endif
-		
+
 		if (result[0] == 0)
 			SendSysMessage (character, "Canceled.");
 			return;
@@ -170,7 +170,7 @@ function FindOnlinePlayerByName (character, name)
 			endif
 		endif
 	endforeach
-	
+
 	//Then try to find someone who's name is at least close
 	foreach onlinechr in EnumerateOnlineCharacters()
 		var thename := lower (onlinechr.name);
@@ -211,7 +211,7 @@ function SendTheMessage (character, whom)
 			SendSysMessage (whom, character.name + ": " + text, FONT_NORMAL, MESSAGE_COLOR_MESSAGE);
 			SetObjProperty (whom, "replyto", character.name);
 			SendSysMessage (character, "Message sent to " + whom.name + ": " + text, FONT_NORMAL, MESSAGE_COLOR_MESSAGE - 1);
-			
+
 			//Logging of certain conversations...  Icky
 			if ((character.acctname in logging_acctnames) or (whom.acctname in logging_acctnames))
 				LogAccountMessages (character, whom, text);
@@ -340,7 +340,7 @@ endfunction
 	if (!sound_options)
 		sound_options := {0};
 	endif
-	
+
 	while (len (sound_options) < 2)
 		sound_options.append (0);
 	endwhile;
@@ -356,7 +356,7 @@ endfunction
 		SendSysMessage (character, "Canceled.");
 		return;
 	endif
-	
+
 	SetObjProperty (character, "#globalmessagetimer", ReadGameClock());
 
 	foreach player in EnumerateOnlineCharacters()
@@ -382,7 +382,7 @@ function alertgm (msg, syslogit := 0)
 	endif
 
 	foreach player in EnumerateOnlineCharacters ()
-		if (IsAGM (player) = 5)
+		if (IsAGM (player) == 5)
 			SendSysMessage (player, msg);
 		endif
 	endforeach
@@ -401,7 +401,7 @@ function LogAccountMessages (character, whom, text)
 			return 0;
 		endif
 	endif
-	
+
 	var acctname := character.acctname;
 	if (!(character.acctname in logging_acctnames))
 		acctname := whom.acctname;
@@ -412,7 +412,7 @@ function LogAccountMessages (character, whom, text)
 		acctinfodf.CreateElement (acctname);
 		entry := acctinfodf.FindElement (acctname);
 	endif
-	
+
 	var propname := CSTR (ReadGameClock());
 	var value := array{character.name, whom.name, text};
 

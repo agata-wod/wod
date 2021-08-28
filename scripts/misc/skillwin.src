@@ -28,7 +28,7 @@ program SkillWindow (me, text)
 
 	LoadSpecs (me);
 	LoadSkillArrayByValue (me);
-	
+
 	foreach skill in skills
 		gump_data.append (GetSkillValDisplay (me, skill));
 		gump_data.append (getskillname (skill));
@@ -119,7 +119,7 @@ endfunction
 function SortValue (byref me, skillid)
 
 	var adjustval := 1;//make sure real skills sort ahead of disabled ones
-	if ( GetSkillName(skillid) = "None" )
+	if ( GetSkillName(skillid) == "None" )
 		return 0;//sort disabled skills to the end
 	else
 		//sort the specs in order:
@@ -168,7 +168,7 @@ function LoadSkillArrayByValue (me)
 			skills[i] := chosenskill - 1;
 		endif
 	endfor
-endfunction 
+endfunction
 
 function GetSortValue (byref me, skillid)
 	if ( GetSkillName(skillid) == "None" )
@@ -193,7 +193,7 @@ function GetSortValue (byref me, skillid)
 			return 3000;
 		endif
 	endif
-	
+
 	var attributeid := GetAttributeIDBySkillID (skillid);
 
 	return (GetAttributeBaseValue (me, attributeid) + GetAttributeTemporaryMod (me, attributeid));
