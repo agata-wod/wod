@@ -562,7 +562,7 @@ function IsMetalArmor (byref armor)
 endfunction
 
 function IsHideArmor (byref armor)
-	if (armor.graphic >= 2b74 and armor.graphic <= 0x2b79)
+	if (armor.graphic >= 0x2b74 and armor.graphic <= 0x2b79)
 		return 1;
 	elseif (armor.graphic >= 0x316b and armor.graphic <= 0x3170)
 		return 1;
