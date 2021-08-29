@@ -352,8 +352,7 @@ function CreateChristmasPresent (corpse)
 			case (RandomInt (15))
 				0:	presentdesc := presentdesc + " the orc warrior";
 				1:	presentdesc := presentdesc + " the orc warrior";
-				2:	presentdesc := presentdesc + " the orc captain";
-//				2:	presentdesc := presentdesc + " the Orc Dragon Defender";
+				2:	presentdesc := presentdesc + " the Orc Dragon Defender";
 				3:	presentdesc := presentdesc + " the Orcish Lord";
 				4:	presentdesc := presentdesc + " the Orcish king";
 				5:	presentdesc := presentdesc + " the archer";

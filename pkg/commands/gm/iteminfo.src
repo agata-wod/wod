@@ -249,9 +249,9 @@ function EditItem(item, character, result)
   case(result)
     1: CreateItemInInventory(character.backpack, item.objtype, val); //SetAmount(item):= val;
        PrintTextAbovePrivate(character, "You have just created " + val + " " + item.desc + " in your backpack.", character);
-    2: MoveObjectToLocation( item, val, item.y, item.z, _DEFAULT_REALM, MOVEOBJECT_FORCELOCATION );
-    3: MoveObjectToLocation( item, item.x, val, item.z, _DEFAULT_REALM, MOVEOBJECT_FORCELOCATION );
-    4: MoveObjectToLocation( item, item.x, item.y, val, _DEFAULT_REALM, MOVEOBJECT_FORCELOCATION );
+    2: MoveObjectToLocation( item, val, item.y, item.z, item.realm, MOVEOBJECT_FORCELOCATION );
+    3: MoveObjectToLocation( item, item.x, val, item.z, item.realm, MOVEOBJECT_FORCELOCATION );
+    4: MoveObjectToLocation( item, item.x, item.y, val, item.realm, MOVEOBJECT_FORCELOCATION );
     5: SetHp(item, val);
     6: if(!item.ar)
         item.dmg_mod := val;
