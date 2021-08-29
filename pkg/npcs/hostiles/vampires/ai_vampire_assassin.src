@@ -64,7 +64,7 @@ function SuckBlood (byref opponent)
 	if (total_hp > GetVitalMaximumValue (me, "Life"))
 		total_hp := GetVitalMaximumValue (me, "Life");
 	endif
-	
+
 	SetVital (me, "life", total_hp);
 	DoDamageByType (me, opponent, damage_done, DAMAGETYPE_MAGIC);
 	PrintTextAbovePrivate (me, me.name + " drains your health!", opponent);
@@ -107,7 +107,7 @@ function DoPoison (byref you)
 
 	SetObjProperty (me, "#lastbreath", ReadGameClock() + 10);
 
-	if ( (distance (me, you) < 2) and (RandomInt(4) = 1) )
+	if ( (distance (me, you) < 2) and (RandomInt(4) == 1) )
 		var plvl := RandomInt (GetVitalMaximumValue (me, "Life")/2500)+1;
 		SetPoison (you, plvl, "You have been poisoned by " + me.name);
 	endif

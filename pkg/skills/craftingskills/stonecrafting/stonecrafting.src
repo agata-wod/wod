@@ -39,11 +39,11 @@ program use_MapmakersPen( who, tool )
 	    repair := rinfo[3],
 	    resmelt := rinfo[4],
 	    fortify := rinfo[5];
-     
+
 	if( repair )
-                RepairItem( who, SKILLID_STONECRAFTING );
+                RepairItem( who, SKILLID_CARPENTRY );
 	elseif (fortify)
-		UpgradeItem (who, SKILLID_STONECRAFTING);
+		UpgradeItem (who, SKILLID_CARPENTRY);
 	elseif (resmelt)
 		return 0;
 	else
@@ -120,7 +120,7 @@ function makeStonecraftingItem( who, tool, chosen_item, amt )
 		endfor
 		PlaySoundEffect(who, SFX_HAMMER);
 
-		if (!CheckSkill (who, SKILLID_STONECRAFTING, item_skill, 0))
+		if (!CheckSkill (who, SKILLID_CARPENTRY, item_skill, 0))
 			var lossamount := RandomInt (CINT ( material_needed/3) )+1;
 			SubtractAmount (logs, lossamount);
 			SendSysmessage (who, "You fail, destroying some " + material_type + ".");
@@ -151,7 +151,7 @@ function makeStonecraftingItem( who, tool, chosen_item, amt )
 					PrintTextAbovePrivate (who, "Lockable!", who);
 					SetObjProperty (created_item, "lockable", "1");
 					var lockid := AllocLockId ();
-					var thekey := CreateItemInContainer (created_item, UOBJ_COPPER_KEY, 1); 
+					var thekey := CreateItemInContainer (created_item, UOBJ_COPPER_KEY, 1);
 					SetObjProperty (thekey, "lockid", lockid);
 					SetObjProperty (created_item, "lockid", lockid);
 				endif
@@ -163,7 +163,7 @@ function makeStonecraftingItem( who, tool, chosen_item, amt )
 					SendSysMessage (who, "You don't have enough logs to upgrade that item!");
 					break;
 				endif
-				
+
 				var upgrade_skill := item_skill + 15;
 				if (upgrade_skill > 110)
 					upgrade_skill := 110;
@@ -178,14 +178,14 @@ function makeStonecraftingItem( who, tool, chosen_item, amt )
 				endif
 
 				PerformItemUpgrade (who, created_item, logs, upgrade_material,
-						SKILLID_STONECRAFTING, upgrade_skill, item_name, autoupgrade);
+						SKILLID_CARPENTRY, upgrade_skill, item_name, autoupgrade);
 			endif
 		endif
-		
+
 		if (whox != who.x or whoy != who.y)
 			break;
 		endif
-		
+
 		if (created_item)
 			items_to_make := items_to_make - 1;
 		endif
@@ -208,7 +208,7 @@ function DoSpecialUpgradeStuff (byref character, byref item, repair_skill)
 
 	//if its a magic item and they're using STONECRAFTING, they can change the color of the item
 	if (IsMagicalItem (item))
-		if (repair_skill != SKILLID_STONECRAFTING)
+		if (repair_skill != SKILLID_CARPENTRY)
 			SendSysMessage (character, "That item is in full repair.");
 			return;
 		endif

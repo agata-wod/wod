@@ -19,7 +19,7 @@ program MakeTinkerItems (character, item)
 	if (!ReserveItem (item) or !item.movable)
 		SendSysMessage (character, "You can't use that right now.");
 		return;
-	endif 
+	endif
 
 	//if its a toolkit, pick what to use it on.  Otherwise, the use_on item is the item used itself
 	var use_on;
@@ -33,7 +33,7 @@ program MakeTinkerItems (character, item)
 
 		if (!Accessible (character, use_on) )
 			SendSysMessage (character, "You can't reach that.");
-			return;	
+			return;
 		endif
 
 		if (!ReserveItem (use_on) )
@@ -80,7 +80,6 @@ program MakeTinkerItems (character, item)
 		UOBJ_GLASS:
 			BasicMakeSomething (character, use_on, "glassmenu", SFX_GLASSBREAK4);
 		UOBJ_IRON_INGOT:
-		UOBJ_IRON_INGOT:
 		UOBJ_BRONZE_INGOT:
 		UOBJ_DULLCOPPER_INGOT:
 		UOBJ_COPPER_INGOT:
@@ -113,9 +112,9 @@ program MakeTinkerItems (character, item)
 			MakeMultiComponentItem (character, UOBJ_CLOCK, item, UOBJ_CLOCK_PARTS, "clock parts", SFX_ANVIL);
 		UOBJ_CLOCK_PARTS:
 			MakeMultiComponentItem (character, UOBJ_CLOCK, item, UOBJ_CLOCK_FRAME, "clock frame", SFX_ANVIL);
-		UOBJ_AXLE_AND_GEARS: 
+		UOBJ_AXLE_AND_GEARS:
 			MakeMultiComponentItem (character, UOBJ_CLOCK_PARTS, item,UOBJ_SPRINGS, "springs", SFX_ANVIL);
-		UOBJ_SPRINGS: 
+		UOBJ_SPRINGS:
 			MakeMultiComponentItem (character, UOBJ_CLOCK_PARTS,  item, UOBJ_CLOCK_PARTS, "clock parts", SFX_ANVIL);
 		UOBJ_SEXTANT_PARTS:
 			MakeMultiComponentItem (character, UOBJ_SEXTANT, item, UOBJ_AXLE, "axle", SFX_ANVIL);
@@ -129,8 +128,8 @@ program MakeTinkerItems (character, item)
 			else
 				SendSysMessage (character, "You don't know how to use those together.");
 			endif
-	endcase 
-        
+	endcase
+
 endprogram
 
 
@@ -176,7 +175,7 @@ function BasicMakeSomething ( character, use_on, menu, skillsound)
 			endfor
 			if (CheckSkill (character, SKILLID_TINKERING, item_skill, 0))
 				var created_item := 0;
-				
+
 				if (chosen_item == UOBJ_OBSIDIAN or chosen_item == UOBJ_PORCELAIN or chosen_item == UOBJ_EMPTY_BOTTLE or chosen_item == UOBJ_LOCKPICKS)
 					var amount_to_create := CINT (use_on.amount/material_needed);
 					if (amount_to_create > 10)
@@ -210,7 +209,7 @@ function BasicMakeSomething ( character, use_on, menu, skillsound)
 					PrintTextAbovePrivate (character, "Lockable!", character);
 					SetObjProperty(created_item, "lockable", "1");
 					var lockid := AllocLockId();
-					var thekey := CreateItemInContainer (created_item, UOBJ_COPPER_KEY, 1); 
+					var thekey := CreateItemInContainer (created_item, UOBJ_COPPER_KEY, 1);
 					SetObjProperty (thekey, "lockid", lockid);
 					SetObjProperty (created_item, "lockid", lockid);
 				endif
@@ -264,7 +263,7 @@ function MakeJewelry (character, use_on)
 	if ( use_on.amount >= material_needed )
 		SendSysmessage (character, "Select a gem for this item.");
 		var thegem := Target (character);
-		if (!thegem)  
+		if (!thegem)
 			SendSysmessage (character, "Canceled.");
 			return;
 		endif
@@ -476,7 +475,7 @@ function MakeObsidianTotem (character, obsidian)
 			SendSysMessage (character, "This isn't supposed to happen!");
 			return;
 	endcase
-	
+
 	SubtractAmount (obsidian, 200);
 	totem.color := 906;
 	totem.usescript := ":dundee:totem";
@@ -618,7 +617,7 @@ function MakePreservedHead (character, head)
 		SendSysMessage (character, "You can't use that right now!");
 		return;
 	endif
-	
+
 	var curepotion := FindObjtypeInContainer (character.backpack, UOBJ_GREATER_CURE_POTION);
 	if (!curepotion)
 		SendSysMessage (character, "You need a greater cure potion to preserve the head.");
@@ -640,7 +639,7 @@ function MakePreservedHead (character, head)
 		SendSysMessage (character, "You need some straw to preserve the head.");
 		return;
 	endif
-	
+
 	SubtractAmount (straw, 1);
 	SubtractAmount (curepotion, 1);
 	if (!CheckSkill (character, SKILLID_TINKERING, -1, 0 ) )

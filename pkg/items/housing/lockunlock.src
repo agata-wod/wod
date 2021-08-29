@@ -12,7 +12,7 @@ program lockunlockitem (parms)
 	if (!sign or !character)
 		return;
 	endif
-	
+
 	if (!IsAFriend (sign, character))
 		if (!character.cmdlevel)
 			return;
@@ -38,13 +38,13 @@ program lockunlockitem (parms)
 	if (!lockdownoption)
 		lockdownoption := HOUSE_LOCKDOWN_ITEM;
 	endif
-	
+
 	case (lockdownoption)
 		HOUSE_LOCKDOWN_ITEM:
 		HOUSE_RELEASE_ITEM:
 			HouseLockUnlockItem (sign, character, item);
 		HOUSE_SECURE_CONTAINER:
-		HOUSE_RELEASE_CONTAINER:	
+		HOUSE_RELEASE_CONTAINER:
 			HouseSecureReleaseContainer (sign, character, item);
 		HOUSE_DISPLAY_ITEM:
 			HouseDisplayItem (sign, character, item);
@@ -55,7 +55,7 @@ program lockunlockitem (parms)
 		default:
 			HouseLockUnlockItem (sign, character, item);
 	endcase
-	
+
 endprogram
 
 
@@ -87,7 +87,7 @@ function HouseLockUnlockItem (sign, character, item)
 			item.movable := 1;
 		endif
 	endif
-	
+
 	if (GetObjProperty (item, "displaycontainer"))
 		if (systemfindobjectbyserial (getobjproperty (item, "displaycontainer")))
 			SendSysMessage (character, "That item is set as a display case");
@@ -267,7 +267,7 @@ function HouseDisplayItem (sign, character, item)
 		SendSysmessage( character, "That's a door!" );
 		return;
 	endif
-	
+
 	if (!item.isa (POLCLASS_CONTAINER))
 		SendSysMessage (character, "You can only put containers on display");
 		return;
@@ -283,7 +283,7 @@ function HouseDisplayItem (sign, character, item)
 		return;
 	endif
 	ReleaseItem (item);
-	
+
 	if (item.movable)
 		foreach subitem in EnumerateItemsInContainer(item)
 			if ( len(EnumerateItemsInContainer (subitem)))
@@ -416,7 +416,7 @@ function IsLockedDownMovableItem (byref item)
 		0x09FD:	//
 		0x0A02:	//
 			return 1;
-			
+
 		0x0c83:	//
 		0x0c87:	//
 		0x0c89:	//
@@ -476,7 +476,7 @@ function IsADeedItem (me, it)
 			if (item.isa(POLCLASS_CONTAINER))
 				foreach anitem in ListRootItemsInContainer (item)
 					MoveObjectToLocation( anitem, item.x, item.y, item.z, item.realm, MOVEOBJECT_FORCELOCATION );
-				endforeach				
+				endforeach
 			endif
 			DestroyItem (item);
 		endforeach
@@ -484,13 +484,13 @@ function IsADeedItem (me, it)
 			if (it.isa(POLCLASS_CONTAINER))
 				foreach anitem in ListRootItemsInContainer (it)
 					MoveObjectToLocation( anitem, it.x, it.y, it.z, it.realm, MOVEOBJECT_FORCELOCATION );
-				endforeach								
+				endforeach
 			endif
 			DestroyItem (it);
 		endif
 		return 1;
 	endif
-	
+
 	if (GetObjProperty (it, "lockdowndestroy"))
 		DestroyItem (it);
 		return 1;
@@ -659,7 +659,6 @@ function IsADeedItem (me, it)
 		0x0c8c:	//
 		0x0c8d:	//
 		0x0c9f:	//
-		0x0c9f:
 		0x0c8f:
 		0x0db8:
 		0x0cc8:
