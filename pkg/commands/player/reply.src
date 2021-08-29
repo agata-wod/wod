@@ -23,7 +23,7 @@ program textcmd_reply (character, text)
 		SendSysMessage (character, "No one to reply to!");
 		return;
 	endif
-	
+
 	if (GetObjProperty (character, "dotmsgstyle"))
 		style := "old";
 	endif
@@ -35,7 +35,7 @@ program textcmd_reply (character, text)
 				SendSysMessage (onlinechr, character.name + ": " + text, FONT_NORMAL, MESSAGE_COLOR_MESSAGE);
 				SetObjProperty (onlinechr, "replyto", character.name);
 				SendSysMessage (character, "Message sent to " + onlinechr.name + ": " + text, FONT_NORMAL, MESSAGE_COLOR_MESSAGE - 1);
-				
+
 				//Logging of certain conversations...  Icky
 				if ((character.acctname in logging_acctnames) or (onlinechr.acctname in logging_acctnames))
 					LogAccountMessages (character, onlinechr, text);
@@ -76,7 +76,7 @@ function SendTheMessage (character, whom)
 			SendSysMessage (whom, character.name + ": " + text, FONT_NORMAL, MESSAGE_COLOR_MESSAGE);
 			SetObjProperty (whom, "replyto", character.name);
 			SendSysMessage (character, "Message sent to " + whom.name + ": " + text, FONT_NORMAL, MESSAGE_COLOR_MESSAGE - 1);
-			
+
 			//Logging of certain conversations...  Icky
 			if ((character.acctname in logging_acctnames) or (whom.acctname in logging_acctnames))
 				LogAccountMessages (character, whom, text);
@@ -149,7 +149,7 @@ function GetLineOfText (character, receivers_name, previous_line)
 	if (!gump_return [1])
 		return "";
 	endif
-	
+
 	var msg := CSTR (gump_return[10]);
 	msg := msg[(find(msg, " ", 1)+1), len(msg)];
 	if (msg)
@@ -171,7 +171,7 @@ function alertgm (msg, syslogit := 0)
 	endif
 
 	foreach player in EnumerateOnlineCharacters ()
-		if (IsAGM (player) = 5)
+		if (IsAGM (player) == 5)
 			SendSysMessage (player, msg);
 		endif
 	endforeach
@@ -190,7 +190,7 @@ function LogAccountMessages (character, whom, text)
 			return 0;
 		endif
 	endif
-	
+
 	var acctname := character.acctname;
 	if (!(character.acctname in logging_acctnames))
 		acctname := whom.acctname;
@@ -201,7 +201,7 @@ function LogAccountMessages (character, whom, text)
 		acctinfodf.CreateElement (acctname);
 		entry := acctinfodf.FindElement (acctname);
 	endif
-	
+
 	var propname := CSTR (ReadGameClock());
 	var value := array{character.name, whom.name, text};
 

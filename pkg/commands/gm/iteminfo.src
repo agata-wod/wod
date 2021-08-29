@@ -146,7 +146,7 @@ program textcmd_info(character, text)
       var what :=  TargetCoordinates(character);
       item := what.item;
   endif
-  
+
   if(!item || GetIntelligence(item))
     SendSysMessage(character, "Invalid selection.");
     return;
@@ -181,7 +181,6 @@ program textcmd_info(character, text)
     12:
     13:
     14:
-    13:
     15: EditItem(item, character, result[0]);
     16: CreateItemInContainer(character.backpack, item.objtype, 1);
     20: DestroyItem(item);
@@ -250,9 +249,9 @@ function EditItem(item, character, result)
   case(result)
     1: CreateItemInInventory(character.backpack, item.objtype, val); //SetAmount(item):= val;
        PrintTextAbovePrivate(character, "You have just created " + val + " " + item.desc + " in your backpack.", character);
-    2: MoveObjectToLocation( item, val, item.y, item.z, realm := _DEFAULT_REALM, MOVEOBJECT_FORCELOCATION );
-    3: MoveObjectToLocation( item, item.x, val, item.z, realm := _DEFAULT_REALM, MOVEOBJECT_FORCELOCATION );
-    4: MoveObjectToLocation( item, item.x, item.y, val, realm := _DEFAULT_REALM, MOVEOBJECT_FORCELOCATION );
+    2: MoveObjectToLocation( item, val, item.y, item.z, item.realm, MOVEOBJECT_FORCELOCATION );
+    3: MoveObjectToLocation( item, item.x, val, item.z, item.realm, MOVEOBJECT_FORCELOCATION );
+    4: MoveObjectToLocation( item, item.x, item.y, val, item.realm, MOVEOBJECT_FORCELOCATION );
     5: SetHp(item, val);
     6: if(!item.ar)
         item.dmg_mod := val;

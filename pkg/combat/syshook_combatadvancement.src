@@ -32,7 +32,7 @@ function QuickAwardRawAttributePoints (character, attributeid, rawpoints)
 	if (RandomInt (to_increase) < rawpoints)
 		var skillcap := GetBaseSkillCap (character, GetSkillIDByAttributeID (attributeid));
 		if (skillcap)
-			if (current = skillcap)
+			if (current == skillcap)
 				return;
 			elseif (current+1 > skillcap)
 				current := skillcap-1;

@@ -104,8 +104,6 @@ function GetAttributeIDBySkillID (skillid)
 			return ATTRIBUTEID_CAMPING;
 		SKILLID_CARPENTRY:
 			return ATTRIBUTEID_CARPENTRY;
-		SKILLID_STONECRAFTING:
-			return ATTRIBUTEID_STONECRAFTING;
 		SKILLID_CARTOGRAPHY:
 			return ATTRIBUTEID_CARTOGRAPHY;
 		SKILLID_COOKING:
@@ -194,8 +192,8 @@ function GetAttributeIDBySkillID (skillid)
 			return ATTRIBUTEID_ITEMID;
 		SKILLID_ARMSLORE:
 			return ATTRIBUTEID_ARMSLORE;
-		SKILLID_BEGGING:
-			return ATTRIBUTEID_BEGGING;
+		// SKILLID_BEGGING:
+			// return ATTRIBUTEID_BEGGING;
 		SKILLID_BOWCRAFT:
 			return ATTRIBUTEID_BOWCRAFT;
 		SKILLID_FORENSICS:
@@ -447,7 +445,7 @@ function AwardRawAttributePoints (character, attributeid, rawpoints)
 			current		:= current + 1;
 			to_increase	:= GetNeededRawPointsToIncrease (current);
 		endwhile
-		
+
 		if (RandomInt (to_increase) < rawpoints)
 			current := current + 1;
 		endif
@@ -463,12 +461,12 @@ function AwardRawAttributePoints (character, attributeid, rawpoints)
 		if (RandomInt (to_decrease) < rawpoints )
 			current := current - 1;
 		endif
-		
+
 		if (current < 0)
 			current := 0;
 		endif
 	endif
-	
+
 	if (current != initial)
 		var skillcap := GetBaseSkillCap (character, GetSkillIDByAttributeID (attributeid));
 		if (skillcap)
