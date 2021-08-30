@@ -14,7 +14,7 @@ program cast_spell (character, text)
 		SendSysMessage (character, "where [name] is the name of the spell in the spellbook, but without spaces");
 		return;
 	endif
-	
+
 	case (text)
 		//Statmod spells
 		"clumsy":
@@ -89,7 +89,6 @@ program cast_spell (character, text)
 		"earth quake":
 		"earthquake":
 			GetTargettedArea (character, ":damage_spells:earthquake");
-		"mass dispel":
 		"mass dispel":
 			GetTargettedArea (character, ":summoning_spells:mass_dispel");
 		"dispel field":

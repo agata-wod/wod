@@ -160,7 +160,7 @@ program UseTub(who,tub)
 	var basecolor := res[0];
 
 	if (!basecolor)
-		SendSysMessage(who,"Canceled");	
+		SendSysMessage(who,"Canceled");
 		return;
 	elseif (basecolor == 1101)
 		maxcolor := 47;
@@ -202,7 +202,7 @@ program UseTub(who,tub)
 	res := SendDialogGump( who, layout2, data2 );
 	newcolor := res[0];
 	if (!newcolor)
-		SendSysMessage(who,"Canceled");	
+		SendSysMessage(who,"Canceled");
 		return;
 	else
 		tub.color := newcolor;
@@ -217,7 +217,7 @@ program UseTub(who,tub)
 	SendSysMessage(who,"Select the furniture you wish to dye");
 	var item := Target (who, TGTOPT_NOCHECK_LOS);
 	if (!item)
-		SendSysMessage(who,"Canceled");	
+		SendSysMessage(who,"Canceled");
 		return;
 	endif
 
@@ -234,28 +234,28 @@ program UseTub(who,tub)
 		0x0A61:	//
 		0x0A5E:	//
 		0x0A5F:	//
-		
+
 		0x11e2:	//
 		0x11e3:	//	More beds
 		0x11e4:	//
 		0x11e5:	//
-		
+
 		0x0B91:	//
 		0x0B92:	//	large bench
 		0x0B93:	//
 		0x0B94:	//
-		
+
 			DyeBed (who, item, newcolor);
 			return;
 	endcase
 
 	if (!Isfurniture (item.objtype))
-		SendSysMessage (who, "You can't dye that.");	
+		SendSysMessage (who, "You can't dye that.");
 		return;
 	endif
 	if (!item.movable)
 		if (item.container)
-			SendSysMessage (who, "You can't dye that.");	
+			SendSysMessage (who, "You can't dye that.");
 			return;
 		else
 			var sign := FindHouseSign (who);
@@ -285,7 +285,6 @@ function IsFurniture (obj_type)
 		0x0a2a:
 		0x0b2c:
 		0x0b2f:
-		0x0b5a:
 		0x0b5a:
 		0x0b56:
 		0x0b53:
@@ -327,7 +326,7 @@ function IsFurniture (obj_type)
 	endcase
 
 	return 0;
-	
+
 endfunction
 
 
