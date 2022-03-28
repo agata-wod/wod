@@ -26,7 +26,7 @@ function main_AI_loop()
 				EraseObjProperty (me, "destinationy");
 				EraseObjProperty (me, "destinationsteps");
 			endif
-		else	
+		else
 			wander();
 			wanders := wanders +1;
 		endif
@@ -54,12 +54,12 @@ function main_AI_loop()
 								sleep (1);
 							endif
 						endif
-					EVID_DAMAGED:
-						SetObjProperty (me, "destinationx", ev.x);
-						SetObjProperty (me, "destinationy", ev.y);
-						SetObjProperty (me, "destinationsteps", 0);
-						drop_anchor ();
-						WalkTowardLocation (ev.x, ev.y);
+					// EVID_DAMAGED:
+						// SetObjProperty (me, "destinationx", ev.x);
+						// SetObjProperty (me, "destinationy", ev.y);
+						// SetObjProperty (me, "destinationsteps", 0);
+						// drop_anchor ();
+						// WalkTowardLocation (ev.x, ev.y);
 				endcase
 				ev := wait_for_event (2);
 			until (!ev);
@@ -69,8 +69,8 @@ function main_AI_loop()
 			next_regrow := readgameclock()+cint(1800+RandomInt(300));
 			EraseObjProperty (me, "#milked");
 		endif
-	endwhile      
-endfunction        
+	endwhile
+endfunction
 
 
 

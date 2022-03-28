@@ -11,7 +11,7 @@
 //  Recent Modifications
 //      1999/01/25 Ignatius added animations/actions/sounds.
 //      1999/01/26 Ignatius moved skillids/constants into this file and
-//                 added a lot of more sounds. 
+//                 added a lot of more sounds.
 //      1999/01/27 Ignatius found out that I got the sounds all wrong
 //                 it seems, fixed up a lot of things there. Started
 //                 to map out the T2A sounds. Added some creature IDs.
@@ -22,7 +22,7 @@
 // Soundeffects
 // The first section is just an enum of existing sounds,
 // the second builds on the first ones, but providing more
-// logical names. 
+// logical names.
 ///
 const SFX_1     :=  0x0001; // forest
 const SFX_2     :=  0x0002; // forest
@@ -409,7 +409,7 @@ const SFX_17E   :=  0x017e; // gazer5.wav
 const SFX_17F   :=  0x017f; // ghost1.wav
 const SFX_180   :=  0x0180; // ghost2.wav
 const SFX_181   :=  0x0181; // ghost3.wav
-const SFX_182   :=  0x0182; // ghost4.wav 
+const SFX_182   :=  0x0182; // ghost4.wav
 const SFX_183   :=  0x0183; // ghost5.wav
 const SFX_184   :=  0x0184; // gispidr1.wav
 const SFX_185   :=  0x0185; // gispidr2.wav
@@ -778,7 +778,7 @@ const FX_TELE_VANISH    :=  0x372a; // Teleport vanish.
 const FX_SPELL_FAIL     :=  0x3735; //
 const FX_BLESS_EFFECT   :=  0x373a; //
 const FX_CURSE_EFFECT   :=  0x374a; //
-const FX_SPARK_EFFECT   :=  0x375a; // 
+const FX_SPARK_EFFECT   :=  0x375a; //
 const FX_HEAL_EFFECT    :=  0x376a; //
 const FX_MARK_EFFECT    :=  0x3779;
 const FX_BLUEMOONSTART  :=  0x3789; // Deathvortex?
@@ -800,7 +800,7 @@ const FX_FIRE_F_NS      :=  0x3996; // Fire field.
 
 ////
 // Layers
-/// 
+///
 const LAYER_NONE        :=  0x00;   // Not used?
 const LAYER_HAND1       :=  0x01;   // One handed weapon.
 const LAYER_HAND2       :=  0x02;   // Two handed weapon, shield or misc.
@@ -835,7 +835,7 @@ const LAYER_TRADE       :=  0x1e;   // Can be multiple of these, do not use dire
 
 ////
 // Fonts
-/// 
+///
 const FONT_MAX          :=  0x00;   // Lowest font.
 const FONT_MIN          :=  0x09;   // Highest font.
 
@@ -852,7 +852,7 @@ const FONT_SMALL_LIGHT  :=  0x09;   // Small light letters.
 
 ////
 // Creature IDs ( hardcoded graphic IDs )
-/// 
+///
 Const CID_ZERO				:= 0x000;  // Not used.
 Const CID_OGRE				:= 0x001;
 Const CID_ETTIN			:= 0x002;
@@ -983,7 +983,7 @@ const CID_DRAGON_BLACK := 0xc6;
 
 ////
 // Directions
-/// 
+///
 const DIR_N             :=  0x00;   // North.
 const DIR_NE            :=  0x01;   // Northeast.
 const DIR_E             :=  0x02;   // East.
@@ -1039,7 +1039,7 @@ const COLOR_TRANSLUCENT     := 0x7cf8;  // Translucent
 
 ////
 // SkillIDs
-/// 
+///
 const SKILLID_ALCHEMY           := 0;
 const SKILLID_ANATOMY           := 1;
 
@@ -1060,7 +1060,7 @@ const SKILLID_BOWCRAFT          := 8;
 const SKILLID_PEACEMAKING       := 9;
 const SKILLID_CAMPING           := 10;
 const SKILLID_CARPENTRY         := 11;
-const SKILLID_STONECRAFTING         := 11;
+// const SKILLID_STONECRAFTING         := 11;
 const SKILLID_CARTOGRAPHY       := 12;
 const SKILLID_COOKING           := 13;
 
