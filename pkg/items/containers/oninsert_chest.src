@@ -47,7 +47,7 @@ program oninsert_chest (character, container, movetype, null_value, item, existi
 	else
 		PlaySoundEffectPrivate (character, 0x49, character);
 	endif
-	
+
 endprogram
 
 
@@ -64,7 +64,7 @@ function DoLostAndFoundStuff (character, thecontainer, item)
 		MoveItemToContainer (item, character.backpack);
 		return;
 	endif
-	
+
 	var owner := SystemFindObjectBySerial (ownerserial, SYSFIND_SEARCH_OFFLINE_MOBILES);
 	if (!owner)
 		SendSysMessage (character, "That player no longer exists.");
@@ -72,14 +72,14 @@ function DoLostAndFoundStuff (character, thecontainer, item)
 		DestroyItem (item);
 		return;
 	endif
-	
+
 	var bankbox := FindBankBox (owner.acctname);
 	if (!bankbox)
 		SendSysMessage (character, "Error opening bankbox!");
 		MoveItemToContainer (item, character.backpack);
 		return;
 	endif
-	
+
 	if (!MoveItemToContainer (item, bankbox))
 		SendSysMessage (character, "The bankbox is full!");
 		MoveItemToContainer (item, character.backpack);
@@ -105,7 +105,7 @@ function AppendLog (who, themessage)
 		log.append (prop);
 	endforeach
 
-	local elemkey := who.name + "(" + who.acctname + ")";
+	var elemkey := who.name + "(" + who.acctname + ")";
 	AppendConfigFileElem ("chestlog", "ITEM REMOVAL:", elemkey, log );
 	UnloadConfigFile ("chestlog");
 endfunction

@@ -72,7 +72,7 @@ endprogram
 
 function IsInsideStatic(destx, desty, sign)
 
-	local homeinfo := GetObjProperty(sign,"homeinfo");
+	var homeinfo := GetObjProperty(sign,"homeinfo");
 	if (!homeinfo) return; endif
 	if ( (destx >= homeinfo[2] and destx <= homeinfo[4]) and
 	     (desty >= homeinfo[3] and desty <= homeinfo[5]) )

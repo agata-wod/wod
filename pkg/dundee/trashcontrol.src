@@ -30,7 +30,7 @@ program TrashControl (trash)
 			endif
 			SetObjProperty (trash, "#nextflush", ReadGameClock() + FLUSH_TIME_SECONDS);
 		endif
-		
+
 	endwhile
 endprogram
 
@@ -38,11 +38,3 @@ function EmptyTrash(trash, who := 0)
 	Run_Script (":dundee:trash", array { trash, who });
 endfunction
 
-
-
-function ProcessEvent (byref ev)
-			return 1;
-		endif
-	endif
-	return 0;
-endfunction
